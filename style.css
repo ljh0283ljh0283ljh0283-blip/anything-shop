@@ -130,3 +130,12 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 .product .seller { font-size: .8rem; color: var(--muted); margin-top: -4px; }
 .sync-msg { margin: 0; font-size: .8rem; color: var(--muted); }
 .sync-msg:empty { display: none; }
+
+/* 내 웹사이트용 관리자 로그인 */
+footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.admin-entry { border: 0; background: transparent; color: var(--muted); font-size: .8rem; text-decoration: underline; padding: 4px; }
+.gh-login { display: grid; gap: 8px; padding-block: 12px; }
+.gh-login p { margin: 0; color: var(--muted); font-size: .88rem; }
+.gh-login label { font-size: .8rem; color: var(--muted); }
+.gh-login input { font: inherit; width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.logout { width: 100%; margin-top: 16px; }

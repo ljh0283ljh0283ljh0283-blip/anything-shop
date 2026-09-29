@@ -9,6 +9,7 @@
   var loaded = false;
   var currentCat = 'all';
   var db = null, col = null, dbLive = false, artifactApi = null, syncTimer = null;
+  var store = null;      // 상품 저장 방식: Claude 저장소(db) 또는 GitHub(products.json)
 
   function setProducts(rows) {
     products = {}; order = [];
@@ -229,7 +230,7 @@
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!col) return;
+    if (!store) return;
     var data = {
       name: form.name.value.trim(),
       seller: form.seller.value.trim(),
@@ -247,16 +248,16 @@
     var job;
     if (wasEdit) {
       data.order = products[editingId] ? products[editingId].order : Date.now();
-      job = col.doc(editingId).set(data);
+      job = store.save(editingId, data);
     } else {
       var max = 0; order.forEach(function (id) { max = Math.max(max, products[id].order || 0); });
       data.order = max + 10;
-      job = col.add(data);
+      job = store.save(null, data);
     }
     job.then(function () {
       resetForm();
-      say(wasEdit ? '"' + data.name + '" 수정을 저장했어요.' : '"' + data.name + '"을(를) 등록했어요.');
-      syncPublic();
+      say((wasEdit ? '"' + data.name + '" 수정을 저장했어요.' : '"' + data.name + '"을(를) 등록했어요.') + (store.note || ''));
+      if (store.afterWrite) store.afterWrite();
     }).catch(function (err) {
       say(writeError(err), true);
     }).then(function () { saveBtn.disabled = false; });
@@ -264,6 +265,9 @@
 
   function writeError(err) {
     var c = err && err.code;
+    if (err && err.status === 401) return 'GitHub 열쇠(토큰)가 맞지 않아요. 관리자 로그인을 다시 해 주세요.';
+    if (err && (err.status === 403 || err.status === 404)) return '이 열쇠(토큰)로는 저장소에 쓸 수 없어요. anything-shop 저장소의 Contents 쓰기 권한을 확인해 주세요.';
+    if (err && err.status === 409) return '다른 곳에서 먼저 저장했어요. 다시 한 번 눌러 주세요.';
     if (c === 'invalid_argument') return '저장할 권한이 없어요. 이 페이지의 편집자만 상품을 바꿀 수 있어요.';
     if (c === 'quota_exceeded') return '저장 공간이 가득 찼어요. 쓰지 않는 상품을 지운 뒤 다시 해 주세요.';
     return '저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
@@ -298,21 +302,126 @@
       }
       var name = products[id] ? products[id].name : '';
       del.disabled = true;
-      col.doc(id).delete().then(function () {
+      store.remove(id).then(function () {
         if (editingId === id) resetForm();
-        say('"' + name + '"을(를) 삭제했어요.');
-        syncPublic();
+        say('"' + name + '"을(를) 삭제했어요.' + (store.note || ''));
+        if (store.afterWrite) store.afterWrite();
       }).catch(function (err) { del.disabled = false; say(writeError(err), true); });
     }
   });
+
+  // ---------- 내 웹사이트(GitHub Pages)용 상품 관리 ----------
+  // 상품은 저장소의 products.json에 있다. 관리자는 GitHub 열쇠(토큰)로 로그인해서 이 파일을 직접 고친다.
+  // 열쇠는 관리자 브라우저에만 저장되고 다른 곳으로 보내지 않는다(GitHub 말고는).
+  var GH = { owner: 'ljh0283ljh0283ljh0283-blip', repo: 'anything-shop', path: 'products.json', branch: 'main' };
+  var TOKEN_KEY = 'anything-shop-gh-token', ghSha = null;
+
+  function ghToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
+  function ghApi(method, body) {
+    var url = 'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.path +
+      (method === 'GET' ? '?ref=' + GH.branch + '&t=' + Date.now() : '');
+    return fetch(url, {
+      method: method, cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + ghToken(), Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { var e = new Error(j.message || 'GitHub error'); e.status = r.status; throw e; }
+        return j;
+      });
+    });
+  }
+  function ghLoad() {
+    return ghApi('GET').then(function (j) {
+      ghSha = j.sha;
+      var text = decodeURIComponent(escape(atob(String(j.content).replace(/\n/g, ''))));
+      return JSON.parse(text).products || [];
+    });
+  }
+  function ghWrite(list, message) {
+    var text = JSON.stringify({ products: list }, null, 1) + '\n';
+    return ghApi('PUT', { message: message, content: btoa(unescape(encodeURIComponent(text))), sha: ghSha, branch: GH.branch })
+      .then(function (j) { ghSha = j.content && j.content.sha; });
+  }
+  // 저장할 때마다 최신 파일을 다시 읽고 고친 뒤 올린다
+  function ghChange(fn, message) {
+    return ghLoad().then(function (list) {
+      list = fn(list);
+      return ghWrite(list, message).then(function () {
+        setProducts(list.map(function (p) { return { id: p.id, data: p }; }));
+      });
+    });
+  }
+
+  function setupGitHubAdmin() {
+    var login = $('#gh-login'), entry = $('#admin-entry');
+    if (!login || !entry) return;
+    entry.hidden = false;
+    store = {
+      note: ' 사이트에는 1~2분 뒤에 반영돼요.',
+      save: function (id, data) {
+        return ghChange(function (list) {
+          if (id) {
+            return list.map(function (p) { return p.id === id ? Object.assign({ id: id }, data) : p; });
+          }
+          var newId = 'p' + Date.now().toString(36);
+          return list.concat([Object.assign({ id: newId }, data)]);
+        }, (id ? '상품 수정: ' : '상품 등록: ') + data.name);
+      },
+      remove: function (id) {
+        var name = products[id] ? products[id].name : id;
+        return ghChange(function (list) { return list.filter(function (p) { return p.id !== id; }); }, '상품 삭제: ' + name);
+      }
+    };
+
+    function showLoggedIn(on) {
+      login.hidden = on;
+      $('#product-form').hidden = !on;
+      $('#admin-list-wrap').hidden = !on;
+      $('#gh-logout').hidden = !on;
+      $('#open-admin').hidden = !on;
+    }
+    function tryLogin() {
+      var msg = $('#gh-msg');
+      msg.textContent = '확인하는 중이에요…';
+      return ghLoad().then(function (list) {
+        setProducts(list.map(function (p) { return { id: p.id, data: p }; }));
+        msg.textContent = '';
+        showLoggedIn(true);
+      }).catch(function (err) {
+        showLoggedIn(false);
+        msg.textContent = writeError(err);
+      });
+    }
+
+    entry.addEventListener('click', function () {
+      openPanel($('#admin'), entry);
+      if (ghToken()) tryLogin(); else showLoggedIn(false);
+    });
+    $('#gh-save').addEventListener('click', function () {
+      var t = $('#gh-token').value.trim();
+      if (!t) { $('#gh-msg').textContent = '열쇠(토큰)를 붙여 넣어 주세요.'; return; }
+      try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+      $('#gh-token').value = '';
+      tryLogin();
+    });
+    $('#gh-logout').addEventListener('click', function () {
+      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+      showLoggedIn(false);
+      $('#gh-msg').textContent = '로그아웃했어요.';
+    });
+    if (ghToken()) { $('#open-admin').hidden = false; }
+    $('#open-admin').addEventListener('click', function () { if (ghToken()) tryLogin(); });
+  }
 
   // ---------- 시작 ----------
   renderCart();
 
   if (!window.claude || !window.claude.use) {
-    fetch('products.json').then(function (r) { return r.json(); }).then(function (j) {
+    fetch('products.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
       setProducts(j.products.map(function (p) { return { id: p.id, data: p }; }));
     }).catch(function () { status.textContent = '상품 목록을 불러오지 못했어요.'; });
+    setupGitHubAdmin();
     return;
   }
 
@@ -326,6 +435,11 @@
     db = d;
     if (!db) return;
     col = db.collection('products');
+    store = {
+      save: function (id, data) { return id ? col.doc(id).set(data) : col.add(data); },
+      remove: function (id) { return col.doc(id).delete(); },
+      afterWrite: syncPublic
+    };
     col.orderBy('order').onSnapshot(function (snap) {
       // 저장소를 읽을 수 없는 손님에게는 빈 목록이 오므로 공개 파일 목록을 그대로 둔다
       if (snap.empty && !dbLive) return;
