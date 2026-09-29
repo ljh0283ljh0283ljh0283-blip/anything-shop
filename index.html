@@ -46,7 +46,7 @@
 <template id="product-tpl">
   <li class="product">
     <span class="kind"></span>
-    <h3></h3>
+    <h3><button type="button" class="detail-link"></button></h3>
     <span class="seller"></span>
     <p class="desc"></p>
     <span class="unit"></span>
@@ -68,7 +68,75 @@
   <div class="panel-foot">
     <div class="done" id="done" hidden></div>
     <div class="total"><span>합계</span><span id="cart-total">0원</span></div>
-    <button class="primary" id="checkout" type="button" disabled>주문하기</button>
+    <button class="primary" id="checkout" type="button" disabled>주문서 작성</button>
+  </div>
+</aside>
+
+<aside class="panel detail" id="detail" aria-label="상품 자세히 보기" aria-hidden="true">
+  <div class="panel-head">
+    <span class="kind" id="d-kind"></span>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <h2 class="d-name" id="d-name"></h2>
+    <p class="d-seller" id="d-seller"></p>
+    <p class="d-desc" id="d-desc"></p>
+    <dl class="d-facts">
+      <div><dt>단위</dt><dd id="d-unit"></dd></div>
+      <div><dt>가격</dt><dd id="d-price"></dd></div>
+    </dl>
+    <div class="d-qty">
+      <span>수량</span>
+      <span class="qty"><button type="button" id="d-dec" aria-label="하나 빼기">−</button><span id="d-q">1</span><button type="button" id="d-inc" aria-label="하나 더">+</button></span>
+    </div>
+  </div>
+  <div class="panel-foot">
+    <div class="total"><span>합계</span><span id="d-total">0원</span></div>
+    <div class="two">
+      <button class="ghost" id="d-add" type="button">장바구니 담기</button>
+      <button class="primary" id="d-buy" type="button">바로 구매</button>
+    </div>
+  </div>
+</aside>
+
+<aside class="panel order" id="order" aria-label="주문서" aria-hidden="true">
+  <div class="panel-head">
+    <h2>주문서</h2>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <div id="order-step">
+      <ul class="items summary" id="o-items"></ul>
+      <div class="total o-total"><span>결제할 금액</span><span id="o-total">0원</span></div>
+      <form id="order-form" class="form" novalidate>
+        <label for="o-name">주문하는 분 이름</label>
+        <input id="o-name" name="oname" required maxlength="20" autocomplete="name">
+        <label for="o-phone">연락처</label>
+        <input id="o-phone" name="ophone" required maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000">
+        <label for="o-place">받는 곳 또는 만날 곳</label>
+        <input id="o-place" name="oplace" maxlength="100" placeholder="주소, 또는 미소를 받을 장소">
+        <label for="o-memo">판매자에게 남길 말</label>
+        <textarea id="o-memo" name="omemo" rows="2" maxlength="200" placeholder="원하는 날짜, 시간 등"></textarea>
+        <label for="o-payer">입금하실 분 이름</label>
+        <input id="o-payer" name="opayer" maxlength="20" placeholder="비워 두면 주문하는 분 이름">
+        <div class="pay-note">
+          <strong>결제 방법: 계좌 입금</strong>
+          <span>주문하면 입금할 계좌를 알려 드려요. 입금이 확인되면 판매자가 연락드려요.</span>
+        </div>
+        <p class="form-msg" id="o-msg" role="status"></p>
+        <button class="primary" id="o-submit" type="submit">주문하기</button>
+      </form>
+    </div>
+    <div class="receipt" id="receipt" hidden>
+      <p class="r-title">주문이 접수됐어요</p>
+      <dl class="d-facts">
+        <div><dt>주문번호</dt><dd id="r-no"></dd></div>
+        <div><dt>입금할 금액</dt><dd id="r-total"></dd></div>
+        <div><dt>입금 계좌</dt><dd id="r-bank"></dd></div>
+      </dl>
+      <p class="r-note">입금이 확인되면 판매자가 적어 주신 연락처로 연락드려요. 주문번호를 적어 두세요.</p>
+      <button class="ghost" type="button" data-close>쇼핑 계속하기</button>
+    </div>
   </div>
 </aside>
 

@@ -95,14 +95,7 @@
     saveCart(); renderCart();
   }
 
-  checkout.addEventListener('click', function () {
-    var n = 0; Object.keys(cart).forEach(function (id) { n += cart[id]; });
-    var t = totalEl.textContent;
-    cart = {}; saveCart(); renderCart();
-    done.innerHTML = '<strong>주문이 접수됐어요</strong>';
-    done.appendChild(document.createTextNode('상품 ' + n + '개, ' + t + '. 실제 결제는 아직 연결되지 않은 연습용 주문입니다.'));
-    done.hidden = false;
-  });
+  checkout.addEventListener('click', function () { openOrder(checkout); });
 
   // ---------- 상품 목록 ----------
   var grid = $('#grid'), status = $('#status'), tpl = $('#product-tpl');
@@ -115,7 +108,7 @@
       li.dataset.id = id;
       li.dataset.cat = p.cat;
       li.querySelector('.kind').textContent = p.cat;
-      li.querySelector('h3').textContent = p.name;
+      li.querySelector('.detail-link').textContent = p.name;
       var sel = li.querySelector('.seller');
       sel.textContent = p.seller ? '판매자 ' + p.seller : '';
       sel.hidden = !p.seller;
@@ -196,6 +189,118 @@
       else if (e.target.closest('[data-dec]')) changeCart(row.dataset.id, -1);
       else if (e.target.closest('[data-remove]')) changeCart(row.dataset.id, -cart[row.dataset.id]);
     }
+  });
+
+  // ---------- 상품 자세히 보기 ----------
+  var detailId = null, detailQty = 1;
+  function renderDetail() {
+    var p = products[detailId]; if (!p) return;
+    $('#d-kind').textContent = p.cat;
+    $('#d-name').textContent = p.name;
+    $('#d-seller').textContent = p.seller ? '판매자 ' + p.seller : '';
+    $('#d-seller').hidden = !p.seller;
+    $('#d-desc').textContent = p.desc || '';
+    $('#d-unit').textContent = p.unit || '-';
+    $('#d-price').textContent = won(p.price);
+    $('#d-q').textContent = detailQty;
+    $('#d-total').textContent = won(p.price * detailQty);
+  }
+  function openDetail(id, from) {
+    if (!products[id]) return;
+    detailId = id; detailQty = 1;
+    renderDetail();
+    openPanel($('#detail'), from);
+  }
+  grid.addEventListener('click', function (e) {
+    if (e.target.closest('.add')) return;
+    var card = e.target.closest('.product');
+    if (card) openDetail(card.dataset.id, card.querySelector('.detail-link'));
+  });
+  $('#d-inc').addEventListener('click', function () { detailQty = Math.min(99, detailQty + 1); renderDetail(); });
+  $('#d-dec').addEventListener('click', function () { detailQty = Math.max(1, detailQty - 1); renderDetail(); });
+  $('#d-add').addEventListener('click', function () {
+    changeCart(detailId, detailQty);
+    closePanels();
+    var btn = $('#open-cart'); btn.classList.remove('bump'); void btn.offsetWidth; btn.classList.add('bump');
+  });
+  $('#d-buy').addEventListener('click', function () {
+    changeCart(detailId, detailQty);
+    openOrder($('#open-cart'));
+  });
+
+  // ---------- 주문서 ----------
+  // 주문은 판매자의 구글 시트로 보낸다(settings.json의 orderUrl). 결제는 계좌 입금.
+  var settings = { orderUrl: '', bank: {} };
+  fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { if (j) settings = j; }).catch(function () {});
+
+  var orderForm = $('#order-form'), oMsg = $('#o-msg');
+  function oSay(t, isErr) { oMsg.textContent = t; oMsg.classList.toggle('err', !!isErr); }
+
+  function cartLines() {
+    return Object.keys(cart).filter(function (id) { return products[id]; }).map(function (id) {
+      var p = products[id];
+      return { id: id, name: p.name, seller: p.seller, price: p.price, qty: cart[id] };
+    });
+  }
+
+  function openOrder(from) {
+    var lines = cartLines();
+    if (!lines.length) return;
+    var box = $('#o-items'), total = 0;
+    box.innerHTML = '';
+    lines.forEach(function (l) {
+      total += l.price * l.qty;
+      var li = document.createElement('li');
+      li.className = 'item';
+      li.innerHTML = '<span class="name"></span><span class="sum"></span><span class="meta"></span>';
+      li.querySelector('.name').textContent = l.name;
+      li.querySelector('.sum').textContent = won(l.price * l.qty);
+      li.querySelector('.meta').textContent = won(l.price) + ' × ' + l.qty + (l.seller ? ' · 판매자 ' + l.seller : '');
+      box.appendChild(li);
+    });
+    $('#o-total').textContent = won(total);
+    $('#order-step').hidden = false;
+    $('#receipt').hidden = true;
+    if (!settings.orderUrl) oSay('지금은 주문 받기를 준비하고 있어요. 조금만 기다려 주세요.', true);
+    else oSay('');
+    $('#o-submit').disabled = !settings.orderUrl;
+    openPanel($('#order'), from);
+  }
+
+  orderForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!settings.orderUrl) return;
+    var f = orderForm;
+    var data = {
+      name: f.oname.value.trim(), phone: f.ophone.value.trim(), place: f.oplace.value.trim(),
+      memo: f.omemo.value.trim(), payer: f.opayer.value.trim(), items: cartLines()
+    };
+    if (!data.name) { oSay('주문하는 분 이름을 적어 주세요.', true); f.oname.focus(); return; }
+    if (!/^[0-9+\-\s()]{8,20}$/.test(data.phone)) { oSay('연락처를 숫자로 적어 주세요. 예: 010-1234-5678', true); f.ophone.focus(); return; }
+    if (!data.items.length) { oSay('장바구니가 비어 있어요.', true); return; }
+    if (!data.payer) data.payer = data.name;
+
+    var btn = $('#o-submit'); btn.disabled = true;
+    oSay('주문을 보내는 중이에요…');
+    // text/plain으로 보내야 구글 스크립트가 바로 받는다
+    fetch(settings.orderUrl, { method: 'POST', body: JSON.stringify(data) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.ok) throw new Error(res && res.error || 'order failed');
+        var b = settings.bank || {};
+        $('#r-no').textContent = res.orderNo;
+        $('#r-total').textContent = won(res.total);
+        $('#r-bank').textContent = b.account ? (b.name + ' ' + b.account + ' (' + b.holder + ')') : '판매자가 연락드려 알려 드려요';
+        $('#order-step').hidden = true;
+        $('#receipt').hidden = false;
+        cart = {}; saveCart(); renderCart();
+        f.reset(); oSay('');
+      })
+      .catch(function () {
+        oSay('주문을 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', true);
+      })
+      .then(function () { btn.disabled = false; });
   });
 
   // ---------- 상품 관리 (편집 권한이 있는 사람에게만 보임) ----------

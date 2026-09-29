@@ -139,3 +139,26 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .gh-login label { font-size: .8rem; color: var(--muted); }
 .gh-login input { font: inherit; width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
 .logout { width: 100%; margin-top: 16px; }
+
+/* 상품 자세히 보기, 주문서 */
+.product { cursor: pointer; }
+.detail-link { all: unset; cursor: pointer; }
+.detail-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.detail .panel-head .kind { font-size: .75rem; color: var(--accent); background: var(--tag); padding: 2px 8px; border-radius: 4px; }
+.d-name { font-family: var(--display); font-size: 1.5rem; line-height: 1.3; margin: 16px 0 4px; text-wrap: balance; }
+.d-seller { margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
+.d-desc { margin: 0 0 16px; white-space: pre-line; }
+.d-facts { margin: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.d-facts div { display: flex; justify-content: space-between; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--line); }
+.d-facts dt { color: var(--muted); font-size: .88rem; }
+.d-facts dd { margin: 0; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.d-qty { display: flex; justify-content: space-between; align-items: center; padding-block: 14px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.summary .item { grid-template-columns: 1fr auto; }
+.summary .meta { font-size: .8rem; color: var(--muted); }
+.o-total { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.pay-note { display: grid; gap: 2px; margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--tag); font-size: .85rem; }
+.pay-note span { color: var(--muted); }
+.receipt { display: grid; gap: 14px; padding-block: 16px; }
+.r-title { font-family: var(--display); font-size: 1.4rem; margin: 0; }
+.r-note { margin: 0; color: var(--muted); font-size: .88rem; }
