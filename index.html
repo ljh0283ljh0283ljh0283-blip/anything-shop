@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>무엇이든 상점</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>body{margin:0}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="site">
+    <a class="logo" href="#top" id="top">무엇이든 상점</a>
+    <nav class="menu" aria-label="메뉴">
+      <a href="#products">상품</a>
+      <a href="#about">소개</a>
+      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>상품 관리</button>
+      <button class="cart-btn" id="open-cart" type="button" aria-controls="cart">장바구니 <span class="count" id="cart-count">0</span></button>
+    </nav>
+  </header>
+
+  <section class="intro">
+    <h1>손에 잡히는 것도, 잡히지 않는 것도 팝니다</h1>
+    <p>커피 한 잔부터 미소 한 번까지. 필요한 걸 고르면 정성껏 보내드립니다.</p>
+  </section>
+
+  <section id="products" aria-label="상품 목록">
+    <div class="cats" id="cats" role="group" aria-label="분류">
+      <button type="button" data-cat="all" aria-pressed="true">전체</button>
+    </div>
+    <p class="status" id="status">상품을 불러오는 중이에요.</p>
+    <ul class="grid" id="grid"></ul>
+  </section>
+
+  <section class="about" id="about">
+    <h2>소개</h2>
+    <p>무엇이든 상점은 물건뿐 아니라 마음과 시간도 파는 작은 가게입니다. 여기 없는 상품이 필요하면 말씀해 주세요.</p>
+  </section>
+
+  <footer>© 2026 무엇이든 상점</footer>
+</div>
+
+<template id="product-tpl">
+  <li class="product">
+    <span class="kind"></span>
+    <h3></h3>
+    <span class="seller"></span>
+    <p class="desc"></p>
+    <span class="unit"></span>
+    <div class="buy"><span class="price"></span><button class="add" type="button">담기</button></div>
+  </li>
+</template>
+
+<div class="shade" id="shade" hidden></div>
+
+<aside class="panel cart" id="cart" aria-label="장바구니" aria-hidden="true">
+  <div class="panel-head">
+    <h2>장바구니</h2>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <p class="empty" id="cart-empty">아직 담은 상품이 없어요. 마음에 드는 상품의 담기 버튼을 눌러 보세요.</p>
+    <ul class="items" id="cart-items" hidden></ul>
+  </div>
+  <div class="panel-foot">
+    <div class="done" id="done" hidden></div>
+    <div class="total"><span>합계</span><span id="cart-total">0원</span></div>
+    <button class="primary" id="checkout" type="button" disabled>주문하기</button>
+  </div>
+</aside>
+
+<aside class="panel admin" id="admin" aria-label="상품 관리" aria-hidden="true">
+  <div class="panel-head">
+    <h2 id="form-title">새 상품 등록</h2>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <form id="product-form" class="form" novalidate>
+      <label for="f-name">상품 이름</label>
+      <input id="f-name" name="name" required maxlength="40" placeholder="예: 미소 한 번">
+      <label for="f-seller">판매자</label>
+      <input id="f-seller" name="seller" maxlength="30" list="seller-list" placeholder="예: 빨간도령">
+      <datalist id="seller-list"></datalist>
+      <div class="row">
+        <div>
+          <label for="f-cat">분류</label>
+          <input id="f-cat" name="cat" required maxlength="12" list="cat-list" placeholder="마음, 시간, 물건…">
+          <datalist id="cat-list"></datalist>
+        </div>
+        <div>
+          <label for="f-price">가격 (원)</label>
+          <input id="f-price" name="price" type="number" min="0" step="100" required inputmode="numeric" placeholder="1000">
+        </div>
+      </div>
+      <label for="f-unit">단위</label>
+      <input id="f-unit" name="unit" maxlength="20" placeholder="예: 1회, 30분, 355ml">
+      <label for="f-desc">설명</label>
+      <textarea id="f-desc" name="desc" rows="3" maxlength="200" placeholder="손님에게 보여줄 한두 문장"></textarea>
+      <p class="form-msg" id="form-msg" role="status"></p>
+      <div class="form-actions">
+        <button class="primary" id="f-save" type="submit">등록하기</button>
+        <button class="ghost" id="f-cancel" type="button" hidden>수정 취소</button>
+      </div>
+    </form>
+
+    <p class="sync-msg" id="sync-msg" role="status"></p>
+    <h3 class="admin-list-title">등록된 상품 <span id="admin-count">0</span>개</h3>
+    <ul class="admin-list" id="admin-list"></ul>
+  </div>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>
