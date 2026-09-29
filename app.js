@@ -383,14 +383,14 @@
     }
     function tryLogin() {
       var msg = $('#gh-msg');
-      msg.textContent = '확인하는 중이에요…';
+      msg.textContent = '확인하는 중이에요…'; msg.classList.remove('err');
       return ghLoad().then(function (list) {
         setProducts(list.map(function (p) { return { id: p.id, data: p }; }));
         msg.textContent = '';
         showLoggedIn(true);
       }).catch(function (err) {
         showLoggedIn(false);
-        msg.textContent = writeError(err);
+        msg.textContent = writeError(err); msg.classList.add('err');
       });
     }
 
@@ -400,7 +400,7 @@
     });
     $('#gh-save').addEventListener('click', function () {
       var t = $('#gh-token').value.trim();
-      if (!t) { $('#gh-msg').textContent = '열쇠(토큰)를 붙여 넣어 주세요.'; return; }
+      if (!t) { $('#gh-msg').textContent = '열쇠(토큰)를 붙여 넣어 주세요.'; $('#gh-msg').classList.add('err'); return; }
       try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
       $('#gh-token').value = '';
       tryLogin();
@@ -408,7 +408,7 @@
     $('#gh-logout').addEventListener('click', function () {
       try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
       showLoggedIn(false);
-      $('#gh-msg').textContent = '로그아웃했어요.';
+      $('#gh-msg').textContent = '로그아웃했어요.'; $('#gh-msg').classList.remove('err');
     });
     if (ghToken()) { $('#open-admin').hidden = false; }
     $('#open-admin').addEventListener('click', function () { if (ghToken()) tryLogin(); });
