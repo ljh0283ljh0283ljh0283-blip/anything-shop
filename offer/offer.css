@@ -1,0 +1,43 @@
+/* 값매김 상점: 무엇이든 상점(../style.css) 위에 제안에 필요한 것만 더한다 */
+.product .bids { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.product.closed { opacity: .7; }
+.add:disabled { border-color: var(--line); color: var(--muted); background: transparent; cursor: not-allowed; }
+
+.how ol { margin: 0 0 10px; padding-left: 1.3em; color: var(--muted); display: grid; gap: 4px; }
+.how strong { color: var(--fg); font-weight: 600; }
+footer a { color: var(--muted); }
+
+.closed-note { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--tag); color: var(--danger); font-size: .88rem; }
+.form h3, .lookup h3 { margin: 4px 0 0; font-size: .95rem; }
+.form .check { display: flex; gap: 8px; align-items: center; font-size: .85rem; color: var(--fg); }
+.form .check input { width: auto; }
+.lookup { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+/* 제안 카드 (내 제안, 받은 제안) */
+.offers { list-style: none; margin: 0; padding: 0; display: grid; }
+.offer-card { display: grid; gap: 2px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.oc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.oc-name, .oc-price { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.oc-meta, .oc-who { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.oc-who { color: var(--fg); }
+.oc-note { margin: 2px 0 0; font-size: .85rem; color: var(--muted); white-space: pre-line; }
+.oc-note:empty { display: none; }
+.oc-bank { margin: 4px 0 0; padding: 8px 10px; border-radius: 6px; background: var(--tag); font-size: .85rem; font-weight: 500; }
+.oc-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.oc-actions:empty { display: none; }
+.oc-actions button { font-size: .82rem; padding: 5px 12px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); }
+.oc-actions button.yes { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.oc-actions button.link { border: 0; padding: 4px 0; margin-right: 10px; color: var(--muted); text-decoration: underline; }
+.oc-actions button.confirm { color: var(--danger); }
+.oc-actions button:disabled { opacity: .5; }
+.badge { flex: none; font-size: .72rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.badge.wait { border-color: var(--accent); color: var(--accent); }
+.badge.yes { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.badge.no { border-color: var(--danger); color: var(--danger); }
+
+/* 판매자 화면 탭 */
+.tabs { display: flex; gap: 4px; }
+.tabs button { padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 600; font-size: .95rem; }
+.tabs button[aria-selected="true"] { background: var(--tag); color: var(--accent); }
+.filters { margin: 12px 0 4px; }
+.offer-group h3 { margin: 16px 0 0; font-size: .95rem; }

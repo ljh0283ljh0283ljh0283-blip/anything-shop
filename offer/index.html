@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>값매김 상점</title>
+<meta name="description" content="판매자는 가격 없이 상품만 올리고, 손님이 스스로 값을 매겨 제안하는 값매김 상점. 판매자는 제안을 보고 팔지 말지 정해요.">
+<link rel="canonical" href="https://ljh0283ljh0283ljh0283-blip.github.io/anything-shop/offer/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="값매김 상점">
+<meta property="og:title" content="값매김 상점">
+<meta property="og:description" content="가격은 손님이 정합니다. 마음에 드는 상품에 값을 매겨 제안해 보세요.">
+<meta property="og:url" content="https://ljh0283ljh0283ljh0283-blip.github.io/anything-shop/offer/">
+<meta property="og:image" content="https://ljh0283ljh0283ljh0283-blip.github.io/anything-shop/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../style.css?v=20260930b">
+<link rel="stylesheet" href="offer.css?v=20260930a">
+<style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="site">
+    <a class="logo" href="#top" id="top">값매김 상점</a>
+    <nav class="menu" aria-label="메뉴">
+      <a href="#products">상품</a>
+      <a href="#how">이용 방법</a>
+      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>판매자</button>
+      <button class="cart-btn" id="open-mine" type="button" aria-controls="mine">내 제안 <span class="count" id="mine-count">0</span></button>
+    </nav>
+  </header>
+
+  <p class="notice" id="notice"><strong>오픈 준비 중</strong><span>지금은 상품을 둘러보실 수 있어요. 가격 제안은 정식 오픈 후에 받을게요.</span></p>
+
+  <section class="intro">
+    <h1>가격은<br>당신이 정합니다</h1>
+    <p>판매자는 가격을 붙이지 않고 상품만 올려요. 마음에 드는 상품이 있으면 스스로 값을 매겨 제안하세요. 판매자가 제안을 보고 팔지 정합니다.</p>
+  </section>
+
+  <section id="products" aria-label="상품 목록">
+    <div class="cats" id="cats" role="group" aria-label="분류">
+      <button type="button" data-cat="all" aria-pressed="true">전체</button>
+    </div>
+    <p class="status" id="status">상품을 불러오는 중이에요.</p>
+    <ul class="grid" id="grid"></ul>
+  </section>
+
+  <section class="about how" id="how">
+    <h2>이용 방법</h2>
+    <ol>
+      <li><strong>판매자</strong>는 가격 없이 상품 설명만 올려요.</li>
+      <li><strong>손님</strong>은 상품의 가치를 스스로 매겨 한 개당 가격을 제안해요. 여러 사람이 제안할 수 있어요.</li>
+      <li><strong>판매자</strong>는 들어온 제안을 보고 팔지 말지 정해요. 수락되면 안내된 계좌로 입금하면 거래가 끝나요.</li>
+    </ol>
+    <p>제안하면 제안번호가 나와요. 위의 <strong>내 제안</strong>에서 판매자의 답을 확인할 수 있어요.</p>
+  </section>
+
+  <footer>© 2026 값매김 상점 · <a href="../">무엇이든 상점</a> <button class="admin-entry" id="admin-entry" type="button">판매자</button></footer>
+</div>
+
+<template id="product-tpl">
+  <li class="product">
+    <span class="kind"></span>
+    <h3><button type="button" class="detail-link"></button></h3>
+    <span class="seller"></span>
+    <p class="desc"></p>
+    <span class="unit"></span>
+    <div class="buy"><span class="bids"></span><button class="add" type="button">가격 제안</button></div>
+  </li>
+</template>
+
+<div class="shade" id="shade" hidden></div>
+
+<!-- 상품 자세히 보기 + 가격 제안 -->
+<aside class="panel detail" id="detail" aria-label="상품 자세히 보기" aria-hidden="true">
+  <div class="panel-head">
+    <span class="kind" id="d-kind"></span>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <div id="offer-step">
+      <h2 class="d-name" id="d-name"></h2>
+      <p class="d-seller" id="d-seller"></p>
+      <p class="d-desc" id="d-desc"></p>
+      <dl class="d-facts">
+        <div><dt>단위</dt><dd id="d-unit"></dd></div>
+        <div><dt>지금까지 제안</dt><dd id="d-bids"></dd></div>
+      </dl>
+      <form id="offer-form" class="form" novalidate>
+        <p class="closed-note" id="d-closed" hidden>판매자가 이 상품의 제안을 마감했어요.</p>
+        <div class="row">
+          <div>
+            <label for="o-price">한 개당 제안 가격 (원)</label>
+            <input id="o-price" name="oprice" type="number" min="100" step="100" inputmode="numeric" placeholder="얼마면 사실래요?">
+          </div>
+          <div>
+            <label for="o-qty">수량</label>
+            <input id="o-qty" name="oqty" type="number" min="1" max="99" value="1" inputmode="numeric">
+          </div>
+        </div>
+        <div class="total o-total"><span>제안 합계</span><span id="o-total">0원</span></div>
+        <label for="o-name">제안하는 분 이름</label>
+        <input id="o-name" name="oname" required maxlength="20" autocomplete="name">
+        <label for="o-phone">연락처</label>
+        <input id="o-phone" name="ophone" required maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000">
+        <label for="o-place">받는 곳 또는 만날 곳</label>
+        <input id="o-place" name="oplace" maxlength="100" placeholder="주소, 또는 미소를 받을 장소">
+        <label for="o-memo">판매자에게 남길 말</label>
+        <textarea id="o-memo" name="omemo" rows="2" maxlength="200" placeholder="이 가격을 매긴 이유, 원하는 날짜 등"></textarea>
+        <div class="pay-note">
+          <strong>제안은 약속이에요</strong>
+          <span>판매자가 수락하면 제안한 금액을 계좌로 입금해 주세요. 판매자가 답하기 전에는 언제든 취소할 수 있어요.</span>
+        </div>
+        <p class="form-msg" id="o-msg" role="status"></p>
+        <button class="primary" id="o-submit" type="submit">이 가격으로 제안하기</button>
+      </form>
+    </div>
+    <div class="receipt" id="receipt" hidden>
+      <p class="r-title">제안을 보냈어요</p>
+      <dl class="d-facts">
+        <div><dt>제안번호</dt><dd id="r-no"></dd></div>
+        <div><dt>상품</dt><dd id="r-product"></dd></div>
+        <div><dt>제안 금액</dt><dd id="r-total"></dd></div>
+      </dl>
+      <p class="r-note">판매자가 제안을 보고 수락하거나 거절해요. 결과는 위의 <strong>내 제안</strong>에서 확인하세요. 제안번호를 적어 두면 다른 기기에서도 볼 수 있어요.</p>
+      <button class="ghost" type="button" data-close>다른 상품 보기</button>
+    </div>
+  </div>
+</aside>
+
+<!-- 내 제안 -->
+<aside class="panel mine" id="mine" aria-label="내 제안" aria-hidden="true">
+  <div class="panel-head">
+    <h2>내 제안</h2>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <p class="empty" id="mine-empty">이 기기에서 보낸 제안이 아직 없어요.</p>
+    <ul class="offers" id="mine-list"></ul>
+    <form id="lookup-form" class="form lookup" novalidate>
+      <h3>제안번호로 찾기</h3>
+      <div class="row">
+        <div>
+          <label for="l-no">제안번호</label>
+          <input id="l-no" name="lno" maxlength="30" placeholder="260930-120000-12">
+        </div>
+        <div>
+          <label for="l-phone">연락처</label>
+          <input id="l-phone" name="lphone" maxlength="20" inputmode="tel" placeholder="010-0000-0000">
+        </div>
+      </div>
+      <p class="form-msg" id="l-msg" role="status"></p>
+      <button class="ghost" type="submit">찾기</button>
+    </form>
+  </div>
+</aside>
+
+<!-- 판매자: 받은 제안 + 상품 관리 -->
+<aside class="panel admin" id="admin" aria-label="판매자" aria-hidden="true">
+  <div class="panel-head">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-offers" aria-selected="true" aria-controls="pane-offers">받은 제안</button>
+      <button type="button" role="tab" id="tab-products" aria-selected="false" aria-controls="pane-products">상품 관리</button>
+    </div>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <div id="pane-offers" role="tabpanel" aria-labelledby="tab-offers">
+      <div class="gh-login" id="key-login" hidden>
+        <p>받은 제안을 보려면 판매자 열쇠로 로그인해 주세요. 열쇠는 구글 시트 Apps Script의 스크립트 속성 ADMIN_KEY에 넣은 글자예요.</p>
+        <label for="admin-key">판매자 열쇠</label>
+        <input id="admin-key" type="password" autocomplete="off">
+        <button class="primary" id="key-save" type="button">로그인</button>
+      </div>
+      <p class="form-msg" id="key-msg" role="status"></p>
+      <div id="offers-wrap" hidden>
+        <div class="cats filters" id="offer-filter" role="group" aria-label="제안 상태">
+          <button type="button" data-f="검토 중" aria-pressed="true">검토 중</button>
+          <button type="button" data-f="수락" aria-pressed="false">수락</button>
+          <button type="button" data-f="거절" aria-pressed="false">거절</button>
+          <button type="button" data-f="all" aria-pressed="false">전체</button>
+        </div>
+        <div id="offer-groups"></div>
+        <button class="ghost logout" id="key-logout" type="button">판매자 열쇠 로그아웃</button>
+      </div>
+    </div>
+
+    <div id="pane-products" role="tabpanel" aria-labelledby="tab-products" hidden>
+      <div class="gh-login" id="gh-login" hidden>
+        <p>상품을 바꾸려면 GitHub 열쇠(토큰)로 로그인해 주세요. 열쇠는 이 브라우저에만 저장돼요.</p>
+        <label for="gh-token">GitHub 토큰</label>
+        <input id="gh-token" type="password" autocomplete="off" placeholder="github_pat_로 시작하는 글자">
+        <button class="primary" id="gh-save" type="button">로그인</button>
+      </div>
+      <p class="form-msg" id="gh-msg" role="status"></p>
+      <form id="product-form" class="form" novalidate hidden>
+        <h3 id="form-title">새 상품 등록</h3>
+        <label for="f-name">상품 이름</label>
+        <input id="f-name" name="name" required maxlength="40" placeholder="예: 미소 한 번">
+        <div class="row">
+          <div>
+            <label for="f-seller">판매자</label>
+            <input id="f-seller" name="seller" maxlength="30" list="seller-list" placeholder="예: 빨간도령">
+            <datalist id="seller-list"></datalist>
+          </div>
+          <div>
+            <label for="f-cat">분류</label>
+            <input id="f-cat" name="cat" required maxlength="12" list="cat-list" placeholder="마음, 시간, 물건…">
+            <datalist id="cat-list"></datalist>
+          </div>
+        </div>
+        <label for="f-unit">단위</label>
+        <input id="f-unit" name="unit" maxlength="20" placeholder="예: 1회, 30분, 355ml">
+        <label for="f-desc">설명</label>
+        <textarea id="f-desc" name="desc" rows="4" maxlength="400" placeholder="가격 대신 상품의 가치를 알 수 있게 자세히 적어 주세요"></textarea>
+        <label class="check"><input id="f-closed" name="closed" type="checkbox"> 제안 마감 (더 이상 가격 제안을 받지 않아요)</label>
+        <p class="form-msg" id="form-msg" role="status"></p>
+        <div class="form-actions">
+          <button class="primary" id="f-save" type="submit">등록하기</button>
+          <button class="ghost" id="f-cancel" type="button" hidden>수정 취소</button>
+        </div>
+      </form>
+      <div id="admin-list-wrap" hidden>
+        <h3 class="admin-list-title">등록된 상품 <span id="admin-count">0</span>개</h3>
+        <ul class="admin-list" id="admin-list"></ul>
+        <button class="ghost logout" id="gh-logout" type="button">GitHub 로그아웃</button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script src="app.js?v=20260930a"></script>
+</body>
+</html>
