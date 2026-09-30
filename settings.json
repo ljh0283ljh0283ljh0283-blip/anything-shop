@@ -1,4 +1,8 @@
 {
- "orderUrl": "",
- "bank": { "name": "", "account": "", "holder": "" }
+ "orderUrl": "https://script.google.com/macros/s/AKfycbzn-AQEKTQA87p5i88l7l1CbsdAUQCfHBwUkeHVwSKVG7O-S8Pf5a6ZHZI0XIBREojoWw/exec",
+ "bank": {
+  "name": "",
+  "account": "",
+  "holder": ""
+ }
 }
