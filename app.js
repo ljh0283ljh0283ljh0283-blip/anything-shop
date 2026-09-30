@@ -232,7 +232,11 @@
   // 주문은 판매자의 구글 시트로 보낸다(settings.json의 orderUrl). 결제는 계좌 입금.
   var settings = { orderUrl: '', bank: {} };
   fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) { if (j) settings = j; }).catch(function () {});
+    .then(function (j) { if (j) settings = j; applyOpen(); }).catch(function () {});
+
+  // settings.json의 open이 false면 "오픈 준비 중" 안내를 띄우고 주문을 받지 않는다
+  function isOpen() { return settings.open !== false && !!settings.orderUrl; }
+  function applyOpen() { $('#notice').hidden = settings.open !== false; }
 
   var orderForm = $('#order-form'), oMsg = $('#o-msg');
   function oSay(t, isErr) { oMsg.textContent = t; oMsg.classList.toggle('err', !!isErr); }
@@ -262,15 +266,15 @@
     $('#o-total').textContent = won(total);
     $('#order-step').hidden = false;
     $('#receipt').hidden = true;
-    if (!settings.orderUrl) oSay('지금은 주문 받기를 준비하고 있어요. 조금만 기다려 주세요.', true);
+    if (!isOpen()) oSay('지금은 오픈 준비 중이라 주문을 받지 않아요. 정식 오픈 후에 주문해 주세요.', true);
     else oSay('');
-    $('#o-submit').disabled = !settings.orderUrl;
+    $('#o-submit').disabled = !isOpen();
     openPanel($('#order'), from);
   }
 
   orderForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (!settings.orderUrl) return;
+    if (!isOpen()) return;
     var f = orderForm;
     var data = {
       name: f.oname.value.trim(), phone: f.ophone.value.trim(), place: f.oplace.value.trim(),
