@@ -1,6 +1,6 @@
 {
- "open": false,
- "offerUrl": "",
+ "open": true,
+ "offerUrl": "https://script.google.com/macros/s/AKfycbzh9O9IrRMBFbpY-tQrnBKMRCrVURO2v7YmFflLLiTv1z1TplTrnkpj-B89bc3qJYBG/exec",
  "bank": {
   "name": "신한은행",
   "account": "92804326188",
