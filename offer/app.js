@@ -1,4 +1,4 @@
-// 값매김 상점: 상품 목록, 가격 제안, 내 제안 확인, 판매자(받은 제안 수락/거절, 상품 관리)
+// 어떻게든 팔거야: 상품 목록, 가격 제안, 내 제안 확인, 판매자(받은 제안 수락/거절, 상품 관리)
 (function () {
   var MINE_KEY = 'offer-shop-mine';
   var ADMIN_KEY = 'offer-shop-admin-key';

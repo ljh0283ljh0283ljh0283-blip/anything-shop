@@ -9,7 +9,7 @@
 - `settings.json` 주문 받을 주소(orderUrl)와 입금 계좌
 - `order-script.gs` 주문을 구글 시트에 쌓는 스크립트 (구글 시트 > 확장 프로그램 > Apps Script에 붙여 넣고 웹 앱으로 배포)
 
-## 값매김 상점 (`offer/`)
+## 어떻게든 팔거야 (`offer/`)
 
 가격을 판매자가 정하지 않고 손님이 제안하는 상점입니다. 주소: `/anything-shop/offer/`
 
