@@ -1,4 +1,4 @@
-/* 값매김 상점: 무엇이든 상점(../style.css) 위에 제안에 필요한 것만 더한다 */
+/* 어떻게든 팔거야: 무엇이든 상점(../style.css) 위에 제안에 필요한 것만 더한다 */
 .product .bids { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .product.closed { opacity: .7; }
 .add:disabled { border-color: var(--line); color: var(--muted); background: transparent; cursor: not-allowed; }
