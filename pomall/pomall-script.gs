@@ -1,19 +1,20 @@
 // SEKI POmall 발주: 거래처 로그인, 거래처별 단가, 발주를 구글 시트에 두는 Apps Script
 // 시트 탭 두 개를 씁니다. 없으면 처음 쓸 때 만들어집니다.
 //   발주    발주 한 건의 품목마다 한 줄 (같은 발주번호). 생산 현장에서 줄 단위로 보기 쉽게 하려는 것입니다.
-//   거래처  거래처 코드, 비밀번호(암호화), 사용 여부, 모델마다 한 칸씩 단가(원/EA, 부가세 별도). 빈 칸은 "단가 문의".
+//   거래처  거래처 코드, 비밀번호(암호화), 사용 여부, 할인율(%), 모델마다 한 칸씩 단가(원/EA, 부가세 별도). 빈 칸은 "단가 문의".
+//           최종 단가 = 모델 단가 × (1 - 할인율/100). 할인율이 비어 있으면 적은 단가 그대로입니다.
 //           단가는 사이트의 관리 > 거래처 단가에서 고치는 것이 기본이지만, 이 시트에서 직접 고쳐도 됩니다.
 // 스크립트 속성(프로젝트 설정 > 스크립트 속성)
 //   ADMIN_KEY     관리자 열쇠. 관리 화면에서 발주를 보고 거래처 단가를 고칠 때 씁니다.
 //   PRODUCTS_URL  products.json 주소. 저장소를 옮기면 이 값만 바꾸면 됩니다.
-// 금액은 거래처 브라우저가 보낸 값을 믿지 않고 거래처 단가와 products.json 규칙으로 다시 계산합니다.
+// 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
 
 var DEFAULT_PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/pomall/products.json';
 var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처';
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '바뀐 시각'];
+var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
 var STATUSES = ['접수 대기', '생산 확정', '생산 중', '출하 완료', '취소'];
 
 function doGet() { return reply({ ok: true }); }
@@ -45,7 +46,7 @@ function login(code, pw) {
   var c = authCustomer(code, pw);
   if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices };
+  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount };
 }
 function authCustomer(code, pw) {
   code = clip(code, 20).toUpperCase();
@@ -55,7 +56,7 @@ function authCustomer(code, pw) {
 }
 function customerList() { return customers().map(publicCustomer); }
 function publicCustomer(c) {
-  return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, hasPassword: !!c.hash };
+  return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
 }
 function saveCustomer(c) {
   var code = clip(c.code, 20).toUpperCase();
@@ -66,13 +67,15 @@ function saveCustomer(c) {
   var ex = findCustomer(code);
   if (!ex && pw.length < 4) return { ok: false, error: '새 거래처는 비밀번호를 4자 이상 정해 주세요.' };
   if (pw && pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  var discount = Number(c.discount) || 0;
+  if (discount < 0 || discount >= 100) return { ok: false, error: '할인율은 0 이상 100 미만이에요.' };
 
   var s = customerSheet(), head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
   var row = ex ? s.getRange(ex.index, 1, 1, head.length).getValues()[0] : head.map(function () { return ''; });
   var set = function (h, v) { var i = head.indexOf(h); if (i >= 0) row[i] = v; };
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
-  set('사용', c.active === false ? '중지' : '사용'); set('바뀐 시각', new Date());
+  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date());
   if (pw) set('비밀번호', hash(code, pw));
   var prices = c.prices || {};
   head.forEach(function (h, i) {
@@ -93,7 +96,7 @@ function customers() {
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
     return { index: k + 2, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
       phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), hash: String(at(r, '비밀번호')),
-      active: String(at(r, '사용')) !== '중지', prices: prices };
+      active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices };
   }).filter(function (c) { return c.code; });
 }
 function findCustomer(code) { return customers().filter(function (c) { return c.code === code; })[0] || null; }
@@ -121,7 +124,7 @@ function placeOrder(d) {
     if (!(len >= C.length.min && len <= C.length.max && len % C.length.step === 0)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
-    var unit = unitPrice(C, cust.prices[p.id], len, temp, qty);
+    var unit = unitPrice(cust.prices[p.id], cust.discount);
     lines.push({ code: specCode(p.id, len, temp), model: p.id, len: len, temp: temp, qty: qty, unit: unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   var net = lines.reduce(function (s, l) { return s + l.amount; }, 0);
@@ -187,12 +190,7 @@ function catalog() {
 }
 function findProduct(C, id) { for (var i = 0; i < C.products.length; i++) if (C.products[i].id === id) return C.products[i]; return null; }
 function specCode(model, len, temp) { return model + '-L' + ('00' + len).slice(-3) + '-T' + ('00' + temp).slice(-3); }
-function unitPrice(C, base, len, temp, qty) {
-  var r = C.price, u = base + Math.max(0, (len - r.wireBaseMm) / 10) * r.wirePer10mm;
-  if (temp > r.highTempOver) u *= 1 + r.highTempRate;
-  for (var i = 0; i < r.volume.length; i++) if (qty >= r.volume[i].min) { u *= 1 - r.volume[i].off; break; }
-  return Math.round(u * 10) / 10;
-}
+function unitPrice(base, discount) { return Math.round(base * (1 - (discount || 0) / 100) * 10) / 10; }
 function addBizDays(n) {
   var d = new Date(Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd') + 'T00:00:00'), k = 0;
   while (k < n) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) k++; }
@@ -209,13 +207,13 @@ function orderSheet() {
   if (s.getLastRow() === 0) { s.appendRow(HEADER); s.setFrozenRows(1); }
   return s;
 }
-// 거래처 탭: 기본 칸 뒤에 products.json의 모델마다 단가 칸을 둔다. 모델이 늘면 칸이 뒤에 붙는다.
+// 거래처 탭: 기본 칸 뒤에 products.json의 모델마다 단가 칸을 둔다. 모델이나 기본 칸이 늘면 뒤에 붙는다.
 function customerSheet() {
   var s = tab(CUSTOMER_SHEET);
   if (s.getLastRow() === 0) { s.appendRow(CUST_BASE); s.setFrozenRows(1); }
   var head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
   var models = catalog().products.map(function (p) { return p.id; });
-  var missing = models.filter(function (m) { return head.indexOf(m) < 0; });
+  var missing = CUST_BASE.concat(models).filter(function (m) { return head.indexOf(m) < 0; });
   if (missing.length) s.getRange(1, head.length + 1, 1, missing.length).setValues([missing]);
   return s;
 }

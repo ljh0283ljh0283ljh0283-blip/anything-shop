@@ -1,6 +1,6 @@
 // SEKI POmall 발주: 거래처가 로그인해 사양(모델, 와이어 길이, 동작온도)을 골라 선주문 생산을 요청한다.
-// 모델 단가는 거래처마다 다르다. 회사가 관리 > 거래처 단가에서 정하고, 거래처는 로그인해야 자기 단가만 본다.
-// 제품 목록과 공통 가산·할인 규칙은 products.json, 주문 저장 위치는 settings.json에서 정한다.
+// 모델 단가와 할인율은 거래처마다 다르다. 회사가 관리 > 거래처 단가에서 정하고, 거래처는 로그인해야 자기 단가만 본다.
+// 제품 목록과 범위는 products.json, 주문 저장 위치는 settings.json에서 정한다.
 // 저장 위치를 바꾸려면 STORAGES에 같은 일을 하는 항목을 더하고 settings.json의 storage 값을 그 이름으로 바꾼다.
 (function () {
   'use strict';
@@ -49,10 +49,10 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, hasPassword: !!c.pw }; }
+      function pub(c) { return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
-        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices }; }); },
+        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
             var o = Object.assign({}, order, { no: orderNo(), code: c.code, company: c.name, createdAt: new Date().toISOString(), status: '접수 대기' });
@@ -69,7 +69,7 @@
         saveCustomer: function (key, c) {
           var list = custs(), ex = list.filter(function (x) { return x.code === c.code; })[0];
           if (!ex && !c.pw) return Promise.reject(new Error('새 거래처는 비밀번호가 필요해요.'));
-          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices });
+          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount });
           if (c.pw) row.pw = c.pw;
           if (!ex) list.push(row);
           store(KEY.localCustomers, list); return Promise.resolve({ ok: true });
@@ -81,7 +81,7 @@
   // ----- 상태 -----
   var C = null, settings = {}, api = null;
   var sel = { model: null };
-  var session = store(KEY.session);      // {code, pw, customer, prices}
+  var session = store(KEY.session);      // {code, pw, customer, prices, discount}
   var cart = [];
   var history = [];
   var adminOrders = [], adminFilter = 'all', adminTab = 'orders', customers = [], editing = null;
@@ -98,14 +98,10 @@
   function product(id) { return C.products.filter(function (p) { return p.id === id; })[0]; }
   function specCode(model, len, temp) { return model + '-L' + String(len).padStart(3, '0') + '-T' + String(temp).padStart(3, '0'); }
   function basePrice(model) { var v = session && session.prices ? Number(session.prices[model]) : 0; return v > 0 ? v : null; }
-  // 거래처 모델 단가에 공통 가산(와이어 길이, 고온)과 수량 할인을 붙인다. 단가가 없으면 null.
-  function unitPrice(p, len, temp, qty) {
+  // 최종 단가 = 거래처 모델 단가 × (1 - 거래처 할인율). 와이어 길이, 온도, 수량과 상관없다. 단가가 없으면 null.
+  function unitPrice(p) {
     var base = basePrice(p.id); if (base == null) return null;
-    var r = C.price, u = base + Math.max(0, (len - r.wireBaseMm) / 10) * r.wirePer10mm;
-    if (temp > r.highTempOver) u *= 1 + r.highTempRate;
-    var v = r.volume.filter(function (v) { return qty >= v.min; })[0];
-    if (v) u *= 1 - v.off;
-    return Math.round(u * 10) / 10;
+    return Math.round(base * (1 - ((session && session.discount) || 0) / 100) * 10) / 10;
   }
   function leadDays(items) { return items.some(function (i) { return i.qty >= C.lead.bigQty; }) ? C.lead.bigDays : C.lead.days; }
   function totals(items) { var net = items.reduce(function (s, i) { return s + i.unit * i.qty; }, 0); return { net: net, vat: net * C.price.vat, total: net * (1 + C.price.vat) }; }
@@ -125,7 +121,7 @@
   }
   function login(code, pw, quiet) {
     return api.login(code, pw).then(function (d) {
-      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {} };
+      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0 };
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
@@ -153,7 +149,7 @@
   function renderModels() {
     $('#models').innerHTML = C.products.map(function (p) {
       var b = basePrice(p.id);
-      var price = !session ? '로그인 후 단가' : b == null ? '단가 문의' : '기본 ' + won(b);
+      var price = !session ? '로그인 후 단가' : b == null ? '단가 문의' : '단가 ' + won(unitPrice(p));
       return '<button type="button" class="model" data-id="' + esc(p.id) + '" aria-pressed="' + (p.id === sel.model) + '"><b>' + esc(p.id) + '</b>' +
         '<small>' + esc(p.name) + ' · ' + p.temp[0] + '~' + p.temp[1] + '°C</small><span class="price">' + price + '</span></button>';
     }).join('');
@@ -181,7 +177,7 @@
     if (v.errs.length) { $('#spec-meta').textContent = ''; $('#spec-err').textContent = v.errs[0]; add.disabled = true; return; }
     $('#spec-err').textContent = '';
     if (!session) { $('#spec-meta').textContent = '로그인하면 우리 회사 단가로 금액이 나옵니다.'; add.disabled = true; return; }
-    var u = unitPrice(v.p, v.len, v.temp, v.qty);
+    var u = unitPrice(v.p);
     if (u == null) { $('#spec-meta').textContent = v.p.id + '는 아직 단가가 정해지지 않았어요. 담당 영업에 문의해 주세요.'; add.disabled = true; return; }
     $('#spec-meta').textContent = '단가 ' + won(u) + ' × ' + v.qty.toLocaleString() + 'EA = ' + won(u * v.qty);
     add.disabled = false;
@@ -200,7 +196,7 @@
   // ----- 발주서 (거래처마다 따로 보관) -----
   function saveCart() { if (!session) return; var all = store(KEY.cart) || {}; if (Array.isArray(all)) all = {}; all[session.code] = cart; store(KEY.cart, all); }
   function repriceCart() {
-    cart = cart.filter(function (i) { var p = product(i.model); return p && (i.unit = unitPrice(p, i.len, i.temp, i.qty)) != null; });
+    cart = cart.filter(function (i) { var p = product(i.model); return p && (i.unit = unitPrice(p)) != null; });
     saveCart();
   }
   function renderCart() {
@@ -222,10 +218,10 @@
   }
   function addToCart() {
     var v = validate(); if (v.errs.length || !session) return;
-    var unit = unitPrice(v.p, v.len, v.temp, v.qty); if (unit == null) return;
+    var unit = unitPrice(v.p); if (unit == null) return;
     var code = specCode(v.p.id, v.len, v.temp), memo = $('#item-memo').value.trim();
     var ex = cart.filter(function (i) { return i.code === code && i.memo === memo; })[0];
-    if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p, v.len, v.temp, ex.qty); }
+    if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p); }
     else cart.push({ code: code, model: v.p.id, len: v.len, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
@@ -302,7 +298,7 @@
     var o = history.filter(function (x) { return x.no === no; })[0]; if (!o) return;
     var n = 0, skipped = 0;
     o.items.forEach(function (i) {
-      var p = product(i.model), unit = p ? unitPrice(p, +i.len, +i.temp, +i.qty) : null;
+      var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
       n++; cart.push({ code: i.code, model: i.model, len: +i.len, temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
@@ -357,12 +353,12 @@
 
   // 거래처 단가
   function renderCustomers() {
-    $('#cust-head').innerHTML = '<tr><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>상태</th><th></th></tr>';
+    $('#cust-head').innerHTML = '<tr><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>할인율</th><th>상태</th><th></th></tr>';
     $('#cust-body').innerHTML = customers.map(function (c) {
       return '<tr class="' + (c.active ? '' : 'off') + (editing === c.code ? ' editing' : '') + '"><td class="mono">' + esc(c.code) + '</td><td><b>' + esc(c.name) + '</b></td>' +
         '<td>' + esc(c.contact) + '<div class="order-items">' + esc(c.phone) + '</div></td>' +
         C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return '<td class="num">' + (v > 0 ? v.toLocaleString() : '-') + '</td>'; }).join('') +
-        '<td>' + (c.active ? '사용' : '중지') + '</td><td><button type="button" class="btn ghost small" data-edit="' + esc(c.code) + '">수정</button></td></tr>';
+        '<td class="num">' + (c.discount ? c.discount + '%' : '-') + '</td><td>' + (c.active ? '사용' : '중지') + '</td><td><button type="button" class="btn ghost small" data-edit="' + esc(c.code) + '">수정</button></td></tr>';
     }).join('');
     $('#cust-empty').hidden = customers.length > 0;
     if (!$('#cu-prices').children.length) {
@@ -378,6 +374,7 @@
     $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-addr').value = c ? c.address : '';
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
+    $('#cu-discount').value = c && c.discount ? c.discount : '';
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = c && c.prices ? Number(c.prices[inp.dataset.price]) : 0; inp.value = v > 0 ? v : ''; });
     say($('#cu-msg'), '');
     renderCustomers();
@@ -394,6 +391,8 @@
     if (c.pw && c.pw.length < 4) { say(msg, '비밀번호는 4자 이상이에요.', true); return; }
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = Number(inp.value); if (v > 0) prices[inp.dataset.price] = Math.round(v * 10) / 10; });
     c.prices = prices;
+    c.discount = Number($('#cu-discount').value) || 0;
+    if (c.discount < 0 || c.discount >= 100) { say(msg, '할인율은 0 이상 100 미만으로 적어 주세요.', true); return; }
     $('#cu-save').disabled = true; say(msg, '저장하는 중이에요…');
     api.saveCustomer(adminKey(), c).then(function () {
       return api.customers(adminKey());
@@ -437,7 +436,7 @@
     var k = e.target.dataset.k; if (k === undefined) return;
     var i = cart[+k], p = product(i.model);
     i.qty = Math.max(C.qty.min, Math.round((+e.target.value || 0) / C.qty.step) * C.qty.step);
-    i.unit = unitPrice(p, i.len, i.temp, i.qty); saveCart(); renderCart();
+    i.unit = unitPrice(p); saveCart(); renderCart();
   });
   $('#go-checkout').addEventListener('click', function () { if (!session) return; $('#checkout').hidden = false; fillCheckout(); $('#checkout').scrollIntoView({ behavior: 'smooth' }); });
   $('#cancel-checkout').addEventListener('click', function () { $('#checkout').hidden = true; });
