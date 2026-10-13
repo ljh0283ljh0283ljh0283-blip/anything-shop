@@ -1,0 +1,27 @@
+# SEKI POmall 발주
+
+거래처가 우리 제품을 사양(모델, 와이어 길이, 동작온도)별로 골라 선주문 생산을 요청하는 발주 페이지입니다.
+주소: `https://ljh0283ljh0283ljh0283-blip.github.io/anything-shop/pomall/`
+
+- `index.html`, `style.css`, `app.js` 화면
+- `products.json` 모델, 길이·온도 범위, 단가 규칙, 생산 기간 (제품이나 가격을 바꾸려면 이 파일만 고칩니다)
+- `settings.json` 오픈 여부(`open`), 주문 저장 방식(`storage`), 주문 받을 주소(`orderUrl`), 회사 이름(`company`)
+- `pomall-script.gs` 발주를 구글 시트에 쌓는 Apps Script
+
+## 화면
+
+1. **주문하기**: 모델 선택, 와이어 길이·동작온도·수량 입력, 발주서에 담기, 발주 정보 입력 후 확정. 예상 출하일은 영업일로 계산합니다.
+2. **주문 조회**: 거래처명과 연락처로 발주 상태(접수 대기, 생산 확정, 생산 중, 출하 완료, 취소)를 보고 재주문합니다.
+3. **접수 관리**: 맨 아래 **관리자**를 누르고 관리자 열쇠를 넣으면 모든 발주를 보고 상태를 바꿉니다.
+
+## 구글 시트 연결
+
+1. 새 구글 시트를 만들고 확장 프로그램 > Apps Script에 `pomall-script.gs`를 붙여 넣습니다.
+2. 프로젝트 설정 > 스크립트 속성에 `ADMIN_KEY`(나만 아는 관리자 열쇠)를 넣습니다.
+3. 배포 > 새 배포 > 웹 앱, 액세스 권한 "모든 사용자"로 배포하고 나온 주소를 `settings.json`의 `orderUrl`에 넣습니다.
+4. 준비가 되면 `open`을 `true`로 바꿉니다.
+
+## 옮기기
+
+- **다른 저장소나 호스팅으로**: `pomall` 폴더를 통째로 옮기면 됩니다. 모든 경로가 상대 경로라 어디서나 열립니다. 옮긴 뒤 Apps Script의 스크립트 속성 `PRODUCTS_URL`에 새 `products.json` 주소를 넣으세요.
+- **다른 주문 저장소로**: `app.js`의 `STORAGES`에 `submit`, `lookup`, `list`, `setStatus` 네 가지를 하는 항목을 하나 더하고 `settings.json`의 `storage`를 그 이름으로 바꿉니다. 지금은 `sheet`(구글 시트)와 `local`(이 브라우저에만 저장, 화면 확인용)이 있습니다.

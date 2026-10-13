@@ -1,0 +1,25 @@
+{
+  "note": "단가, 범위, 생산 기간은 모두 예시 값입니다. 실제 값으로 바꿔 주세요. 주문 스크립트도 이 파일로 금액을 다시 계산합니다.",
+  "products": [
+    { "id": "ST-22", "family": "ST", "name": "표준형", "base": 450, "temp": [50, 150] },
+    { "id": "ST-12", "family": "ST", "name": "소형", "base": 380, "temp": [50, 150] },
+    { "id": "ST-30", "family": "ST", "name": "대용량", "base": 520, "temp": [50, 150] },
+    { "id": "CK-01", "family": "CK", "name": "중온형", "base": 610, "temp": [60, 200] },
+    { "id": "CK-99", "family": "CK", "name": "중온 고정밀", "base": 690, "temp": [60, 200] },
+    { "id": "HB-2", "family": "HB", "name": "고온형", "base": 540, "temp": [70, 240] },
+    { "id": "HB-21", "family": "HB", "name": "고온 개량형", "base": 580, "temp": [70, 240] }
+  ],
+  "length": { "min": 30, "max": 500, "step": 5, "presets": [50, 70, 100, 150, 200, 300] },
+  "tempStep": 5,
+  "tempPresets": { "ST": [70, 80, 100, 120, 150], "CK": [80, 100, 130, 150, 180], "HB": [100, 130, 150, 180, 220] },
+  "qty": { "min": 100, "step": 100, "presets": [500, 1000, 3000, 5000] },
+  "price": {
+    "wireBaseMm": 50,
+    "wirePer10mm": 2,
+    "highTempOver": 150,
+    "highTempRate": 0.15,
+    "volume": [ { "min": 5000, "off": 0.07 }, { "min": 1000, "off": 0.03 } ],
+    "vat": 0.1
+  },
+  "lead": { "days": 10, "bigQty": 5000, "bigDays": 15 }
+}
