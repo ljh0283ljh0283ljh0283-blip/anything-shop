@@ -26,3 +26,7 @@
 2. 프로젝트 설정 > 스크립트 속성에 `ADMIN_KEY`를 추가하고 나만 아는 글자를 넣습니다. (판매자 열쇠)
 3. 배포 > 새 배포 > 웹 앱, 액세스 권한 "모든 사용자"로 배포하고 나온 주소를 `offer/settings.json`의 `offerUrl`에 넣습니다.
 4. 준비가 되면 `open`을 `true`로 바꿉니다.
+
+## SEKI POmall 발주 (`pomall/`)
+
+거래처 전용 선주문 생산 발주 페이지입니다. 주소: `/anything-shop/pomall/`. 자세한 내용은 `pomall/README.md`를 보세요.
