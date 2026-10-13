@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261013a">
+<link rel="stylesheet" href="style.css?v=20261013b">
 </head>
 <body>
 
@@ -18,27 +18,28 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" id="tab-order" data-view="order" aria-selected="true">주문하기 <span class="count" id="cart-count" hidden>0</span></button>
       <button type="button" role="tab" id="tab-history" data-view="history" aria-selected="false">주문 조회</button>
-      <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>접수 관리</button>
+      <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>관리</button>
     </nav>
+    <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout">로그아웃</button></div>
   </div>
 </header>
 
 <div class="wrap">
 
-<p class="notice" id="notice" hidden><b>주문 접수 준비 중</b><span>지금은 사양과 금액을 확인해 보실 수 있어요. 발주 확정은 정식 오픈 후에 받습니다.</span></p>
+<p class="notice" id="notice" hidden><b>주문 접수 준비 중</b><span>지금은 사양을 확인해 보실 수 있어요. 로그인과 발주는 정식 오픈 후에 받습니다.</span></p>
 
 <!-- 주문하기 -->
 <section class="view" id="view-order">
   <h2>사양을 고르면 바로 생산 발주가 됩니다</h2>
-  <p class="lede">재고 없이 주문 받은 수량만 생산합니다. 모델, 와이어 길이, 동작온도를 정하면 사양 코드와 예상 출하일이 자동으로 나옵니다.</p>
+  <p class="lede">재고 없이 주문 받은 수량만 생산합니다. 모델, 와이어 길이, 동작온도를 정하면 사양 코드와 예상 출하일이 자동으로 나옵니다. 단가는 거래처마다 따로 정해져 있어 로그인하면 보입니다.</p>
   <ol class="steps">
-    <li><i>1</i>모델 선택</li><li><i>2</i>와이어 길이 · 동작온도</li><li><i>3</i>수량 담기</li><li><i>4</i>발주 확정</li>
+    <li><i>1</i>거래처 로그인</li><li><i>2</i>모델 · 와이어 길이 · 동작온도</li><li><i>3</i>수량 담기</li><li><i>4</i>발주 확정</li>
   </ol>
 
   <div class="grid-order">
     <div class="stack">
       <div class="panel">
-        <div class="label">1 · 모델</div>
+        <div class="label">모델</div>
         <div class="models" id="models"><p class="msg">제품 목록을 불러오는 중이에요.</p></div>
 
         <div class="fields">
@@ -84,27 +85,40 @@
       </div>
     </div>
 
-    <aside class="panel" id="cart-panel">
-      <h3>발주서</h3>
-      <ul class="cart-list" id="cart"></ul>
-      <div class="empty" id="cart-empty">아직 담긴 품목이 없습니다. 사양을 정하고 <b>발주서에 담기</b>를 누르세요.</div>
-      <div id="cart-sum" hidden>
-        <div class="totals">
-          <span>공급가액</span><span class="money" id="sum-net"></span>
-          <span>부가세 10%</span><span class="money" id="sum-vat"></span>
-          <span class="grand">합계</span><span class="money grand" id="sum-total"></span>
+    <aside class="stack">
+      <div class="panel" id="login-panel">
+        <h3>거래처 로그인</h3>
+        <p class="note">회사에서 받은 거래처 코드와 비밀번호를 넣으세요. 코드가 없으면 담당 영업에 요청해 주세요.</p>
+        <form id="login-form" class="stack" style="gap:10px;margin-top:12px" novalidate>
+          <div class="field"><label for="login-code">거래처 코드</label><input id="login-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
+          <div class="field"><label for="login-pw">비밀번호</label><input id="login-pw" type="password" maxlength="40" autocomplete="current-password"></div>
+          <button class="btn" type="submit" id="login-btn">로그인</button>
+          <p class="msg" id="login-msg" role="status"></p>
+        </form>
+      </div>
+
+      <div class="panel" id="cart-panel">
+        <h3>발주서</h3>
+        <ul class="cart-list" id="cart"></ul>
+        <div class="empty" id="cart-empty">아직 담긴 품목이 없습니다. 사양을 정하고 <b>발주서에 담기</b>를 누르세요.</div>
+        <div id="cart-sum" hidden>
+          <div class="totals">
+            <span>공급가액</span><span class="money" id="sum-net"></span>
+            <span>부가세 10%</span><span class="money" id="sum-vat"></span>
+            <span class="grand">합계</span><span class="money grand" id="sum-total"></span>
+          </div>
+          <div class="eta" id="eta"></div>
+          <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px">발주 정보 입력</button>
         </div>
-        <div class="eta" id="eta"></div>
-        <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px">발주 정보 입력</button>
       </div>
     </aside>
   </div>
 
   <div class="panel" id="checkout" hidden style="margin-top:24px">
     <h3>발주 정보</h3>
-    <p class="note">한 번 입력하면 이 기기에 기억되어 다음 주문 때 자동으로 채워집니다.</p>
+    <p class="note">거래처에 등록된 정보가 채워져 있어요. 이번 발주만 다르게 적어도 됩니다.</p>
     <form id="checkout-form" class="checkout" style="margin-top:14px" novalidate>
-      <div class="field"><label for="c-company">거래처명</label><input id="c-company" maxlength="40" autocomplete="organization"></div>
+      <div class="field"><label for="c-company">거래처</label><input id="c-company" readonly></div>
       <div class="field"><label for="c-name">담당자</label><input id="c-name" maxlength="20" autocomplete="name"></div>
       <div class="field"><label for="c-phone">연락처</label><input id="c-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></div>
       <div class="field"><label for="c-po">거래처 발주번호 <span class="hint">(선택)</span></label><input id="c-po" maxlength="40" placeholder="귀사 내부 PO 번호"></div>
@@ -132,37 +146,70 @@
 <!-- 주문 조회 -->
 <section class="view" id="view-history" hidden>
   <h2>주문 조회</h2>
-  <p class="lede">발주할 때 적은 거래처명과 연락처로 생산 진행 상태를 확인합니다. 같은 사양으로 다시 주문하려면 <b>재주문</b>을 누르세요.</p>
-  <form class="lookup-form" id="lookup-form" novalidate>
-    <div class="field"><label for="l-company">거래처명</label><input id="l-company" maxlength="40" autocomplete="organization"></div>
-    <div class="field"><label for="l-phone">연락처</label><input id="l-phone" maxlength="20" inputmode="tel" autocomplete="tel"></div>
-    <button class="btn" type="submit" id="lookup-btn">조회</button>
-  </form>
-  <p class="msg" id="lookup-msg" role="status"></p>
+  <p class="lede">우리 거래처의 발주와 생산 진행 상태입니다. 같은 사양으로 다시 주문하려면 <b>재주문</b>을 누르세요.</p>
+  <p class="msg" id="history-msg" role="status"></p>
   <div class="table-wrap" id="history-wrap" hidden><table>
     <thead><tr><th>발주번호</th><th>접수일</th><th>품목</th><th>합계</th><th>희망 출하</th><th>상태</th><th></th></tr></thead>
     <tbody id="history-body"></tbody>
   </table></div>
 </section>
 
-<!-- 접수 관리 (회사용) -->
+<!-- 관리 (회사용) -->
 <section class="view" id="view-admin" hidden>
-  <h2>접수 관리</h2>
-  <p class="lede">들어온 발주를 확인하고 생산 상태를 바꿉니다. 바꾼 상태는 거래처의 주문 조회에 바로 보입니다. 주문 원본은 구글 시트에도 쌓입니다.</p>
+  <h2>관리</h2>
+  <p class="lede">회사 담당자만 쓰는 화면입니다. 들어온 발주의 생산 상태를 바꾸고, 거래처마다 모델 단가를 정합니다.</p>
   <form class="lookup-form" id="key-form" novalidate>
     <div class="field"><label for="admin-key">관리자 열쇠</label><input id="admin-key" type="password" autocomplete="current-password"></div>
     <button class="btn" type="submit">열기</button>
   </form>
   <div id="admin-wrap" hidden>
     <div class="admin-bar">
-      <div class="kpis" id="admin-filter"></div>
+      <nav class="kpis" aria-label="관리 메뉴">
+        <button type="button" data-admin-tab="orders" aria-pressed="true">발주 접수</button>
+        <button type="button" data-admin-tab="customers" aria-pressed="false">거래처 단가</button>
+      </nav>
       <div style="display:flex;gap:8px"><button type="button" class="btn ghost small" id="admin-reload">새로고침</button><button type="button" class="btn ghost small" id="admin-logout">닫기</button></div>
     </div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>발주번호</th><th>거래처</th><th>품목</th><th>합계</th><th>희망 / 최단 출하</th><th>상태 변경</th></tr></thead>
-      <tbody id="admin-body"></tbody>
-    </table></div>
-    <div class="empty" id="admin-empty" hidden>아직 들어온 발주가 없습니다.</div>
+
+    <div id="admin-orders">
+      <div class="kpis" id="admin-filter"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>발주번호</th><th>거래처</th><th>품목</th><th>합계</th><th>희망 / 최단 출하</th><th>상태 변경</th></tr></thead>
+        <tbody id="admin-body"></tbody>
+      </table></div>
+      <div class="empty" id="admin-empty" hidden>아직 들어온 발주가 없습니다.</div>
+    </div>
+
+    <div id="admin-customers" hidden>
+      <p class="note">모델 단가는 1EA 기준 공급가(부가세 별도)입니다. 비워 둔 모델은 그 거래처 화면에 "단가 문의"로 보이고 주문할 수 없습니다. 와이어 길이·고온 가산과 수량 할인은 모든 거래처에 같이 붙습니다.</p>
+      <div class="table-wrap"><table class="price-table">
+        <thead id="cust-head"></thead>
+        <tbody id="cust-body"></tbody>
+      </table></div>
+      <div class="empty" id="cust-empty" hidden>등록된 거래처가 없습니다. 아래에서 첫 거래처를 추가하세요.</div>
+
+      <div class="panel" style="margin-top:20px">
+        <h3 id="cust-form-title">거래처 추가</h3>
+        <form id="cust-form" class="checkout" style="margin-top:14px" novalidate>
+          <div class="field"><label for="cu-code">거래처 코드</label><input id="cu-code" maxlength="20" placeholder="예: C001" autocapitalize="characters"><span class="hint">거래처가 로그인할 때 씁니다. 저장 후에는 바꿀 수 없어요.</span></div>
+          <div class="field"><label for="cu-name">거래처명</label><input id="cu-name" maxlength="40"></div>
+          <div class="field"><label for="cu-contact">담당자</label><input id="cu-contact" maxlength="20"></div>
+          <div class="field"><label for="cu-phone">연락처</label><input id="cu-phone" maxlength="20" inputmode="tel"></div>
+          <div class="field full"><label for="cu-addr">기본 납품 주소</label><input id="cu-addr" maxlength="120"></div>
+          <div class="field"><label for="cu-pw">비밀번호</label><input id="cu-pw" maxlength="40" autocomplete="new-password"><span class="hint" id="cu-pw-hint">거래처에 알려줄 비밀번호 (4자 이상)</span></div>
+          <div class="field"><label for="cu-active">상태</label><select id="cu-active"><option value="1">사용</option><option value="0">중지 (로그인 막기)</option></select></div>
+          <div class="field full">
+            <span class="label">모델 단가 (원 / EA)</span>
+            <div class="price-grid" id="cu-prices"></div>
+          </div>
+          <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn" type="submit" id="cu-save">저장</button>
+            <button class="btn ghost" type="button" id="cu-new">새 거래처로 비우기</button>
+            <span class="msg" id="cu-msg" role="status"></span>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
   <p class="msg" id="admin-msg" role="status"></p>
 </section>
@@ -171,6 +218,6 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=20261013a"></script>
+<script src="app.js?v=20261013b"></script>
 </body>
 </html>
