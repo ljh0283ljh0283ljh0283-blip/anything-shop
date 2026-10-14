@@ -2,10 +2,12 @@
 // - 손님이 주문하면 첫 번째 탭에 한 줄씩 쌓입니다.
 // - 판매자 되기(회원가입)는 "판매자 신청" 탭에 쌓입니다. 판매자는 아이디와 비밀번호로 로그인합니다.
 //   비밀번호는 그대로 적지 않고 알아볼 수 없게 바꿔(해시) 저장합니다.
-// - 사이트 관리자는 GitHub 열쇠(anything-shop 저장소 쓰기 권한)로 들어와 모든 판매자 상품과 판매자를 관리합니다.
+// - 사이트 관리자는 관리자 비밀번호로 들어옵니다. 비밀번호는 스크립트 속성 ADMIN_KEY에 적어 둡니다.
+//   (프로젝트 설정 > 스크립트 속성 > ADMIN_KEY. 바꾸면 모든 관리자 화면에서 새 비밀번호로 다시 들어와야 합니다)
+// - 운영자가 직접 파는 상품과 샘플 상품은 "운영 상품" 탭에 있습니다. 처음 관리자로 들어올 때 products.json에서 옮겨 옵니다.
 // - 판매자가 올린 상품은 "판매자 상품" 탭에 쌓이고, 상태가 "게시"인 것만 상점에 보입니다.
 //   문제 있는 상품은 상태를 "내림"으로, 판매자는 "판매자 신청" 탭의 상태를 "정지"로 바꾸면 상점에서 사라집니다.
-// 가격은 손님 브라우저가 보낸 값이 아니라 저장소의 products.json과 "판매자 상품" 탭으로 다시 계산합니다.
+// 가격은 손님 브라우저가 보낸 값이 아니라 "운영 상품"·"판매자 상품" 탭으로 다시 계산합니다.
 
 var PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/products.json';
 var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태'];
@@ -14,17 +16,20 @@ var SELLER_TAB = '판매자 신청';
 var SELLER_HEADER = ['신청 시각', '상점', '판매자 이름', '실명', '연락처', '이메일', '구분', '사업자등록번호', '팔고 싶은 것', '은행', '계좌번호', '예금주', '상태', '로그인 열쇠', '아이디', '비밀번호'];
 var S = { at: 0, nick: 2, realName: 3, tel: 4, email: 5, kind: 6, biz: 7, what: 8, bank: 9, acct: 10, holder: 11, status: 12, key: 13, loginId: 14, pw: 15 };
 var ACTIVE = '활동', STOPPED = '정지';
-var REPO_API = 'https://api.github.com/repos/ljh0283ljh0283ljh0283-blip/anything-shop';
 
 var ITEM_TAB = '판매자 상품';
 var ITEM_HEADER = ['상품ID', '올린 시각', '판매자', '분류', '상품', '가격', '단위', '설명', '상태', '바뀐 시각'];
 var I = { id: 0, at: 1, seller: 2, cat: 3, name: 4, price: 5, unit: 6, desc: 7, status: 8, changed: 9 };
 var SHOWN = '게시', HIDDEN = '내림';
 
-// 읽기: 상점에 보일 판매자 상품 목록(누구나)
+var OWN_TAB = '운영 상품';
+var OWN_HEADER = ['상품ID', '분류', '상품', '가격', '단위', '설명', '판매자', '샘플', '순서', '바뀐 시각'];
+var O = { id: 0, cat: 1, name: 2, price: 3, unit: 4, desc: 5, seller: 6, sample: 7, order: 8, changed: 9 };
+
+// 읽기: 상점에 보일 판매자 상품과 운영 상품 목록(누구나). 운영 상품 탭이 아직 없으면 own은 비워 둔다.
 function doGet(e) {
   try {
-    return reply({ ok: true, products: publicItems() });
+    return reply({ ok: true, products: publicItems(), own: ownItems() });
   } catch (err) {
     return reply({ ok: false, error: '판매자 상품을 읽지 못했어요.' });
   }
@@ -55,7 +60,7 @@ function placeOrder(d) {
   if (!name || !phone) return { ok: false, error: '이름과 연락처가 필요해요.' };
 
   var byId = {};
-  var list = JSON.parse(UrlFetchApp.fetch(PRODUCTS_URL + '?t=' + Date.now()).getContentText()).products || [];
+  var list = ownItems() || seedProducts();
   list.forEach(function (p) { if (!p.sample) byId[p.id] = p; });   // 샘플 상품은 주문을 받지 않는다
   publicItems().forEach(function (p) { byId[p.id] = p; });
 
@@ -162,24 +167,16 @@ function itemValues(nick, p) {
 }
 
 // ---------- 사이트 관리자 ----------
-// GitHub 열쇠로 anything-shop 저장소에 쓸 수 있는 사람만 관리자로 본다. 확인 결과는 10분 동안 기억한다.
-function isAdmin(token) {
-  token = String(token || '');
-  if (token.length < 20) return false;
-  var cache = CacheService.getScriptCache();
-  var id = 'admin-' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token));
-  if (cache.get(id) === 'yes') return true;
-  var res = UrlFetchApp.fetch(REPO_API, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }, muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) return false;
-  var ok = !!(JSON.parse(res.getContentText()).permissions || {}).push;
-  if (ok) cache.put(id, 'yes', 600);
-  return ok;
+// 스크립트 속성 ADMIN_KEY와 같은 비밀번호를 보낸 사람만 관리자로 본다. ADMIN_KEY가 없으면 아무도 못 들어온다.
+function isAdmin(key) {
+  var real = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY') || '';
+  return real.length >= 4 && String(key || '') === real;
 }
 
 function admin(d) {
-  if (!isAdmin(d.token)) return { ok: false, error: '관리자 열쇠(GitHub 토큰)가 맞지 않아요.' };
+  if (!isAdmin(d.adminKey)) return { ok: false, error: '관리자 비밀번호가 맞지 않아요.' };
   if (d.action === 'adminList') {
-    return { ok: true,
+    return { ok: true, own: ownList(),
       items: itemRows().map(function (r) { var it = toItem(r.row); it.status = String(r.row[I.status]); it.at = stamp(r.row[I.at]); return it; }).reverse(),
       sellers: sellerRows().map(function (r) {
         return { nick: String(r.row[S.nick]), loginId: String(r.row[S.loginId]), realName: String(r.row[S.realName]), tel: String(r.row[S.tel]),
@@ -216,7 +213,63 @@ function admin(d) {
     sellerSheet().getRange(hit.index, S.status + 1).setValue(d.status);
     return { ok: true };
   }
+  if (d.action === 'adminOwnSave') {
+    var p = d.product || {};
+    var name = clip(p.name, 40), cat = clip(p.cat, 12), price = Math.round(Number(p.price));
+    if (!name || !cat) return { ok: false, error: '상품 이름과 분류를 적어 주세요.' };
+    if (!(price >= 0 && price <= 100000000)) return { ok: false, error: '가격은 0원부터 1억 원까지 적을 수 있어요.' };
+    var vals = [text(cat), text(name), price, text(clip(p.unit, 20)), text(clip(p.desc, 200)), text(clip(p.seller, 30)),
+      p.sample === true ? 'O' : '', Number(p.order) || 0, new Date()];
+    var sheet = ownSheet();
+    var hit2 = d.id ? findOwn(d.id) : null;
+    if (d.id && !hit2) return { ok: false, error: '없는 상품이에요.' };
+    if (hit2) sheet.getRange(hit2.index, O.cat + 1, 1, vals.length).setValues([vals]);
+    else sheet.appendRow(['p' + Date.now().toString(36)].concat(vals));
+    return { ok: true, own: ownList() };
+  }
+  if (d.action === 'adminOwnDelete') {
+    var hit3 = findOwn(d.id);
+    if (!hit3) return { ok: false, error: '없는 상품이에요.' };
+    ownSheet().deleteRow(hit3.index);
+    return { ok: true, own: ownList() };
+  }
   return { ok: false, error: '알 수 없는 요청이에요.' };
+}
+
+// ---------- 운영 상품(운영자가 직접 파는 상품과 샘플) ----------
+// 탭이 없으면 null(아직 옮기기 전). 손님 화면은 그때 products.json을 그대로 쓴다.
+function ownItems() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(OWN_TAB);
+  if (!sheet) return null;
+  return readRows(sheet, OWN_HEADER.length).filter(function (r) { return String(r.row[O.id]) && String(r.row[O.name]); })
+    .map(function (r) {
+      var row = r.row;
+      return { id: String(row[O.id]), cat: String(row[O.cat]), name: String(row[O.name]), price: Number(row[O.price]) || 0,
+        unit: String(row[O.unit]), desc: String(row[O.desc]), seller: String(row[O.seller]),
+        sample: String(row[O.sample]).trim() !== '', order: Number(row[O.order]) || 0 };
+    }).sort(function (a, b) { return a.order - b.order; });
+}
+// 관리자가 처음 들어오면 탭을 만들고 products.json의 상품을 옮겨 둔다
+function ownList() {
+  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(OWN_TAB)) {
+    var sheet = ownSheet();
+    var rows = seedProducts().map(function (p) {
+      return [String(p.id), text(String(p.cat || '기타')), text(String(p.name || '')), Number(p.price) || 0, text(String(p.unit || '')),
+        text(String(p.desc || '')), text(String(p.seller || '')), p.sample === true ? 'O' : '', Number(p.order) || 0, new Date()];
+    });
+    if (rows.length) sheet.getRange(2, 1, rows.length, OWN_HEADER.length).setValues(rows);
+  }
+  return ownItems();
+}
+function seedProducts() {
+  return JSON.parse(UrlFetchApp.fetch(PRODUCTS_URL + '?t=' + Date.now()).getContentText()).products || [];
+}
+function ownSheet() { return tab(OWN_TAB, OWN_HEADER); }
+function findOwn(id) {
+  id = String(id || '');
+  var hit = null;
+  readRows(ownSheet(), OWN_HEADER.length).forEach(function (r) { if (String(r.row[O.id]) === id) hit = r; });
+  return hit;
 }
 
 // 정지되지 않은 판매자의 "게시" 상품만 상점에 보인다

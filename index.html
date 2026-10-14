@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261014g">
+<link rel="stylesheet" href="style.css?v=20261014h">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -186,10 +186,10 @@
       <p class="su-switch">아직 판매자가 아니라면 <button class="link-btn" type="button" data-seller-signup>판매자 되기</button></p>
     </div>
     <div class="gh-login" id="login-admin" hidden>
-      <p>사이트 관리자만 들어올 수 있어요. GitHub 열쇠(토큰)를 넣어 주세요. 열쇠는 이 브라우저에만 저장돼요.</p>
-      <label for="gh-token">GitHub 열쇠</label>
-      <input id="gh-token" type="password" autocomplete="off" placeholder="github_pat_로 시작하는 열쇠">
-      <button class="primary" id="gh-save" type="button">관리자로 들어가기</button>
+      <p>사이트 관리자만 들어올 수 있어요. 관리자 비밀번호를 넣어 주세요. 비밀번호는 이 브라우저에만 저장돼요.</p>
+      <label for="admin-pw">관리자 비밀번호</label>
+      <input id="admin-pw" type="password" autocomplete="current-password">
+      <button class="primary" id="admin-go" type="button">관리자로 들어가기</button>
     </div>
     <section class="signup" id="seller-signup" hidden data-shop="무엇이든 상점" data-settings="settings.json" data-terms="terms/" aria-label="판매자 되기"></section>
     <div class="admin-tabs" id="admin-tabs" hidden>
@@ -237,7 +237,7 @@
   </div>
 </aside>
 
-<script src="app.js?v=20261014g"></script>
-<script src="seller.js?v=20261014g"></script>
+<script src="app.js?v=20261014h"></script>
+<script src="seller.js?v=20261014h"></script>
 </body>
 </html>
