@@ -39,6 +39,7 @@ function doPost(e) {
       case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
       case 'customers': return reply(staff(d.key, ['admin'], function () { return { ok: true, customers: customerList() }; }));
       case 'saveCustomer': return reply(staff(d.key, ['admin'], function () { return saveCustomer(d.customer || {}); }));
+      case 'deleteCustomer': return reply(staff(d.key, ['admin'], function () { return deleteCustomer(d.code); }));
     }
     return reply({ ok: false, error: '알 수 없는 요청이에요.' });
   } catch (err) {
@@ -65,13 +66,17 @@ function customerList() { return customers().map(publicCustomer); }
 function publicCustomer(c) {
   return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
 }
+// oldCode가 있으면 그 거래처를 고친다. 코드를 바꾸면 비밀번호가 코드와 묶여 있어 새 비밀번호가 필요하고, 지난 발주의 거래처 코드도 함께 바꾼다.
 function saveCustomer(c) {
-  var code = clip(c.code, 20).toUpperCase();
+  var code = clip(c.code, 20).toUpperCase(), oldCode = clip(c.oldCode, 20).toUpperCase();
   if (!/^[A-Z0-9_-]{2,20}$/.test(code)) return { ok: false, error: '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.' };
   var name = clip(c.name, 40);
   if (!name) return { ok: false, error: '거래처명이 필요해요.' };
   var pw = String(c.pw || '');
-  var ex = findCustomer(code);
+  var ex = findCustomer(oldCode || code), renamed = !!(oldCode && oldCode !== code);
+  if (oldCode && !ex) return { ok: false, error: '고치려는 거래처가 없어요. 새로고침해 주세요.' };
+  if (renamed && findCustomer(code)) return { ok: false, error: '이미 있는 거래처 코드예요.' };
+  if (renamed && pw.length < 4) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).' };
   if (!ex && pw.length < 4) return { ok: false, error: '새 거래처는 비밀번호를 4자 이상 정해 주세요.' };
   if (pw && pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
   var discount = Number(c.discount) || 0;
@@ -91,6 +96,17 @@ function saveCustomer(c) {
     row[i] = v > 0 ? Math.round(v * 10) / 10 : '';
   });
   if (ex) s.getRange(ex.index, 1, 1, head.length).setValues([row]); else s.appendRow(row);
+  if (renamed) {
+    var os = orderSheet(), all = rows();
+    for (var i = 0; i < all.length; i++) if (String(all[i][COL['거래처 코드']]) === oldCode) os.getRange(i + 2, COL['거래처 코드'] + 1).setValue(code);
+  }
+  return { ok: true, code: code };
+}
+// 거래처 탭에서 줄을 지운다. 지난 발주는 발주 탭에 그대로 남는다.
+function deleteCustomer(code) {
+  var c = findCustomer(clip(code, 20).toUpperCase());
+  if (!c) return { ok: false, error: '없는 거래처예요.' };
+  customerSheet().deleteRow(c.index);
   return { ok: true };
 }
 function customers() {
