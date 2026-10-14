@@ -20,8 +20,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="../style.css?v=20260930b">
-<link rel="stylesheet" href="offer.css?v=20260930a">
+<link rel="stylesheet" href="../style.css?v=20261014">
+<link rel="stylesheet" href="offer.css?v=20261014">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -62,7 +62,10 @@
     <p>제안하면 제안번호가 나와요. 위의 <strong>내 제안</strong>에서 판매자의 답을 확인할 수 있어요.</p>
   </section>
 
-  <footer>© 2026 어떻게든 팔거야 · <a href="../">무엇이든 상점</a> · <a href="../terms/">이용약관</a> <button class="admin-entry" id="admin-entry" type="button">판매자</button></footer>
+  <footer>
+    <p class="broker">무엇이든 상점은 통신판매중개자로서 통신판매의 당사자가 아닙니다. 상품 정보와 거래에 대한 책임은 각 판매자에게 있습니다.</p>
+    <div class="foot-row"><span>© 2026 어떻게든 팔거야 · <a href="../">무엇이든 상점</a> · <a href="../terms/">이용약관</a></span> <button class="admin-entry" id="admin-entry" type="button">판매자</button></div>
+  </footer>
 </div>
 
 <template id="product-tpl">
@@ -117,6 +120,7 @@
         <div class="pay-note">
           <strong>제안은 약속이에요</strong>
           <span>판매자가 수락하면 제안한 금액을 계좌로 입금해 주세요. 판매자가 답하기 전에는 언제든 취소할 수 있어요.</span>
+          <span>무엇이든 상점은 통신판매중개자로서 거래의 당사자가 아니며, 상품과 거래에 대한 책임은 각 판매자에게 있어요. 제안하면 <a href="../terms/" target="_blank" rel="noopener">이용약관</a>에 동의하는 것으로 봐요.</span>
         </div>
         <p class="form-msg" id="o-msg" role="status"></p>
         <button class="primary" id="o-submit" type="submit">이 가격으로 제안하기</button>
