@@ -6,7 +6,7 @@
   'use strict';
 
   var $ = function (s) { return document.querySelector(s); };
-  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers' };
+  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead' };
   function store(k, v) {
     try {
       if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null');
@@ -32,6 +32,7 @@
   // 각 저장 위치는 같은 일을 한다:
   //   login(code, pw) → {customer, prices}      submit(auth, order) → {no, total, ...}      mine(auth) → [발주]
   //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
+  //   config() → {lead}      saveLead(key, {days, bigQty, bigDays, by})      shipDate(key, {no, date, by})
   //   customers(key) → [거래처]      saveCustomer(key, 거래처 + oldCode)      deleteCustomer(key, code)
   var STORAGES = {
     // 구글 시트 + Apps Script 웹 앱 (pomall-script.gs)
@@ -47,6 +48,9 @@
         submit: function (auth, order) { return call({ action: 'order', code: auth.code, pw: auth.pw, order: order }).then(function (d) { return d.order; }); },
         mine: function (auth) { return call({ action: 'mine', code: auth.code, pw: auth.pw }).then(function (d) { return d.orders; }); },
         staff: function (key) { return call({ action: 'staff', key: key }).then(function (d) { return d.role; }); },
+        config: function () { return call({ action: 'config' }); },
+        saveLead: function (key, L) { return call(Object.assign({ action: 'saveLead', key: key }, L)); },
+        shipDate: function (key, c) { return call({ action: 'shipDate', key: key, no: c.no, date: c.date, by: c.by }); },
         list: function (key) { return call({ action: 'list', key: key }).then(function (d) { return d.orders; }); },
         setStatus: function (key, c) { return call({ action: 'status', key: key, no: c.no, status: c.status, by: c.by, reason: c.reason }); },
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
@@ -76,6 +80,12 @@
         },
         mine: function (a) { return auth(a.code, a.pw).then(function (c) { return orders().filter(function (o) { return o.code === c.code; }); }); },
         staff: function (key) { return Promise.resolve(roleOf(key)); },
+        config: function () { return Promise.resolve({ lead: store(KEY.localLead) }); },
+        saveLead: function (key, L) { if (roleOf(key) === 'view') return Promise.reject(new Error('영업팀 권한이 필요해요.')); store(KEY.localLead, { days: +L.days, bigQty: +L.bigQty, bigDays: +L.bigDays }); return Promise.resolve({ ok: true }); },
+        shipDate: function (key, c) {
+          if (roleOf(key) === 'view') return Promise.reject(new Error('영업팀 권한이 필요해요.'));
+          store(KEY.localOrders, orders().map(function (o) { if (o.no === c.no) o.shipDate = c.date; return o; })); return Promise.resolve({ ok: true });
+        },
         list: function () { return Promise.resolve(orders()); },
         setStatus: function (key, c) {
           var role = roleOf(key), list = orders(), o = list.filter(function (x) { return x.no === c.no; })[0];
@@ -308,6 +318,11 @@
   var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
   function pill(s) { s = OLD_STATUS[s] || s; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(s || '접수 대기') + '</span>'; }
   function itemsHtml(o) { return '<ul class="order-items">' + o.items.map(function (i) { return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + '</li>'; }).join('') + '</ul>'; }
+  // 담당자가 확정 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다
+  function shipText(o) {
+    return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">확정</div>'
+      : esc(o.requestedDate) + '<div class="order-items">희망 · 확정 전</div>';
+  }
   function loadHistory() {
     var msg = $('#history-msg');
     if (!session) { $('#history-wrap').hidden = true; say(msg, '주문하기 화면에서 거래처 로그인을 하면 발주 내역이 보입니다.'); return; }
@@ -319,7 +334,7 @@
       $('#history-body').innerHTML = history.map(function (o) {
         return '<tr><td class="mono">' + esc(o.no) + (o.customerPo ? '<div class="order-items">귀사 PO ' + esc(o.customerPo) + '</div>' : '') + '</td>' +
           '<td class="mono">' + esc(String(o.createdAt).slice(0, 10)) + '</td><td>' + itemsHtml(o) + '</td>' +
-          '<td class="mono">' + won(o.total) + '</td><td class="mono">' + esc(o.requestedDate) + '</td><td>' + pill(o.status) + '</td>' +
+          '<td class="mono">' + won(o.total) + '</td><td class="mono">' + shipText(o) + '</td><td>' + pill(o.status) + '</td>' +
           '<td><button type="button" class="btn ghost small" data-reorder="' + esc(o.no) + '">재주문</button></td></tr>';
       }).join('');
     }).catch(function (err) { say(msg, errText(err, '불러오지 못했어요. 잠시 후 다시 열어 주세요.'), true); });
@@ -355,7 +370,7 @@
       $('#staff-badge').className = 'role role-' + role;
       $('#cust-tab').hidden = role !== 'admin';
       showAdminTab(role === 'admin' ? adminTab : 'orders');
-      renderAdmin(); if (role === 'admin') renderCustomers();
+      renderAdmin(); renderLead(); if (role === 'admin') renderCustomers();
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
       say(msg, errText(err, '불러오지 못했어요.'), true);
@@ -377,11 +392,47 @@
       return '<tr><td class="mono">' + esc(o.no) + '<div class="order-items">' + esc(String(o.createdAt).slice(0, 16).replace('T', ' ')) + '</div>' + (o.customerPo ? '<div class="order-items">PO ' + esc(o.customerPo) + '</div>' : '') + '</td>' +
         '<td><b>' + esc(o.company) + '</b> <span class="order-items">' + esc(o.code || '') + '</span><div class="order-items">' + esc(o.contact) + ' · ' + esc(o.phone) + '</div><div class="order-items">' + esc(o.address) + '</div>' + (o.memo ? '<div class="order-items">요청: ' + esc(o.memo) + '</div>' : '') + '</td>' +
         '<td>' + itemsHtml(o) + '</td><td class="mono">' + won(o.total) + '</td>' +
-        '<td class="mono">' + esc(o.requestedDate) + '<div class="order-items">최단 ' + esc(o.eta) + '</div></td>' +
+        '<td class="mono">' + shipCell(o) + '</td>' +
         '<td>' + statusCell(o) + '</td></tr>';
     }).join('');
     $('#admin-empty').hidden = list.length > 0;
   }
+  function canEdit() { return role === 'admin' || role === 'sales'; }
+  function shipCell(o) {
+    var head = '<div class="order-items">희망 ' + esc(o.requestedDate) + ' · 최단 ' + esc(o.eta) + '</div>';
+    if (!canEdit()) return (o.shipDate ? '<b>' + esc(o.shipDate) + '</b>' : '<span class="order-items">확정 전</span>') + head;
+    return '<label class="ship"><span class="order-items">확정 출하일</span><input type="date" data-ship="' + esc(o.no) + '" value="' + esc(o.shipDate || '') + '"></label>' + head;
+  }
+  function saveShip(input) {
+    var no = input.dataset.ship, date = input.value;
+    input.disabled = true;
+    api.shipDate(adminKey(), { no: no, date: date, by: staffInfo().name }).then(function () {
+      adminOrders.forEach(function (o) {
+        if (o.no !== no) return;
+        (o.log = o.log || []).push({ at: new Date().toISOString(), from: '출하일 ' + (o.shipDate || '미정'), to: '출하일 ' + (date || '미정'), by: staffInfo().name, role: ROLES[role], reason: '' });
+        o.shipDate = date;
+      });
+      renderAdmin(); toast(no + ' 출하일 ' + (date || '미정'));
+    }).catch(function (err) { toast(errText(err, '출하일을 저장하지 못했어요.')); renderAdmin(); });
+  }
+  // 생산 소요일 설정: 영업팀과 관리자가 바꾼다. 거래처 화면의 예상 출하일 계산에 바로 쓰인다.
+  function renderLead() {
+    var L = C.lead;
+    $('#lead-now').textContent = L.days + '영업일 (' + Number(L.bigQty).toLocaleString() + 'EA 이상 ' + L.bigDays + '영업일)';
+    $('#lead-days').value = L.days; $('#lead-bigqty').value = L.bigQty; $('#lead-bigdays').value = L.bigDays;
+    $('#lead-form').querySelectorAll('input,button').forEach(function (el) { el.disabled = !canEdit(); });
+    $('#lead-hint').textContent = canEdit() ? '바꾸면 거래처 화면의 예상 출하일이 바로 이 기준으로 계산돼요. 이미 들어온 발주는 바뀌지 않아요.' : '영업팀과 관리자만 바꿀 수 있어요.';
+  }
+  $('#lead-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var L = { days: +$('#lead-days').value, bigQty: +$('#lead-bigqty').value, bigDays: +$('#lead-bigdays').value, by: staffInfo().name };
+    if (!(L.days >= 1 && L.days <= 120 && L.bigDays >= 1 && L.bigDays <= 120 && L.bigQty >= 1)) { say($('#lead-msg'), '영업일은 1~120, 수량은 1 이상으로 적어 주세요.', true); return; }
+    say($('#lead-msg'), '저장하는 중이에요…');
+    api.saveLead(adminKey(), L).then(function () {
+      C.lead = { days: L.days, bigQty: L.bigQty, bigDays: L.bigDays };
+      renderLead(); renderCart(); say($('#lead-msg'), '저장했어요.');
+    }).catch(function (err) { say($('#lead-msg'), errText(err, '저장하지 못했어요.'), true); });
+  });
   function stamp(iso) { var d = new Date(iso); return isNaN(d) ? String(iso || '') : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function logLine(l) { return esc(stamp(l.at)) + ' ' + esc(l.by) + '(' + esc(l.role) + ') ' + esc(l.from) + ' → ' + esc(l.to) + (l.reason ? '<br>사유: ' + esc(l.reason) : ''); }
   // 바꿀 수 있는 상태만 고르게 하고, 마지막으로 바꾼 사람과 기록을 함께 보여 준다
@@ -550,7 +601,10 @@
   });
   $('#admin-reload').addEventListener('click', adminLoad);
   $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; adminLoad(); say($('#admin-msg'), '닫았어요.'); });
-  $('#admin-body').addEventListener('change', function (e) { if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value); });
+  $('#admin-body').addEventListener('change', function (e) {
+    if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value);
+    if (e.target.dataset.ship) saveShip(e.target);
+  });
 
   // ----- 시작 -----
   Promise.all([
@@ -565,6 +619,8 @@
     if (adminKey()) $('#tab-admin').hidden = false;
     setSpec(C.products[0].id, 70, 100, 1000);
     renderRecent();
+    // 담당자가 관리 화면에서 바꾼 생산 소요일을 받아 온다
+    if (api.ready && api.config) api.config().then(function (d) { if (d && d.lead && d.lead.days) { C.lead = d.lead; renderCart(); } }).catch(function () {});
     if (session && api.ready) {
       cart = (store(KEY.cart) || {})[session.code] || [];
       renderSession(); renderCart();

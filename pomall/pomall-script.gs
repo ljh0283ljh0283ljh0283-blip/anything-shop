@@ -10,6 +10,7 @@
 //   SALES_KEY     영업팀 열쇠. 발주를 보고 상태를 앞으로만 바꿉니다(접수 대기 → 생산 지시 → 생산 중 → 입고 완료 → 출하). 취소는 사유를 적어야 합니다.
 //   VIEW_KEY      조회 전용 열쇠(선택). 생산, 물류 같은 다른 팀이 발주와 상태를 보기만 합니다.
 //   열쇠를 아는 사람이 팀을 떠나면 그 열쇠 값만 바꾸면 됩니다.
+//   LEAD          생산 소요일. 관리 화면에서 바꾸면 여기에 저장됩니다. 직접 만들 필요는 없습니다.
 //   PRODUCTS_URL  products.json 주소. 저장소를 옮기면 이 값만 바꾸면 됩니다.
 // 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
 
@@ -18,7 +19,7 @@ var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 �
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
-  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각'];
+  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
 var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
@@ -37,6 +38,9 @@ function doPost(e) {
       case 'login': return reply(login(d.code, d.pw));
       case 'order': return reply(placeOrder(d));
       case 'mine': return reply(mine(d));
+      case 'config': return reply({ ok: true, lead: lead() });
+      case 'saveLead': return reply(staff(d.key, ['admin', 'sales'], function (role) { return saveLead(d, role); }));
+      case 'shipDate': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setShipDate(d, role); }));
       case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
       case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
       case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
@@ -155,8 +159,8 @@ function placeOrder(d) {
   }
   var net = lines.reduce(function (s, l) { return s + l.amount; }, 0);
   var total = Math.round(net * (1 + C.price.vat));
-  var big = lines.some(function (l) { return l.qty >= C.lead.bigQty; });
-  var eta = addBizDays(big ? C.lead.bigDays : C.lead.days);
+  var L = lead(C), big = lines.some(function (l) { return l.qty >= L.bigQty; });
+  var eta = addBizDays(big ? L.bigDays : L.days);
   var wanted = /^\d{4}-\d{2}-\d{2}$/.test(o.requestedDate || '') && o.requestedDate >= eta ? o.requestedDate : eta;
 
   var s = orderSheet(), now = new Date();
@@ -205,6 +209,39 @@ function setStatus(d, role) {
   return { ok: true, status: to };
 }
 
+// 담당자가 생산 일정에 맞춰 정하는 확정 출하일. 빈 값이면 지운다. 상태 기록에 남는다.
+function setShipDate(d, role) {
+  var date = String(d.date || ''), by = clip(d.by, 20);
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜 형식이 맞지 않아요.' };
+  if (!by) return { ok: false, error: '바꾸는 사람 이름이 필요해요.' };
+  var s = orderSheet(), all = rows(), hit = [];
+  for (var i = 0; i < all.length; i++) if (String(all[i][COL['발주번호']]) === String(d.no)) hit.push(i);
+  if (!hit.length) return { ok: false, error: '없는 발주예요.' };
+  var before = day(all[hit[0]][COL['확정 출하일']]);
+  if (before === date) return { ok: true, date: date };
+  hit.forEach(function (i) { s.getRange(i + 2, COL['확정 출하일'] + 1).setValue(date ? "'" + date : ''); });
+  logSheet().appendRow([new Date(), String(d.no), text(String(all[hit[0]][COL['거래처']])), '출하일 ' + (before || '미정'), '출하일 ' + (date || '미정'), text(by), ROLES[role], text(clip(d.reason, 200))]);
+  return { ok: true, date: date };
+}
+
+// 생산 소요일: 관리 화면에서 바꾼 값(스크립트 속성 LEAD)이 있으면 그것을, 없으면 products.json 값을 쓴다
+function lead(C) {
+  var v = PropertiesService.getScriptProperties().getProperty('LEAD');
+  if (v) { try { return JSON.parse(v); } catch (e) {} }
+  return (C || catalog()).lead;
+}
+function saveLead(d, role) {
+  var L = { days: Math.floor(Number(d.days)), bigQty: Math.floor(Number(d.bigQty)), bigDays: Math.floor(Number(d.bigDays)) };
+  if (!(L.days >= 1 && L.days <= 120 && L.bigDays >= 1 && L.bigDays <= 120)) return { ok: false, error: '영업일은 1~120 사이로 적어 주세요.' };
+  if (!(L.bigQty >= 1)) return { ok: false, error: '대량 기준 수량을 적어 주세요.' };
+  var by = clip(d.by, 20); if (!by) return { ok: false, error: '바꾸는 사람 이름이 필요해요.' };
+  var old = lead();
+  PropertiesService.getScriptProperties().setProperty('LEAD', JSON.stringify(L));
+  var say = function (x) { return '생산 소요 ' + x.days + '영업일, ' + x.bigQty + 'EA 이상 ' + x.bigDays + '영업일'; };
+  logSheet().appendRow([new Date(), '설정', '', say(old), say(L), text(by), ROLES[role], '']);
+  return { ok: true, lead: L };
+}
+
 // 상태 기록을 발주번호별로 모은다 (오래된 것부터)
 function statusLog() {
   var s = logSheet(), n = s.getLastRow(), map = {};
@@ -230,7 +267,7 @@ function orders(withLog) {
         code: String(r[COL['거래처 코드']]), company: String(r[COL['거래처']]), contact: String(r[COL['담당자']]), phone: String(r[COL['연락처']]),
         customerPo: String(r[COL['거래처 PO']]), address: String(r[COL['납품 주소']]), memo: String(r[COL['요청 사항']]),
         requestedDate: day(r[COL['희망 출하일']]), eta: day(r[COL['최단 출하일']]),
-        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
+        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, shipDate: day(r[COL['확정 출하일']]), status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]),
@@ -258,9 +295,12 @@ function tab(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
+// 발주 탭: 칸이 늘면(예: 확정 출하일) 머리글 줄 뒤에 이름을 붙인다
 function orderSheet() {
   var s = tab(ORDER_SHEET);
-  if (s.getLastRow() === 0) { s.appendRow(HEADER); s.setFrozenRows(1); }
+  if (s.getLastRow() === 0) { s.appendRow(HEADER); s.setFrozenRows(1); return s; }
+  var w = s.getLastColumn();
+  if (w < HEADER.length) s.getRange(1, w + 1, 1, HEADER.length - w).setValues([HEADER.slice(w)]);
   return s;
 }
 // 거래처 탭: 기본 칸 뒤에 products.json의 모델마다 단가 칸을 둔다. 모델이나 기본 칸이 늘면 뒤에 붙는다.
