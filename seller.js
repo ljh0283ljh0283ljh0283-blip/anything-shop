@@ -1,6 +1,6 @@
-// 판매자 등록 신청: 무엇이든 상점과 어떻게든 팔거야가 같이 쓴다.
-// <section id="seller-signup" data-shop="상점 이름" data-settings="settings.json 경로"> 안에 신청서를 그리고,
-// 신청은 무엇이든 상점 settings.json의 orderUrl(구글 시트)로 보낸다. 시트의 "판매자 신청" 탭에 쌓인다.
+// 판매자 되기 신청서. <section id="seller-signup" data-shop="상점 이름" data-settings="settings.json 경로"> 안에 그린다.
+// 신청은 settings.json의 orderUrl(구글 시트)로 보내고, 시트의 "판매자 신청" 탭에 쌓인다.
+// 신청하면 바로 판매자 열쇠가 나오고, "seller-key" 이벤트로 상품 관리 창에 알려 바로 상품을 올리게 한다.
 (function () {
   var box = document.getElementById('seller-signup');
   if (!box) return;
@@ -14,14 +14,8 @@
   var terms = box.dataset.terms || 'terms/';
   box.innerHTML =
     '<div class="su-intro">' +
-      '<p class="su-eyebrow">판매자 모집</p>' +
-      '<h2>' + (shop === '무엇이든 상점' ? '당신이 파는 무엇이든,<br>여기에 올려 보세요' : '값은 손님이 매겨요.<br>당신은 내놓기만 하세요') + '</h2>' +
-      '<p>물건도, 재능도, 시간도 괜찮아요. 신청서를 보내 주시면 확인한 뒤 연락드리고, 상품을 함께 올려 드려요.</p>' +
-      '<ul class="su-points">' +
-        '<li>판매 수수료 없음</li>' +
-        '<li>손님이 판매자 계좌로 직접 입금</li>' +
-        '<li>샘플 칸에서 어떤 상품을 팔 수 있는지 미리 보기</li>' +
-      '</ul>' +
+      '<p>물건도, 재능도, 시간도 괜찮아요. 신청하면 바로 판매자 열쇠가 나오고, 그 열쇠로 상품을 올리면 곧바로 상점에 보여요.</p>' +
+      '<ul class="su-points"><li>판매 수수료 없음</li><li>손님이 판매자 계좌로 직접 입금</li></ul>' +
     '</div>' +
     '<form class="form su-form" id="su-form" novalidate>' +
       '<div class="row">' +
@@ -57,11 +51,16 @@
       '<button class="primary" id="su-submit" type="submit">판매자 신청하기</button>' +
     '</form>' +
     '<div class="su-done" id="su-done" hidden>' +
-      '<p class="r-title">신청을 받았어요</p>' +
-      '<p>적어 주신 연락처로 확인 연락을 드릴게요. 그동안 <strong>샘플</strong> 칸에서 다른 상품들이 어떻게 보이는지 구경해 보세요.</p>' +
+      '<p class="r-title">판매자가 되셨어요</p>' +
+      '<p>아래 판매자 열쇠로 내 상품을 올리고 고칠 수 있어요. 열쇠는 이 브라우저에 저장되지만, 다른 기기에서 쓰려면 꼭 적어 두세요.</p>' +
+      '<p class="su-key"><span>판매자 열쇠</span><strong id="su-key"></strong></p>' +
+      '<button class="primary" id="su-go" type="button">이 열쇠로 상품 올리기</button>' +
     '</div>';
 
-  var form = document.getElementById('su-form'), msg = document.getElementById('su-msg');
+  var form = document.getElementById('su-form'), msg = document.getElementById('su-msg'), lastKey = '';
+  document.getElementById('su-go').addEventListener('click', function () {
+    document.dispatchEvent(new CustomEvent('seller-key', { detail: { key: lastKey } }));
+  });
   function say(t, isErr) { msg.textContent = t; msg.classList.toggle('err', !!isErr); }
 
   form.addEventListener('change', function (e) {
@@ -92,9 +91,13 @@
     fetch(url, { method: 'POST', body: JSON.stringify(data) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
-        if (!res || !res.ok || !res.seller) throw new Error('seller signup failed');
+        if (res && !res.ok && res.error) { say(res.error, true); return; }
+        if (!res || !res.ok || !res.key) throw new Error('seller signup failed');
         form.hidden = true;
+        box.querySelector('.su-intro').hidden = true;
+        document.getElementById('su-key').textContent = res.key;
         document.getElementById('su-done').hidden = false;
+        lastKey = res.key;
       })
       .catch(function () { say('신청을 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', true); })
       .then(function () { btn.disabled = false; });

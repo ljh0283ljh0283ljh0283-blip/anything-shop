@@ -185,26 +185,31 @@ footer a { color: var(--muted); }
 .form .check { display: flex; gap: 8px; align-items: center; font-size: .85rem; color: var(--fg); }
 .form .check input { width: auto; }
 
-/* 판매자 등록 신청 ("전체" 칸) */
+/* 판매자 되기, 빈 "전체" 칸 */
 .cats .cat-sample { border-style: dashed; }
-.signup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px 40px; padding: 28px; border: 1px solid var(--line);
-  border-radius: 14px; background: var(--surface); }
+.empty-cta { display: grid; justify-items: start; gap: 12px; padding: 28px; border: 1px dashed var(--line); border-radius: 14px; background: var(--surface); }
+.empty-cta p { margin: 0; font-family: var(--display); font-size: 1.25rem; }
+.foot-btns { display: inline-flex; gap: 4px; }
+.su-switch { margin: 4px 0 0; font-size: .85rem; color: var(--muted); }
+.link-btn { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
+.signup { display: grid; gap: 12px; padding-block: 8px 16px; }
 .signup[hidden] { display: none; }
-.su-intro h2 { font-family: var(--display); font-size: 1.6rem; line-height: 1.35; margin: 4px 0 12px; text-wrap: balance; }
-.su-intro p { margin: 0 0 12px; color: var(--muted); }
-.su-eyebrow { margin: 0; font-size: .78rem; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
-.su-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: .92rem; }
+.su-intro p { margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
+.su-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: .88rem; }
 .su-points li::before { content: "✓"; color: var(--accent); margin-right: 8px; }
 .su-form { padding-block: 0; }
 .su-kind { border: 0; margin: 6px 0 0; padding: 0; display: flex; gap: 16px; }
 .su-kind legend { font-size: .8rem; color: var(--muted); padding: 0; margin-bottom: 4px; }
-.su-bank { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 8px; }
+.su-bank { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.su-bank input:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
 .su-privacy { font-size: .82rem; color: var(--muted); margin-top: 8px; }
 .su-privacy summary { cursor: pointer; }
 .su-privacy p { margin: 6px 0 0; line-height: 1.7; }
 .su-form .check a { color: var(--accent); }
 .su-form .primary { margin-top: 4px; }
-.su-done { display: grid; gap: 8px; align-content: start; }
+.su-done { display: grid; gap: 10px; align-content: start; }
 .su-done p { margin: 0; }
-@media (max-width: 720px) { .signup { grid-template-columns: 1fr; padding: 20px 16px; } .su-bank { grid-template-columns: 1fr 1fr; } .su-bank input:nth-child(2) { grid-column: 1 / -1; grid-row: 2; } }
+.su-key { display: grid; gap: 2px; padding: 12px; border-radius: 8px; background: var(--tag); }
+.su-key span { font-size: .8rem; color: var(--muted); }
+.su-key strong { font-size: 1.2rem; letter-spacing: .06em; font-variant-numeric: tabular-nums; user-select: all; overflow-wrap: anywhere; }
 .add { white-space: nowrap; }

@@ -14,14 +14,18 @@
   var db = null, col = null, dbLive = false, artifactApi = null, syncTimer = null;
   var store = null;      // 상품 저장 방식: Claude 저장소(db) 또는 GitHub(products.json)
 
+  // 판매자가 직접 올린 상품(구글 시트)은 sellerRows에 따로 두고 products.json 목록 뒤에 붙인다
+  var baseRows = [], sellerRows = [];
   function setProducts(rows) {
+    baseRows = rows;
     products = {}; order = [];
-    rows.forEach(function (row) {
+    rows.concat(sellerRows).forEach(function (row) {
       var d = row.data;
       if (!d || typeof d.name !== 'string' || !d.name) return;
       products[row.id] = {
         name: d.name, seller: String(d.seller || ''), cat: String(d.cat || '기타'), price: Number(d.price) || 0,
-        desc: String(d.desc || ''), unit: String(d.unit || ''), order: Number(d.order) || 0, sample: d.sample === true
+        desc: String(d.desc || ''), unit: String(d.unit || ''), order: Number(d.order) || 0, sample: d.sample === true,
+        fromSeller: d.fromSeller === true
       };
       order.push(row.id);
     });
@@ -130,7 +134,8 @@
     // "전체"에는 진짜 상품과 판매자 등록 신청서, "샘플"에는 샘플 상품만 보인다
     if (loaded) status.textContent = currentCat === 'all' || order.some(function (id) { return inView(products[id]); }) ? '' : '아직 등록된 상품이 없어요.';
     $('#sample-note').hidden = currentCat !== 'sample';
-    $('#seller-signup').hidden = currentCat !== 'all';
+    $('#empty-cta').hidden = !loaded || currentCat !== 'all' || order.some(function (id) { return inView(products[id]); });
+    if (!$('#empty-cta').hidden) status.textContent = '';
     renderCart();
     renderAdminList();
   }
@@ -252,7 +257,19 @@
   // 판매자 계좌는 settings.json의 sellers, 판매자가 비어 있는 상품(운영자 직접 판매)은 bank.
   var settings = { orderUrl: '', bank: {}, sellers: {} };
   fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (j) { if (j) settings = j; applyOpen(); }).catch(function () {});
+    .then(function (j) { if (j) settings = j; applyOpen(); loadSellerItems(); }).catch(function () {});
+
+  function loadSellerItems() {
+    if (!settings.orderUrl) return Promise.resolve();
+    return fetch(settings.orderUrl + '?action=products', { cache: 'no-store' }).then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.ok || !Array.isArray(j.products)) return;
+        sellerRows = j.products.map(function (p, i) {
+          return { id: p.id, data: Object.assign({}, p, { fromSeller: true, order: 1000000 + i }) };
+        });
+        if (loaded) setProducts(baseRows);
+      }).catch(function () {});
+  }
 
   // settings.json의 open이 false면 "오픈 준비 중" 안내를 띄우고 주문을 받지 않는다
   function isOpen() { return settings.open !== false && !!settings.orderUrl; }
@@ -293,7 +310,7 @@
   }
 
   // 판매자마다 입금할 금액과 계좌를 따로 보여 준다
-  function renderPayTo(lines) {
+  function renderPayTo(lines, accounts) {
     var box = $('#r-pay'), groups = {}, keys = [];
     lines.forEach(function (l) {
       var k = l.seller || '';
@@ -302,7 +319,7 @@
     });
     box.innerHTML = '';
     keys.forEach(function (k) {
-      var b = k ? (settings.sellers || {})[k] || {} : settings.bank || {};
+      var b = k ? accounts[k] || (settings.sellers || {})[k] || {} : settings.bank || {};
       var div = document.createElement('div');
       div.innerHTML = '<dt></dt><dd><span class="r-sum"></span><span class="r-acct"></span></dd>';
       div.querySelector('dt').textContent = '판매자 ' + (k || SHOP_NAME);
@@ -334,7 +351,7 @@
         if (!res || !res.ok) throw new Error(res && res.error || 'order failed');
         $('#r-no').textContent = res.orderNo;
         $('#r-total').textContent = won(res.total);
-        renderPayTo(data.items);
+        renderPayTo(data.items, res.accounts || {});
         $('#order-step').hidden = true;
         $('#receipt').hidden = false;
         cart = {}; saveCart(); renderCart();
@@ -369,7 +386,8 @@
   function resetForm() {
     editingId = null;
     form.reset();
-    $('#form-title').textContent = '새 상품 등록';
+    if (sellerNick) form.seller.value = sellerNick;
+    $('#form-title').textContent = sellerNick ? sellerNick + '님의 상품 올리기' : '새 상품 등록';
     $('#f-save').textContent = '등록하기';
     $('#f-cancel').hidden = true;
     renderAdminList();
@@ -387,7 +405,8 @@
       unit: form.unit.value.trim(),
       desc: form.desc.value.trim()
     };
-    if (form.sample.checked) data.sample = true;
+    if (form.sample.checked && !sellerNick) data.sample = true;
+    if (sellerNick) data.seller = sellerNick;
     if (!data.name) { say('상품 이름을 적어 주세요.', true); form.name.focus(); return; }
     if (!data.cat) { say('분류를 적어 주세요.', true); form.cat.focus(); return; }
     if (form.price.value === '' || !(data.price >= 0)) { say('가격을 0 이상의 숫자로 적어 주세요.', true); form.price.focus(); return; }
@@ -413,6 +432,7 @@
   });
 
   function writeError(err) {
+    if (err && err.sellerError) return err.sellerError;
     var c = err && err.code;
     if (err && err.status === 401) return 'GitHub 열쇠(토큰)가 맞지 않아요. 관리자 로그인을 다시 해 주세요.';
     if (err && (err.status === 403 || err.status === 404)) return '이 열쇠(토큰)로는 저장소에 쓸 수 없어요. anything-shop 저장소의 Contents 쓰기 권한을 확인해 주세요.';
@@ -422,10 +442,18 @@
     return '저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
   }
 
+  // 판매자는 자기 상품만, 운영자는 products.json 상품만 고친다(판매자 상품은 시트에서 내린다)
+  function myIds() {
+    return order.filter(function (id) {
+      var p = products[id];
+      return sellerNick ? p.fromSeller && p.seller === sellerNick : !p.fromSeller;
+    });
+  }
   function renderAdminList() {
-    $('#admin-count').textContent = order.length;
+    var ids = myIds();
+    $('#admin-count').textContent = ids.length;
     adminList.innerHTML = '';
-    order.forEach(function (id) {
+    ids.forEach(function (id) {
       var p = products[id];
       var li = document.createElement('li');
       li.dataset.id = id;
@@ -502,11 +530,31 @@
     });
   }
 
+  // ---------- 판매자 로그인 ----------
+  // 판매자는 신청할 때 받은 판매자 열쇠로 들어와 자기 상품만 올린다. 상품은 구글 시트(orderUrl)에 저장되고 바로 보인다.
+  // 운영자는 같은 칸에 GitHub 열쇠(github_pat_…)를 넣으면 products.json을 고치는 관리자 화면이 된다.
+  var SELLER_KEY = 'anything-shop-seller-key', sellerNick = '';
+  function sellerKey() { try { return localStorage.getItem(SELLER_KEY) || ''; } catch (e) { return ''; } }
+  function sellerPost(body) {
+    if (!settings.orderUrl) return Promise.reject({ sellerError: '지금은 판매자 기능을 쓸 수 없어요. 잠시 뒤 다시 해 주세요.' });
+    body.key = sellerKey();
+    return fetch(settings.orderUrl, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.ok) throw { sellerError: (res && res.error) || '저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.' };
+        return res;
+      }, function () { throw { sellerError: '인터넷 연결을 확인하고 다시 눌러 주세요.' }; });
+  }
+  var sellerStore = {
+    note: ' 상점에 바로 보여요.',
+    save: function (id, data) { return sellerPost({ action: 'sellerSave', id: id, product: data }).then(loadSellerItems); },
+    remove: function (id) { return sellerPost({ action: 'sellerRemove', id: id }).then(loadSellerItems); }
+  };
+
   function setupGitHubAdmin() {
-    var login = $('#gh-login'), entry = $('#admin-entry');
+    var login = $('#gh-login'), entry = $('#admin-entry'), signup = $('#seller-signup');
     if (!login || !entry) return;
     entry.hidden = false;
-    store = {
+    var ghStore = {
       note: ' 사이트에는 1~2분 뒤에 반영돼요.',
       save: function (id, data) {
         return ghChange(function (list) {
@@ -525,42 +573,82 @@
 
     function showLoggedIn(on) {
       login.hidden = on;
+      signup.hidden = true;
       $('#product-form').hidden = !on;
       $('#admin-list-wrap').hidden = !on;
       $('#gh-logout').hidden = !on;
       $('#open-admin').hidden = !on;
+      $('#f-sample-row').hidden = !!sellerNick;
+      form.seller.readOnly = !!sellerNick;
+      $('#open-admin').textContent = sellerNick ? '내 상품' : '상품 관리';
+      if (on) resetForm(); else $('#form-title').textContent = '판매자';
     }
+    function showSignup() {
+      openPanel($('#admin'), entry);
+      login.hidden = true;
+      $('#product-form').hidden = true;
+      $('#admin-list-wrap').hidden = true;
+      $('#gh-msg').textContent = '';
+      $('#form-title').textContent = '판매자 되기';
+      signup.hidden = false;
+    }
+    function loginMsg(t, isErr) { var m = $('#gh-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
+
     function tryLogin() {
-      var msg = $('#gh-msg');
-      msg.textContent = '확인하는 중이에요…'; msg.classList.remove('err');
+      sellerNick = ''; store = ghStore;
+      loginMsg('확인하는 중이에요…');
       return ghLoad().then(function (list) {
         setProducts(list.map(function (p) { return { id: p.id, data: p }; }));
-        msg.textContent = '';
+        loginMsg('');
         showLoggedIn(true);
       }).catch(function (err) {
         showLoggedIn(false);
-        msg.textContent = writeError(err); msg.classList.add('err');
+        loginMsg(writeError(err), true);
       });
     }
+    function trySellerLogin() {
+      loginMsg('확인하는 중이에요…');
+      return sellerPost({ action: 'sellerLogin' }).then(function (res) {
+        sellerNick = res.nick; store = sellerStore;
+        loginMsg('');
+        showLoggedIn(true);
+        return loadSellerItems();
+      }).catch(function (err) {
+        sellerNick = '';
+        showLoggedIn(false);
+        loginMsg(writeError(err), true);
+      });
+    }
+    function autoLogin() {
+      if (sellerKey()) return trySellerLogin();
+      if (ghToken()) return tryLogin();
+      showLoggedIn(false);
+    }
 
-    entry.addEventListener('click', function () {
-      openPanel($('#admin'), entry);
-      if (ghToken()) tryLogin(); else showLoggedIn(false);
-    });
+    entry.addEventListener('click', function () { openPanel($('#admin'), entry); autoLogin(); });
     $('#gh-save').addEventListener('click', function () {
       var t = $('#gh-token').value.trim();
-      if (!t) { $('#gh-msg').textContent = '열쇠(토큰)를 붙여 넣어 주세요.'; $('#gh-msg').classList.add('err'); return; }
-      try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+      if (!t) { loginMsg('판매자 열쇠를 붙여 넣어 주세요.', true); return; }
       $('#gh-token').value = '';
-      tryLogin();
+      var isGitHub = /^(github_pat_|ghp_)/.test(t);
+      try { localStorage.setItem(isGitHub ? TOKEN_KEY : SELLER_KEY, t); localStorage.removeItem(isGitHub ? SELLER_KEY : TOKEN_KEY); } catch (e) {}
+      if (isGitHub) tryLogin(); else trySellerLogin();
     });
     $('#gh-logout').addEventListener('click', function () {
-      try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+      try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(SELLER_KEY); } catch (e) {}
+      sellerNick = '';
       showLoggedIn(false);
-      $('#gh-msg').textContent = '로그아웃했어요.'; $('#gh-msg').classList.remove('err');
+      loginMsg('로그아웃했어요.');
     });
-    if (ghToken()) { $('#open-admin').hidden = false; }
-    $('#open-admin').addEventListener('click', function () { if (ghToken()) tryLogin(); });
+    // 신청서에서 "이 열쇠로 상품 올리기"를 누르면 바로 판매자로 들어간다
+    document.addEventListener('seller-key', function (e) {
+      try { localStorage.setItem(SELLER_KEY, e.detail.key); localStorage.removeItem(TOKEN_KEY); } catch (err) {}
+      trySellerLogin();
+    });
+    document.addEventListener('click', function (e) { if (e.target.closest('[data-seller-signup]')) showSignup(); });
+    if (location.hash === '#seller') showSignup();
+    if (ghToken() || sellerKey()) { $('#open-admin').hidden = false; $('#open-admin').textContent = sellerKey() ? '내 상품' : '상품 관리'; }
+    $('#open-admin').addEventListener('click', autoLogin);
   }
 
   // ---------- 시작 ----------

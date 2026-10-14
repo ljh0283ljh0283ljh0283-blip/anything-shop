@@ -95,9 +95,9 @@
     });
     renderCats();
     // "전체"에는 진짜 상품과 판매자 등록 신청서, "샘플"에는 샘플 상품만 보인다
-    if (loaded) status.textContent = currentCat === 'all' || order.some(function (id) { return inView(products[id]); }) ? '' : '아직 등록된 상품이 없어요.';
+    if (loaded) status.textContent = order.some(function (id) { return inView(products[id]); }) ? '' : '아직 올라온 상품이 없어요. 샘플 칸에서 어떤 상품을 팔 수 있는지 구경해 보세요.';
     $('#sample-note').hidden = currentCat !== 'sample';
-    $('#seller-signup').hidden = currentCat !== 'all';
+
     renderAdminList();
   }
 
