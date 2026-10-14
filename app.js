@@ -21,7 +21,7 @@
       if (!d || typeof d.name !== 'string' || !d.name) return;
       products[row.id] = {
         name: d.name, seller: String(d.seller || ''), cat: String(d.cat || '기타'), price: Number(d.price) || 0,
-        desc: String(d.desc || ''), unit: String(d.unit || ''), order: Number(d.order) || 0
+        desc: String(d.desc || ''), unit: String(d.unit || ''), order: Number(d.order) || 0, sample: d.sample === true
       };
       order.push(row.id);
     });
@@ -85,6 +85,7 @@
     countEl.textContent = count;
     checkout.disabled = count === 0;
     document.querySelectorAll('#grid .add').forEach(function (b) {
+      if (b.disabled) return;
       var q = cart[b.dataset.add];
       b.classList.toggle('added', !!q);
       b.textContent = q ? '담김 ' + q : '담기';
@@ -92,6 +93,7 @@
   }
 
   function changeCart(id, d) {
+    if (products[id] && products[id].sample && d > 0) return;
     cart[id] = (cart[id] || 0) + d;
     if (cart[id] <= 0) delete cart[id];
     done.hidden = true;
@@ -110,7 +112,8 @@
       var li = tpl.content.firstElementChild.cloneNode(true);
       li.dataset.id = id;
       li.dataset.cat = p.cat;
-      li.querySelector('.kind').textContent = p.cat;
+      li.querySelector('.kind').textContent = p.sample ? '샘플 · ' + p.cat : p.cat;
+      li.classList.toggle('is-sample', p.sample);
       li.querySelector('.detail-link').textContent = p.name;
       var sel = li.querySelector('.seller');
       sel.textContent = '판매자 ' + sellerOf(p);
@@ -118,10 +121,13 @@
       li.querySelector('.unit').textContent = p.unit || '';
       li.querySelector('.price').textContent = won(p.price);
       li.querySelector('.add').dataset.add = id;
+      // 샘플 상품은 상점을 보여 주기 위한 것이라 담을 수 없다
+      if (p.sample) { li.querySelector('.add').textContent = '샘플'; li.querySelector('.add').disabled = true; }
       li.hidden = currentCat !== 'all' && p.cat !== currentCat;
       grid.appendChild(li);
     });
     if (loaded) status.textContent = order.length ? '' : '아직 등록된 상품이 없어요.';
+    $('#sample-note').hidden = !order.some(function (id) { return products[id].sample; });
     renderCats();
     renderCart();
     renderAdminList();
@@ -197,7 +203,9 @@
   var detailId = null, detailQty = 1;
   function renderDetail() {
     var p = products[detailId]; if (!p) return;
-    $('#d-kind').textContent = p.cat;
+    $('#d-kind').textContent = p.sample ? '샘플 · ' + p.cat : p.cat;
+    $('#d-sample').hidden = !p.sample;
+    $('#d-add').disabled = $('#d-buy').disabled = p.sample;
     $('#d-name').textContent = p.name;
     $('#d-seller').textContent = '판매자 ' + sellerOf(p);
     $('#d-desc').textContent = p.desc || '';
@@ -244,7 +252,7 @@
   function oSay(t, isErr) { oMsg.textContent = t; oMsg.classList.toggle('err', !!isErr); }
 
   function cartLines() {
-    return Object.keys(cart).filter(function (id) { return products[id]; }).map(function (id) {
+    return Object.keys(cart).filter(function (id) { return products[id] && !products[id].sample; }).map(function (id) {
       var p = products[id];
       return { id: id, name: p.name, seller: p.seller, price: p.price, qty: cart[id] };
     });
@@ -338,7 +346,7 @@
     var p = products[id]; if (!p) return;
     editingId = id;
     form.name.value = p.name; form.seller.value = p.seller || ''; form.cat.value = p.cat; form.price.value = p.price;
-    form.unit.value = p.unit || ''; form.desc.value = p.desc || '';
+    form.unit.value = p.unit || ''; form.desc.value = p.desc || ''; form.sample.checked = p.sample;
     $('#form-title').textContent = '상품 수정';
     $('#f-save').textContent = '수정 저장';
     $('#f-cancel').hidden = false;
@@ -369,6 +377,7 @@
       unit: form.unit.value.trim(),
       desc: form.desc.value.trim()
     };
+    if (form.sample.checked) data.sample = true;
     if (!data.name) { say('상품 이름을 적어 주세요.', true); form.name.focus(); return; }
     if (!data.cat) { say('분류를 적어 주세요.', true); form.cat.focus(); return; }
     if (form.price.value === '' || !(data.price >= 0)) { say('가격을 0 이상의 숫자로 적어 주세요.', true); form.price.focus(); return; }
@@ -413,7 +422,7 @@
       if (id === editingId) li.className = 'editing';
       li.innerHTML = '<span class="a-name"></span><span class="a-actions"><button type="button" data-edit>수정</button><button type="button" class="del" data-del>삭제</button></span><span class="a-meta"></span>';
       li.querySelector('.a-name').textContent = p.name;
-      li.querySelector('.a-meta').textContent = (p.seller ? p.seller + ' · ' : '') + p.cat + ' · ' + won(p.price) + (p.unit ? ' · ' + p.unit : '');
+      li.querySelector('.a-meta').textContent = (p.sample ? '샘플 · ' : '') + (p.seller ? p.seller + ' · ' : '') + p.cat + ' · ' + won(p.price) + (p.unit ? ' · ' + p.unit : '');
       adminList.appendChild(li);
     });
   }

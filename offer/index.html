@@ -20,7 +20,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="../style.css?v=20261014">
+<link rel="stylesheet" href="../style.css?v=20261014b">
 <link rel="stylesheet" href="offer.css?v=20261014">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
@@ -38,6 +38,8 @@
   </header>
 
   <p class="notice" id="notice"><strong>오픈 준비 중</strong><span>지금은 상품을 둘러보실 수 있어요. 가격 제안은 정식 오픈 후에 받을게요.</span></p>
+
+  <p class="sample-note" id="sample-note" hidden><strong>샘플 상품</strong><span>지금 보이는 상품은 이 상점에서 무엇을 사고팔 수 있는지 보여 드리는 예시예요. 판매자 이름도 예시이고, 가격 제안은 받지 않아요.</span></p>
 
   <section class="intro">
     <h1>가격은 당신이 정합니다</h1>
@@ -98,6 +100,7 @@
       </dl>
       <form id="offer-form" class="form" novalidate>
         <p class="closed-note" id="d-closed" hidden>판매자가 이 상품의 제안을 마감했어요.</p>
+        <p class="d-sample" id="d-sample" hidden>이 상품은 상점을 보여 드리기 위한 샘플이라 가격 제안을 받지 않아요.</p>
         <div class="row">
           <div>
             <label for="o-price">한 개당 제안 가격 (원)</label>
@@ -225,6 +228,7 @@
         <label for="f-desc">설명</label>
         <textarea id="f-desc" name="desc" rows="4" maxlength="400" placeholder="가격 대신 상품의 가치를 알 수 있게 자세히 적어 주세요"></textarea>
         <label class="check"><input id="f-closed" name="closed" type="checkbox"> 제안 마감 (더 이상 가격 제안을 받지 않아요)</label>
+        <label class="check"><input id="f-sample" name="sample" type="checkbox"> 샘플 상품 (보여 주기만 하고 제안은 받지 않아요)</label>
         <p class="form-msg" id="form-msg" role="status"></p>
         <div class="form-actions">
           <button class="primary" id="f-save" type="submit">등록하기</button>
