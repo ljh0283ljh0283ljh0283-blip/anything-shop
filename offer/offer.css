@@ -41,3 +41,5 @@ footer a { color: var(--muted); }
 .tabs button[aria-selected="true"] { background: var(--tag); color: var(--accent); }
 .filters { margin: 12px 0 4px; }
 .offer-group h3 { margin: 16px 0 0; font-size: .95rem; }
+
+.pay-note a { color: var(--accent); }
