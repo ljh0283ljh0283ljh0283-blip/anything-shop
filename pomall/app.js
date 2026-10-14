@@ -32,7 +32,7 @@
   // 각 저장 위치는 같은 일을 한다:
   //   login(code, pw) → {customer, prices}      submit(auth, order) → {no, total, ...}      mine(auth) → [발주]
   //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
-  //   customers(key) → [거래처]      saveCustomer(key, 거래처)
+  //   customers(key) → [거래처]      saveCustomer(key, 거래처 + oldCode)      deleteCustomer(key, code)
   var STORAGES = {
     // 구글 시트 + Apps Script 웹 앱 (pomall-script.gs)
     sheet: function (cfg) {
@@ -50,7 +50,8 @@
         list: function (key) { return call({ action: 'list', key: key }).then(function (d) { return d.orders; }); },
         setStatus: function (key, c) { return call({ action: 'status', key: key, no: c.no, status: c.status, by: c.by, reason: c.reason }); },
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
-        saveCustomer: function (key, c) { return call({ action: 'saveCustomer', key: key, customer: c }); }
+        saveCustomer: function (key, c) { return call({ action: 'saveCustomer', key: key, customer: c }); },
+        deleteCustomer: function (key, code) { return call({ action: 'deleteCustomer', key: key, code: code }); }
       };
     },
     // 이 브라우저에만 저장 (화면 확인용). 다른 사람에게는 보이지 않는다.
@@ -87,12 +88,19 @@
         },
         customers: function () { return Promise.resolve(custs().map(pub)); },
         saveCustomer: function (key, c) {
-          var list = custs(), ex = list.filter(function (x) { return x.code === c.code; })[0];
-          if (!ex && !c.pw) return Promise.reject(new Error('새 거래처는 비밀번호가 필요해요.'));
+          var list = custs(), ex = list.filter(function (x) { return x.code === (c.oldCode || c.code); })[0];
+          var renamed = !!(c.oldCode && c.oldCode !== c.code);
+          if (renamed && list.some(function (x) { return x.code === c.code; })) return Promise.reject(new Error('이미 있는 거래처 코드예요.'));
+          if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
           var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount });
           if (c.pw) row.pw = c.pw;
           if (!ex) list.push(row);
-          store(KEY.localCustomers, list); return Promise.resolve({ ok: true });
+          store(KEY.localCustomers, list);
+          if (renamed) store(KEY.localOrders, orders().map(function (o) { if (o.code === c.oldCode) o.code = c.code; return o; }));
+          return Promise.resolve({ ok: true });
+        },
+        deleteCustomer: function (key, code) {
+          store(KEY.localCustomers, custs().filter(function (x) { return x.code !== code; })); return Promise.resolve({ ok: true });
         }
       };
     }
@@ -439,7 +447,9 @@
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
     $('#cust-form-title').textContent = c ? c.name + ' 수정' : '거래처 추가';
-    $('#cu-code').value = c ? c.code : ''; $('#cu-code').readOnly = !!c;
+    $('#cu-code').value = c ? c.code : '';
+    $('#cu-code-hint').textContent = c ? '바꾸면 비밀번호도 새로 정해야 해요. 지난 발주도 새 코드로 옮겨져요.' : '거래처가 로그인할 때 씁니다.';
+    $('#cu-delete').hidden = !c;
     $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-addr').value = c ? c.address : '';
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
@@ -455,8 +465,11 @@
       phone: $('#cu-phone').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
     if (!/^[A-Z0-9_-]{2,20}$/.test(c.code)) { say(msg, '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.', true); return; }
     if (!c.name) { say(msg, '거래처명을 적어 주세요.', true); return; }
-    if (!editing && customers.some(function (x) { return x.code === c.code; })) { say(msg, '이미 있는 거래처 코드예요. 목록에서 수정을 눌러 주세요.', true); return; }
+    var renamed = !!(editing && editing !== c.code);
+    if ((!editing || renamed) && customers.some(function (x) { return x.code === c.code; })) { say(msg, '이미 있는 거래처 코드예요. 목록에서 수정을 눌러 주세요.', true); return; }
     if (!editing && c.pw.length < 4) { say(msg, '새 거래처는 비밀번호를 4자 이상 정해 주세요.', true); return; }
+    if (renamed && c.pw.length < 4) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).', true); return $('#cu-pw').focus(); }
+    if (editing) c.oldCode = editing;
     if (c.pw && c.pw.length < 4) { say(msg, '비밀번호는 4자 이상이에요.', true); return; }
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = Number(inp.value); if (v > 0) prices[inp.dataset.price] = Math.round(v * 10) / 10; });
     c.prices = prices;
@@ -473,6 +486,21 @@
       .then(function () { $('#cu-save').disabled = false; });
   });
   $('#cu-new').addEventListener('click', function () { fillCustomerForm(null); $('#cu-code').focus(); });
+  // 거래처 삭제: 한 번 더 묻는다. 지난 발주는 시트에 남는다.
+  $('#cu-delete').addEventListener('click', function () {
+    var c = customers.filter(function (x) { return x.code === editing; })[0]; if (!c) return;
+    $('#del-text').textContent = c.name + ' (' + c.code + ')';
+    say($('#del-msg'), ''); $('#del-ok').disabled = false;
+    $('#del-dialog').showModal();
+  });
+  $('#del-cancel').addEventListener('click', function () { $('#del-dialog').close(); });
+  $('#del-form').addEventListener('submit', function (e) {
+    e.preventDefault(); var code = editing; if (!code) return;
+    $('#del-ok').disabled = true; say($('#del-msg'), '삭제하는 중이에요…');
+    api.deleteCustomer(adminKey(), code).then(function () { return api.customers(adminKey()); }).then(function (list) {
+      customers = list || []; $('#del-dialog').close(); fillCustomerForm(null); toast(code + ' 거래처를 삭제했어요');
+    }).catch(function (err) { $('#del-ok').disabled = false; say($('#del-msg'), errText(err, '삭제하지 못했어요.'), true); });
+  });
 
   // ----- 탭 -----
   function show(view) {

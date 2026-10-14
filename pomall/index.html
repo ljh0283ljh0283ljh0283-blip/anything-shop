@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261014a">
+<link rel="stylesheet" href="style.css?v=20261014b">
 </head>
 <body>
 
@@ -192,7 +192,7 @@
       <div class="panel" style="margin-top:20px">
         <h3 id="cust-form-title">거래처 추가</h3>
         <form id="cust-form" class="checkout" style="margin-top:14px" novalidate>
-          <div class="field"><label for="cu-code">거래처 코드</label><input id="cu-code" maxlength="20" placeholder="예: C001" autocapitalize="characters"><span class="hint">거래처가 로그인할 때 씁니다. 저장 후에는 바꿀 수 없어요.</span></div>
+          <div class="field"><label for="cu-code">거래처 코드</label><input id="cu-code" maxlength="20" placeholder="예: C001" autocapitalize="characters"><span class="hint" id="cu-code-hint">거래처가 로그인할 때 씁니다.</span></div>
           <div class="field"><label for="cu-name">거래처명</label><input id="cu-name" maxlength="40"></div>
           <div class="field"><label for="cu-contact">담당자</label><input id="cu-contact" maxlength="20"></div>
           <div class="field"><label for="cu-phone">연락처</label><input id="cu-phone" maxlength="20" inputmode="tel"></div>
@@ -207,6 +207,7 @@
           <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <button class="btn" type="submit" id="cu-save">저장</button>
             <button class="btn ghost" type="button" id="cu-new">새 거래처로 비우기</button>
+            <button class="btn ghost danger-text" type="button" id="cu-delete" hidden>거래처 삭제</button>
             <span class="msg" id="cu-msg" role="status"></span>
           </div>
         </form>
@@ -231,6 +232,16 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261014a"></script>
+<dialog class="confirm" id="del-dialog" aria-labelledby="del-title">
+  <form id="del-form" novalidate>
+    <h3 id="del-title">거래처를 삭제할까요?</h3>
+    <p><b id="del-text"></b></p>
+    <p class="note">삭제하면 이 거래처는 더 로그인할 수 없어요. 지난 발주는 시트의 발주 탭에 그대로 남아요. 잠시 막기만 하려면 상태를 "중지"로 바꾸세요.</p>
+    <p class="msg" id="del-msg" role="status"></p>
+    <div class="st-actions"><button class="btn ghost" type="button" id="del-cancel">그만두기</button><button class="btn danger" type="submit" id="del-ok">삭제하기</button></div>
+  </form>
+</dialog>
+
+<script src="app.js?v=20261014b"></script>
 </body>
 </html>

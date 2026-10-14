@@ -150,3 +150,5 @@ dialog.confirm textarea{font:inherit;width:100%}
 .st-meta dd{margin:0}
 .st-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 .btn.danger{background:#b3261e;border-color:#b3261e;color:#fff}
+.btn.danger-text{color:#b3261e;border-color:#e3b4b0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.danger-text{color:#f2a49e;border-color:#6b3532}}
