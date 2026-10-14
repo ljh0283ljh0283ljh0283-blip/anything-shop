@@ -12,10 +12,12 @@
   var loaded = false;
   var currentCat = 'all';
   var db = null, col = null, dbLive = false, artifactApi = null, syncTimer = null;
-  var store = null;      // 상품 저장 방식: Claude 저장소(db) 또는 GitHub(products.json)
+  var store = null;      // 상품 저장 방식: Claude 저장소(db) 방식일 때만 쓴다
 
-  // 판매자가 직접 올린 상품(구글 시트)은 sellerRows에 따로 두고 products.json 목록 뒤에 붙인다
-  var baseRows = [], sellerRows = [];
+  // 판매자가 직접 올린 상품(구글 시트)은 sellerRows에 따로 두고 운영 상품 목록 뒤에 붙인다
+  // 운영 상품은 구글 시트 "운영 상품" 탭을 먼저 쓰고, 아직 없으면 products.json을 쓴다
+  var baseRows = [], sellerRows = [], ownFromSheet = false;
+  function ownRows(list) { return list.map(function (p) { return { id: p.id, data: p }; }); }
   function setProducts(rows) {
     baseRows = rows;
     products = {}; order = [];
@@ -267,7 +269,8 @@
         sellerRows = j.products.map(function (p, i) {
           return { id: p.id, data: Object.assign({}, p, { fromSeller: true, order: 1000000 + i }) };
         });
-        if (loaded) setProducts(baseRows);
+        if (Array.isArray(j.own) && !window.claude) { ownFromSheet = true; setProducts(ownRows(j.own)); }
+        else if (loaded) setProducts(baseRows);
       }).catch(function () {});
   }
 
@@ -365,7 +368,7 @@
 
   // ---------- 상품 관리 창: 판매자(내 상품)와 사이트 관리자 ----------
   // mode: ''(로그인 전), 'seller'(판매자: 내 상품만), 'admin'(사이트 관리자)
-  // 관리자 탭: items(판매자 상품 전체), sellers(판매자), own(샘플·운영 상품 = products.json)
+  // 관리자 탭: items(판매자 상품 전체), sellers(판매자), own(샘플·운영 상품 = 시트 "운영 상품" 탭)
   var form = $('#product-form'), msg = $('#form-msg'), editingId = null;
   var adminList = $('#admin-list');
   var mode = '', adminTab = 'items', adminData = { items: [], sellers: [] }, sellerNick = '';
@@ -425,7 +428,7 @@
 
   function activeStore() {
     if (mode === 'seller') return sellerStore;
-    if (mode === 'admin') return adminTab === 'items' ? adminItemStore : ghStore;
+    if (mode === 'admin') return adminTab === 'items' ? adminItemStore : ownStore;
     return store;   // Claude 저장소(db) 방식
   }
 
@@ -455,7 +458,7 @@
       data.order = old && old.order || Date.now();
       job = st.save(editingId, data);
     } else {
-      var max = 0; order.forEach(function (id) { max = Math.max(max, products[id].order || 0); });
+      var max = 0; order.forEach(function (id) { if (!products[id].fromSeller) max = Math.max(max, products[id].order || 0); });
       data.order = max + 10;
       job = st.save(null, data);
     }
@@ -471,9 +474,6 @@
   function writeError(err) {
     if (err && err.sellerError) return err.sellerError;
     var c = err && err.code;
-    if (err && err.status === 401) return 'GitHub 열쇠(토큰)가 맞지 않아요. 관리자 로그인을 다시 해 주세요.';
-    if (err && (err.status === 403 || err.status === 404)) return '이 열쇠(토큰)로는 저장소에 쓸 수 없어요. anything-shop 저장소의 Contents 쓰기 권한을 확인해 주세요.';
-    if (err && err.status === 409) return '다른 곳에서 먼저 저장했어요. 다시 한 번 눌러 주세요.';
     if (c === 'invalid_argument') return '저장할 권한이 없어요. 이 페이지의 편집자만 상품을 바꿀 수 있어요.';
     if (c === 'quota_exceeded') return '저장 공간이 가득 찼어요. 쓰지 않는 상품을 지운 뒤 다시 해 주세요.';
     return '저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.';
@@ -570,53 +570,12 @@
     }
   });
 
-  // ---------- 내 웹사이트(GitHub Pages)용 상품 관리 ----------
-  // 상품은 저장소의 products.json에 있다. 관리자는 GitHub 열쇠(토큰)로 로그인해서 이 파일을 직접 고친다.
-  // 열쇠는 관리자 브라우저에만 저장되고 다른 곳으로 보내지 않는다(GitHub 말고는).
-  var GH = { owner: 'ljh0283ljh0283ljh0283-blip', repo: 'anything-shop', path: 'products.json', branch: 'main' };
-  var TOKEN_KEY = 'anything-shop-gh-token', ghSha = null;
-
-  function ghToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
-  function ghApi(method, body) {
-    var url = 'https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.path +
-      (method === 'GET' ? '?ref=' + GH.branch + '&t=' + Date.now() : '');
-    return fetch(url, {
-      method: method, cache: 'no-store',
-      headers: { Authorization: 'Bearer ' + ghToken(), Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined
-    }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) {
-        if (!r.ok) { var e = new Error(j.message || 'GitHub error'); e.status = r.status; throw e; }
-        return j;
-      });
-    });
-  }
-  function ghLoad() {
-    return ghApi('GET').then(function (j) {
-      ghSha = j.sha;
-      var text = decodeURIComponent(escape(atob(String(j.content).replace(/\n/g, ''))));
-      return JSON.parse(text).products || [];
-    });
-  }
-  function ghWrite(list, message) {
-    var text = JSON.stringify({ products: list }, null, 1) + '\n';
-    return ghApi('PUT', { message: message, content: btoa(unescape(encodeURIComponent(text))), sha: ghSha, branch: GH.branch })
-      .then(function (j) { ghSha = j.content && j.content.sha; });
-  }
-  // 저장할 때마다 최신 파일을 다시 읽고 고친 뒤 올린다
-  function ghChange(fn, message) {
-    return ghLoad().then(function (list) {
-      list = fn(list);
-      return ghWrite(list, message).then(function () {
-        setProducts(list.map(function (p) { return { id: p.id, data: p }; }));
-      });
-    });
-  }
-
   // ---------- 판매자 로그인과 관리자 로그인 ----------
   // 판매자는 아이디·비밀번호로 로그인하고, 받은 로그인 열쇠를 이 브라우저에 둔다. 상품은 구글 시트(orderUrl)에 저장되어 바로 보인다.
-  // 사이트 관리자는 GitHub 열쇠로 들어온다. 시트 스크립트도 같은 열쇠로 관리자인지 확인한다.
-  var SELLER_KEY = 'anything-shop-seller-key';
+  // 사이트 관리자는 관리자 비밀번호(시트 스크립트의 ADMIN_KEY)로 들어온다. 비밀번호는 이 브라우저에만 저장된다.
+  var SELLER_KEY = 'anything-shop-seller-key', ADMIN_KEY = 'anything-shop-admin-key';
+  try { localStorage.removeItem('anything-shop-gh-token'); } catch (e) {}   // 예전 GitHub 열쇠는 더 이상 쓰지 않는다
+  function adminKey() { try { return localStorage.getItem(ADMIN_KEY) || ''; } catch (e) { return ''; } }
   function sellerKey() { try { return localStorage.getItem(SELLER_KEY) || ''; } catch (e) { return ''; } }
   function keep(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) {} }
   function api(body) {
@@ -628,7 +587,7 @@
       }, function () { throw { sellerError: '인터넷 연결을 확인하고 다시 눌러 주세요.' }; });
   }
   function sellerPost(body) { body.key = sellerKey(); return api(body); }
-  function adminPost(body) { body.token = ghToken(); return api(body); }
+  function adminPost(body) { body.adminKey = adminKey(); return api(body); }
 
   var sellerStore = {
     note: ' 상점에 바로 보여요.',
@@ -640,18 +599,12 @@
     save: function (id, data) { return adminPost({ action: 'adminSave', id: id, product: data }).then(reloadAdmin).then(loadSellerItems); },
     remove: function (id) { return adminPost({ action: 'adminItemDelete', id: id }).then(reloadAdmin).then(loadSellerItems); }
   };
-  var ghStore = {
-    note: ' 사이트에는 1~2분 뒤에 반영돼요.',
-    save: function (id, data) {
-      return ghChange(function (list) {
-        if (id) return list.map(function (p) { return p.id === id ? Object.assign({ id: id }, data) : p; });
-        return list.concat([Object.assign({ id: 'p' + Date.now().toString(36) }, data)]);
-      }, (id ? '상품 수정: ' : '상품 등록: ') + data.name);
-    },
-    remove: function (id) {
-      var name = products[id] ? products[id].name : id;
-      return ghChange(function (list) { return list.filter(function (p) { return p.id !== id; }); }, '상품 삭제: ' + name);
-    }
+  // 샘플·운영 상품도 시트에 저장되어 상점에 바로 보인다
+  function showOwn(res) { ownFromSheet = true; setProducts(ownRows(res.own || [])); }
+  var ownStore = {
+    note: ' 상점에 바로 반영돼요.',
+    save: function (id, data) { return adminPost({ action: 'adminOwnSave', id: id, product: data }).then(showOwn); },
+    remove: function (id) { return adminPost({ action: 'adminOwnDelete', id: id }).then(showOwn); }
   };
   function reloadAdmin() {
     return adminPost({ action: 'adminList' }).then(function (res) {
@@ -692,17 +645,17 @@
     }
     function enterAdmin() {
       loginMsg('확인하는 중이에요…');
-      return Promise.all([ghLoad(), adminPost({ action: 'adminList' }).catch(function (err) { return { failed: err }; })]).then(function (r) {
-        setProducts(r[0].map(function (p) { return { id: p.id, data: p }; }));
+      return adminPost({ action: 'adminList' }).then(function (res) {
+        showOwn(res);
+        adminData = { items: res.items || [], sellers: res.sellers || [] };
         mode = 'admin'; sellerNick = '';
-        if (r[1].failed) { adminData = { items: [], sellers: [] }; loginMsg('판매자 정보를 읽지 못했어요. 시트 스크립트를 새 버전으로 배포했는지 확인해 주세요.', true); }
-        else { adminData = { items: r[1].items || [], sellers: r[1].sellers || [] }; loginMsg(''); }
+        loginMsg('');
         show('admin');
-      }).catch(function (err) { mode = ''; show('adminLogin'); loginMsg(writeError(err), true); });
+      }).catch(function (err) { keep(ADMIN_KEY, ''); mode = ''; show('adminLogin'); loginMsg(writeError(err), true); $('#admin-pw').focus(); });
     }
     function openAdmin(from) {
       openPanel(panel, from);
-      if (!ghToken()) { mode = ''; return show('adminLogin'); }
+      if (!adminKey()) { mode = ''; show('adminLogin'); $('#admin-pw').focus(); return; }
       enterAdmin();
     }
     function showSignup() { if (sellerKey()) return openSeller(); openPanel(panel); mode = ''; loginMsg(''); show('signup'); }
@@ -737,13 +690,14 @@
         .catch(function (err) { show('login'); loginMsg(writeError(err), true); });
     });
 
-    $('#gh-save').addEventListener('click', function () {
-      var t = $('#gh-token').value.trim();
-      if (!t) { loginMsg('GitHub 열쇠(토큰)를 붙여 넣어 주세요.', true); return; }
-      $('#gh-token').value = '';
-      keep(TOKEN_KEY, t);
+    $('#admin-go').addEventListener('click', function () {
+      var t = $('#admin-pw').value.trim();
+      if (!t) { loginMsg('관리자 비밀번호를 적어 주세요.', true); return; }
+      $('#admin-pw').value = '';
+      keep(ADMIN_KEY, t);
       enterAdmin();
     });
+    $('#admin-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#admin-go').click(); });
     $('#admin-tabs').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-tab]'); if (!b) return;
       adminTab = b.dataset.tab;
@@ -754,7 +708,7 @@
     // 판매자 로그인과 관리자 로그인은 따로 유지된다. 로그아웃은 지금 보고 있는 쪽만 한다.
     function logout(which) {
       var wasAdmin = which ? which === 'admin' : mode === 'admin';
-      keep(wasAdmin ? TOKEN_KEY : SELLER_KEY, '');
+      keep(wasAdmin ? ADMIN_KEY : SELLER_KEY, '');
       mode = ''; sellerNick = '';
       show(wasAdmin ? 'adminLogin' : 'login');
       loginMsg('로그아웃했어요.');
@@ -769,7 +723,7 @@
 
   // 버튼 역할: 판매자 되기 = 가입, 판매자 로그인 = 들어가기(로그아웃 상태에서만 보임), 내 상품 = 로그인한 판매자의 상품 올리기·고치기
   function refreshEntries() {
-    var seller = !!sellerKey(), admin = !!ghToken();
+    var seller = !!sellerKey(), admin = !!adminKey();
     $('#open-admin').hidden = !seller;
     $('#open-admin').textContent = '내 상품';
     $('#open-manage').hidden = !admin;
@@ -783,8 +737,8 @@
 
   if (!window.claude || !window.claude.use) {
     fetch('products.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
-      setProducts(j.products.map(function (p) { return { id: p.id, data: p }; }));
-    }).catch(function () { status.textContent = '상품 목록을 불러오지 못했어요.'; });
+      if (!ownFromSheet) setProducts(ownRows(j.products));   // 시트 목록이 먼저 왔으면 그쪽이 최신이다
+    }).catch(function () { if (!loaded) status.textContent = '상품 목록을 불러오지 못했어요.'; });
     setupPanels();
     return;
   }
