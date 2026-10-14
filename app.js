@@ -670,9 +670,8 @@
       }[view];
       views.forEach(function (v) { $(v).hidden = on.indexOf(v) < 0; });
       $('#panel-title').textContent = { login: '판매자 로그인', adminLogin: '사이트 관리자', signup: '판매자 되기',
-        seller: sellerNick + '님의 상품', admin: '사이트 관리자' }[view];
-      $('#open-admin').hidden = !(sellerKey() || ghToken());
-      $('#open-admin').textContent = sellerKey() ? '내 상품' : '관리';
+        seller: '내 상품', admin: '사이트 관리자' }[view];
+      refreshEntries();
       if (view === 'seller' || view === 'admin') resetForm();
     }
     function loginMsg(t, isErr) { var m = $('#gh-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
@@ -706,9 +705,12 @@
       if (!ghToken()) { mode = ''; return show('adminLogin'); }
       enterAdmin();
     }
-    function showSignup() { openPanel(panel); mode = ''; loginMsg(''); show('signup'); }
+    function showSignup() { if (sellerKey()) return openSeller(); openPanel(panel); mode = ''; loginMsg(''); show('signup'); }
 
-    $('#seller-entry').addEventListener('click', function () { openSeller(this); });
+    $('#seller-entry').addEventListener('click', function () {
+      if (sellerKey()) return openSeller(this);
+      openPanel(panel, this); mode = ''; loginMsg(''); show('login'); $('#l-id').focus();
+    });
     $('#admin-entry').addEventListener('click', function () { openAdmin(this); });
     $('#open-admin').addEventListener('click', function () { if (sellerKey()) openSeller(this); else openAdmin(this); });
     document.addEventListener('click', function (e) {
@@ -748,17 +750,29 @@
       say('');
       resetForm();
     });
-    $('#gh-logout').addEventListener('click', function () {
+    function logout() {
+      var wasAdmin = !sellerKey() && !!ghToken();
       keep(TOKEN_KEY, ''); keep(SELLER_KEY, '');
-      var wasAdmin = mode === 'admin';
       mode = ''; sellerNick = '';
       show(wasAdmin ? 'adminLogin' : 'login');
       loginMsg('로그아웃했어요.');
-    });
+    }
+    $('#gh-logout').addEventListener('click', logout);
+
+    $('#seller-out').addEventListener('click', function () { logout(); });
 
     if (location.hash === '#seller') showSignup();
-    $('#open-admin').hidden = !(sellerKey() || ghToken());
-    $('#open-admin').textContent = sellerKey() ? '내 상품' : '관리';
+    refreshEntries();
+  }
+
+  // 버튼 역할: 판매자 되기 = 가입, 판매자 로그인 = 들어가기(로그아웃 상태에서만 보임), 내 상품 = 로그인한 판매자의 상품 올리기·고치기
+  function refreshEntries() {
+    var seller = !!sellerKey(), admin = !seller && !!ghToken();
+    $('#open-admin').hidden = !(seller || admin);
+    $('#open-admin').textContent = seller ? '내 상품' : '관리';
+    $('#signup-entry').hidden = seller;
+    $('#seller-entry').hidden = seller;
+    $('#seller-out').hidden = !seller;
   }
 
   // ---------- 시작 ----------
