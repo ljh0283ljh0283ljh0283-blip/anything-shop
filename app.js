@@ -5,6 +5,9 @@
   var $ = function (s) { return document.querySelector(s); };
 
   var products = {};     // id -> {name, seller, cat, price, desc, unit, order}
+  // 판매자를 적지 않은 상품은 운영자가 직접 파는 상품으로 표시한다(이용약관 제4조)
+  var SHOP_NAME = '무엇이든 상점';
+  function sellerOf(p) { return p.seller || SHOP_NAME; }
   var order = [];        // 화면에 보일 순서대로 id
   var loaded = false;
   var currentCat = 'all';
@@ -110,8 +113,7 @@
       li.querySelector('.kind').textContent = p.cat;
       li.querySelector('.detail-link').textContent = p.name;
       var sel = li.querySelector('.seller');
-      sel.textContent = p.seller ? '판매자 ' + p.seller : '';
-      sel.hidden = !p.seller;
+      sel.textContent = '판매자 ' + sellerOf(p);
       li.querySelector('.desc').textContent = p.desc || '';
       li.querySelector('.unit').textContent = p.unit || '';
       li.querySelector('.price').textContent = won(p.price);
@@ -197,8 +199,7 @@
     var p = products[detailId]; if (!p) return;
     $('#d-kind').textContent = p.cat;
     $('#d-name').textContent = p.name;
-    $('#d-seller').textContent = p.seller ? '판매자 ' + p.seller : '';
-    $('#d-seller').hidden = !p.seller;
+    $('#d-seller').textContent = '판매자 ' + sellerOf(p);
     $('#d-desc').textContent = p.desc || '';
     $('#d-unit').textContent = p.unit || '-';
     $('#d-price').textContent = won(p.price);
@@ -229,8 +230,9 @@
   });
 
   // ---------- 주문서 ----------
-  // 주문은 판매자의 구글 시트로 보낸다(settings.json의 orderUrl). 결제는 계좌 입금.
-  var settings = { orderUrl: '', bank: {} };
+  // 주문은 구글 시트로 보낸다(settings.json의 orderUrl). 결제는 손님이 판매자 계좌로 직접 입금.
+  // 판매자 계좌는 settings.json의 sellers, 판매자가 비어 있는 상품(운영자 직접 판매)은 bank.
+  var settings = { orderUrl: '', bank: {}, sellers: {} };
   fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) { if (j) settings = j; applyOpen(); }).catch(function () {});
 
@@ -260,7 +262,7 @@
       li.innerHTML = '<span class="name"></span><span class="sum"></span><span class="meta"></span>';
       li.querySelector('.name').textContent = l.name;
       li.querySelector('.sum').textContent = won(l.price * l.qty);
-      li.querySelector('.meta').textContent = won(l.price) + ' × ' + l.qty + (l.seller ? ' · 판매자 ' + l.seller : '');
+      li.querySelector('.meta').textContent = won(l.price) + ' × ' + l.qty + ' · 판매자 ' + sellerOf(l);
       box.appendChild(li);
     });
     $('#o-total').textContent = won(total);
@@ -270,6 +272,26 @@
     else oSay('');
     $('#o-submit').disabled = !isOpen();
     openPanel($('#order'), from);
+  }
+
+  // 판매자마다 입금할 금액과 계좌를 따로 보여 준다
+  function renderPayTo(lines) {
+    var box = $('#r-pay'), groups = {}, keys = [];
+    lines.forEach(function (l) {
+      var k = l.seller || '';
+      if (!groups[k]) { groups[k] = 0; keys.push(k); }
+      groups[k] += l.price * l.qty;
+    });
+    box.innerHTML = '';
+    keys.forEach(function (k) {
+      var b = k ? (settings.sellers || {})[k] || {} : settings.bank || {};
+      var div = document.createElement('div');
+      div.innerHTML = '<dt></dt><dd><span class="r-sum"></span><span class="r-acct"></span></dd>';
+      div.querySelector('dt').textContent = '판매자 ' + (k || SHOP_NAME);
+      div.querySelector('.r-sum').textContent = won(groups[k]);
+      div.querySelector('.r-acct').textContent = b.account ? b.name + ' ' + b.account + ' (' + b.holder + ')' : '판매자가 연락드려 계좌를 알려 드려요';
+      box.appendChild(div);
+    });
   }
 
   orderForm.addEventListener('submit', function (e) {
@@ -292,10 +314,9 @@
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (!res || !res.ok) throw new Error(res && res.error || 'order failed');
-        var b = settings.bank || {};
         $('#r-no').textContent = res.orderNo;
         $('#r-total').textContent = won(res.total);
-        $('#r-bank').textContent = b.account ? (b.name + ' ' + b.account + ' (' + b.holder + ')') : '판매자가 연락드려 알려 드려요';
+        renderPayTo(data.items);
         $('#order-step').hidden = true;
         $('#receipt').hidden = false;
         cart = {}; saveCart(); renderCart();

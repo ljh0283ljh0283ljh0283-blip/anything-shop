@@ -259,7 +259,9 @@
       li.querySelector('.oc-meta').textContent = '제안번호 ' + m.no + ' · ' + won(m.price) + ' × ' + m.qty + ' = ' + won(m.total);
       li.querySelector('.oc-note').textContent = STATUS_NOTE[m.status] || '';
       if (m.status === '수락') {
-        var b = settings.bank || {}, bank = li.querySelector('.oc-bank');
+        // 판매자에게 직접 입금한다. 판매자 계좌는 settings.json의 sellers, 판매자가 없으면 bank(운영자 직접 판매)
+        var seller = (products[m.pid] || {}).seller;
+        var b = (seller ? (settings.sellers || {})[seller] : settings.bank) || {}, bank = li.querySelector('.oc-bank');
         bank.hidden = false;
         bank.textContent = b.account ? '입금 계좌 ' + b.name + ' ' + b.account + ' (' + b.holder + ') · ' + won(m.total) : '판매자가 연락드려 계좌를 알려 드려요.';
       }
