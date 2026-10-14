@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261013c">
+<link rel="stylesheet" href="style.css?v=20261014a">
 </head>
 <body>
 
@@ -157,24 +157,25 @@
 <!-- 관리 (회사용) -->
 <section class="view" id="view-admin" hidden>
   <h2>관리</h2>
-  <p class="lede">회사 담당자만 쓰는 화면입니다. 들어온 발주의 생산 상태를 바꾸고, 거래처마다 모델 단가를 정합니다.</p>
+  <p class="lede">회사 담당자만 쓰는 화면입니다. 팀마다 받은 열쇠로 엽니다. 상태 변경은 영업팀과 관리자만, 거래처 단가는 관리자만 할 수 있습니다.</p>
   <form class="lookup-form" id="key-form" novalidate>
-    <div class="field"><label for="admin-key">관리자 열쇠</label><input id="admin-key" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="staff-name">이름</label><input id="staff-name" maxlength="20" autocomplete="name" placeholder="예: 김영업"><span class="hint">상태를 바꾸면 이 이름이 기록에 남아요.</span></div>
+    <div class="field"><label for="admin-key">팀 열쇠</label><input id="admin-key" type="password" autocomplete="current-password"><span class="hint">관리자, 영업팀, 조회 전용 중 받은 열쇠</span></div>
     <button class="btn" type="submit">열기</button>
   </form>
   <div id="admin-wrap" hidden>
     <div class="admin-bar">
       <nav class="kpis" aria-label="관리 메뉴">
         <button type="button" data-admin-tab="orders" aria-pressed="true">발주 접수</button>
-        <button type="button" data-admin-tab="customers" aria-pressed="false">거래처 단가</button>
+        <button type="button" data-admin-tab="customers" aria-pressed="false" id="cust-tab">거래처 단가</button>
       </nav>
-      <div style="display:flex;gap:8px"><button type="button" class="btn ghost small" id="admin-reload">새로고침</button><button type="button" class="btn ghost small" id="admin-logout">닫기</button></div>
+      <div style="display:flex;gap:8px;align-items:center"><span class="role" id="staff-badge"></span><button type="button" class="btn ghost small" id="admin-reload">새로고침</button><button type="button" class="btn ghost small" id="admin-logout">닫기</button></div>
     </div>
 
     <div id="admin-orders">
       <div class="kpis" id="admin-filter"></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>발주번호</th><th>거래처</th><th>품목</th><th>합계</th><th>희망 / 최단 출하</th><th>상태 변경</th></tr></thead>
+        <thead><tr><th>발주번호</th><th>거래처</th><th>품목</th><th>합계</th><th>희망 / 최단 출하</th><th>상태 변경 <span class="lock" title="영업팀과 관리자만 바꿀 수 있어요">영업팀 권한</span></th></tr></thead>
         <tbody id="admin-body"></tbody>
       </table></div>
       <div class="empty" id="admin-empty" hidden>아직 들어온 발주가 없습니다.</div>
@@ -219,6 +220,17 @@
 </div>
 <div class="toast" id="toast" hidden></div>
 
-<script src="app.js?v=20261013c"></script>
+<dialog class="confirm" id="st-dialog" aria-labelledby="st-title">
+  <form id="st-form" novalidate>
+    <h3 id="st-title">상태를 바꿀까요?</h3>
+    <p class="st-change" id="st-change"></p>
+    <dl class="st-meta"><dt>거래처</dt><dd id="st-company"></dd><dt>바꾸는 사람</dt><dd id="st-by"></dd></dl>
+    <div class="field" id="st-reason-wrap" hidden><label for="st-reason" id="st-reason-label">사유</label><textarea id="st-reason" rows="3" maxlength="200" placeholder="예: 거래처 요청으로 수량 변경 후 재발주"></textarea><span class="hint">상태 기록 탭에 남고 관리 화면에 보여요.</span></div>
+    <p class="msg" id="st-msg" role="status"></p>
+    <div class="st-actions"><button class="btn ghost" type="button" id="st-cancel">그만두기</button><button class="btn" type="submit" id="st-ok">바꾸기</button></div>
+  </form>
+</dialog>
+
+<script src="app.js?v=20261014a"></script>
 </body>
 </html>

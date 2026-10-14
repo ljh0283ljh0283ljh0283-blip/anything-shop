@@ -17,11 +17,22 @@
 
   var STATUS = { '접수 대기': 'st-received', '생산 확정': 'st-confirmed', '생산 중': 'st-production', '출하 완료': 'st-shipped', '취소': 'st-canceled' };
   var STATUS_LIST = Object.keys(STATUS);
+  var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
+  // 상태 규칙 (pomall-script.gs의 canMove, needsReason과 같다. 진짜 검사는 서버가 한다)
+  //   영업팀: 앞으로만. 출하 완료나 취소가 된 발주는 못 바꾼다.   관리자: 아무 상태로나.   조회 전용: 못 바꾼다.
+  //   취소, 되돌리기, 취소된 발주 살리기는 사유가 있어야 한다.
+  function canMove(role, from, to) {
+    if (role === 'admin') return true;
+    if (role !== 'sales' || from === '출하 완료' || from === '취소') return false;
+    return to === '취소' || STATUS_LIST.indexOf(to) > STATUS_LIST.indexOf(from);
+  }
+  function needsReason(from, to) { return to === '취소' || from === '취소' || STATUS_LIST.indexOf(to) < STATUS_LIST.indexOf(from); }
 
   // ----- 저장 위치 -----
   // 각 저장 위치는 같은 일을 한다:
   //   login(code, pw) → {customer, prices}      submit(auth, order) → {no, total, ...}      mine(auth) → [발주]
-  //   list(key) → [발주]      setStatus(key, no, status)      customers(key) → [거래처]      saveCustomer(key, 거래처)
+  //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
+  //   customers(key) → [거래처]      saveCustomer(key, 거래처)
   var STORAGES = {
     // 구글 시트 + Apps Script 웹 앱 (pomall-script.gs)
     sheet: function (cfg) {
@@ -35,14 +46,17 @@
         login: function (code, pw) { return call({ action: 'login', code: code, pw: pw }); },
         submit: function (auth, order) { return call({ action: 'order', code: auth.code, pw: auth.pw, order: order }).then(function (d) { return d.order; }); },
         mine: function (auth) { return call({ action: 'mine', code: auth.code, pw: auth.pw }).then(function (d) { return d.orders; }); },
+        staff: function (key) { return call({ action: 'staff', key: key }).then(function (d) { return d.role; }); },
         list: function (key) { return call({ action: 'list', key: key }).then(function (d) { return d.orders; }); },
-        setStatus: function (key, no, status) { return call({ action: 'status', key: key, no: no, status: status }); },
+        setStatus: function (key, c) { return call({ action: 'status', key: key, no: c.no, status: c.status, by: c.by, reason: c.reason }); },
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
         saveCustomer: function (key, c) { return call({ action: 'saveCustomer', key: key, customer: c }); }
       };
     },
     // 이 브라우저에만 저장 (화면 확인용). 다른 사람에게는 보이지 않는다.
+    // 열쇠 검사가 없다: sales로 시작하는 열쇠는 영업팀, view로 시작하면 조회 전용, 나머지는 관리자로 본다.
     local: function () {
+      function roleOf(key) { return /^sales/i.test(key) ? 'sales' : /^view/i.test(key) ? 'view' : 'admin'; }
       function orders() { return store(KEY.localOrders) || []; }
       function custs() { return store(KEY.localCustomers) || []; }
       function auth(code, pw) {
@@ -60,9 +74,15 @@
           });
         },
         mine: function (a) { return auth(a.code, a.pw).then(function (c) { return orders().filter(function (o) { return o.code === c.code; }); }); },
+        staff: function (key) { return Promise.resolve(roleOf(key)); },
         list: function () { return Promise.resolve(orders()); },
-        setStatus: function (key, no, status) {
-          var list = orders(); list.forEach(function (o) { if (o.no === no) o.status = status; }); store(KEY.localOrders, list);
+        setStatus: function (key, c) {
+          var role = roleOf(key), list = orders(), o = list.filter(function (x) { return x.no === c.no; })[0];
+          if (!o) return Promise.reject(new Error('없는 발주예요.'));
+          if (!canMove(role, o.status, c.status)) return Promise.reject(new Error(o.status + '에서 ' + c.status + '(으)로는 관리자만 바꿀 수 있어요.'));
+          if (needsReason(o.status, c.status) && String(c.reason || '').trim().length < 2) return Promise.reject(new Error('사유를 적어 주세요.'));
+          (o.log = o.log || []).push({ at: new Date().toISOString(), from: o.status, to: c.status, by: c.by, role: ROLES[role], reason: c.reason || '' });
+          o.status = c.status; store(KEY.localOrders, list);
           return Promise.resolve({ ok: true });
         },
         customers: function () { return Promise.resolve(custs().map(pub)); },
@@ -84,7 +104,7 @@
   var session = store(KEY.session);      // {code, pw, customer, prices, discount}
   var cart = [];
   var history = [];
-  var adminOrders = [], adminFilter = 'all', adminTab = 'orders', customers = [], editing = null;
+  var adminOrders = [], adminFilter = 'all', adminTab = 'orders', customers = [], editing = null, role = null, pending = null;
 
   // ----- 계산 -----
   var pad = function (n) { return String(n).padStart(2, '0'); };
@@ -307,18 +327,27 @@
   }
 
   // ----- 관리 -----
-  function adminKey() { return store(KEY.admin); }
+  // 관리 열쇠는 팀마다 다르다(관리자, 영업팀, 조회 전용). 이름은 상태를 바꿀 때 기록에 남는다.
+  function staffInfo() { var v = store(KEY.admin); return v && typeof v === 'object' && v.key ? v : null; }
+  function adminKey() { var v = staffInfo(); return v ? v.key : null; }
   function adminLoad() {
     var key = adminKey(), msg = $('#admin-msg');
     $('#key-form').hidden = !!key; $('#admin-wrap').hidden = !key;
     if (!key) return;
     if (!api.ready) { say(msg, '주문 받을 주소(orderUrl)가 아직 없어요. README의 순서대로 구글 시트를 연결해 주세요.', true); return; }
     say(msg, '불러오는 중이에요…');
-    Promise.all([api.list(key), api.customers(key)]).then(function (r) {
+    api.staff(key).then(function (r) {
+      role = r;
+      return Promise.all([api.list(key), role === 'admin' ? api.customers(key) : []]);
+    }).then(function (r) {
       adminOrders = r[0] || []; customers = r[1] || []; say(msg, '');
-      renderAdmin(); renderCustomers();
+      $('#staff-badge').textContent = ROLES[role] + ' · ' + staffInfo().name;
+      $('#staff-badge').className = 'role role-' + role;
+      $('#cust-tab').hidden = role !== 'admin';
+      showAdminTab(role === 'admin' ? adminTab : 'orders');
+      renderAdmin(); if (role === 'admin') renderCustomers();
     }).catch(function (err) {
-      store(KEY.admin, null); $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
+      store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
       say(msg, errText(err, '불러오지 못했어요.'), true);
     });
   }
@@ -339,17 +368,57 @@
         '<td><b>' + esc(o.company) + '</b> <span class="order-items">' + esc(o.code || '') + '</span><div class="order-items">' + esc(o.contact) + ' · ' + esc(o.phone) + '</div><div class="order-items">' + esc(o.address) + '</div>' + (o.memo ? '<div class="order-items">요청: ' + esc(o.memo) + '</div>' : '') + '</td>' +
         '<td>' + itemsHtml(o) + '</td><td class="mono">' + won(o.total) + '</td>' +
         '<td class="mono">' + esc(o.requestedDate) + '<div class="order-items">최단 ' + esc(o.eta) + '</div></td>' +
-        '<td><select data-status="' + esc(o.no) + '" aria-label="' + esc(o.no) + ' 상태">' + STATUS_LIST.map(function (s) { return '<option' + (s === o.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td></tr>';
+        '<td>' + statusCell(o) + '</td></tr>';
     }).join('');
     $('#admin-empty').hidden = list.length > 0;
   }
-  function changeStatus(no, status, selectEl) {
-    selectEl.disabled = true;
-    api.setStatus(adminKey(), no, status).then(function () {
-      adminOrders.forEach(function (o) { if (o.no === no) o.status = status; });
-      renderAdmin(); toast(no + ' → ' + status);
-    }).catch(function (err) { toast(errText(err, '상태를 바꾸지 못했어요.')); renderAdmin(); });
+  function stamp(iso) { var d = new Date(iso); return isNaN(d) ? String(iso || '') : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function logLine(l) { return esc(stamp(l.at)) + ' ' + esc(l.by) + '(' + esc(l.role) + ') ' + esc(l.from) + ' → ' + esc(l.to) + (l.reason ? '<br>사유: ' + esc(l.reason) : ''); }
+  // 바꿀 수 있는 상태만 고르게 하고, 마지막으로 바꾼 사람과 기록을 함께 보여 준다
+  function statusCell(o) {
+    var opts = STATUS_LIST.filter(function (s) { return s !== o.status && canMove(role, o.status, s); });
+    var html = opts.length
+      ? '<select data-status="' + esc(o.no) + '" aria-label="' + esc(o.no) + ' 상태 바꾸기"><option selected>' + esc(o.status) + '</option>' +
+        opts.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select>'
+      : pill(o.status) + '<div class="order-items">' + (role === 'view' ? '보기만 할 수 있어요' : '관리자만 바꿀 수 있어요') + '</div>';
+    var log = o.log || [];
+    if (log.length) {
+      html += '<div class="order-items">' + logLine(log[log.length - 1]) + '</div>';
+      if (log.length > 1) html += '<details class="log"><summary>기록 ' + log.length + '건</summary><ol>' + log.slice().reverse().map(function (l) { return '<li>' + logLine(l) + '</li>'; }).join('') + '</ol></details>';
+    }
+    return html;
   }
+  // 잘못 누르는 일을 막으려고 바꾸기 전에 한 번 더 묻는다. 취소와 되돌리기는 사유를 받는다.
+  function askStatus(no, to) {
+    var o = adminOrders.filter(function (x) { return x.no === no; })[0]; if (!o) return;
+    var reason = needsReason(o.status, to);
+    pending = { no: no, status: to, from: o.status };
+    $('#st-title').textContent = no + ' 상태를 바꿀까요?';
+    $('#st-change').innerHTML = pill(o.status) + ' → ' + pill(to);
+    $('#st-company').textContent = o.company;
+    $('#st-by').textContent = staffInfo().name + ' (' + ROLES[role] + ')';
+    $('#st-reason-wrap').hidden = !reason; $('#st-reason').value = '';
+    $('#st-reason-label').textContent = to === '취소' ? '취소 사유' : '사유';
+    say($('#st-msg'), ''); $('#st-ok').disabled = false;
+    $('#st-ok').classList.toggle('danger', to === '취소');
+    $('#st-ok').textContent = to === '취소' ? '발주 취소하기' : to + '(으)로 바꾸기';
+    $('#st-dialog').showModal();
+    if (reason) $('#st-reason').focus();
+  }
+  function closeStatus() { pending = null; $('#st-dialog').close(); renderAdmin(); }
+  $('#st-form').addEventListener('submit', function (e) {
+    e.preventDefault(); if (!pending) return;
+    var c = { no: pending.no, status: pending.status, by: staffInfo().name, reason: $('#st-reason').value.trim() };
+    if (needsReason(pending.from, c.status) && c.reason.length < 2) { say($('#st-msg'), '사유를 적어 주세요.', true); return $('#st-reason').focus(); }
+    $('#st-ok').disabled = true; say($('#st-msg'), '바꾸는 중이에요…');
+    api.setStatus(adminKey(), c).then(function () {
+      var o = adminOrders.filter(function (x) { return x.no === c.no; })[0];
+      if (o) { (o.log = o.log || []).push({ at: new Date().toISOString(), from: o.status, to: c.status, by: c.by, role: ROLES[role], reason: c.reason }); o.status = c.status; }
+      toast(c.no + ' → ' + c.status); closeStatus();
+    }).catch(function (err) { $('#st-ok').disabled = false; say($('#st-msg'), errText(err, '상태를 바꾸지 못했어요.'), true); });
+  });
+  $('#st-cancel').addEventListener('click', closeStatus);
+  $('#st-dialog').addEventListener('cancel', function () { pending = null; renderAdmin(); });
 
   // 거래처 단가
   function renderCustomers() {
@@ -444,13 +513,14 @@
   $('#done-history').addEventListener('click', function () { show('history'); });
   $('#admin-entry').addEventListener('click', function () { show('admin'); });
   $('#key-form').addEventListener('submit', function (e) {
-    e.preventDefault(); var k = $('#admin-key').value.trim();
-    if (!k) { say($('#admin-msg'), '관리자 열쇠를 적어 주세요.', true); return; }
-    store(KEY.admin, k); $('#admin-key').value = ''; adminLoad();
+    e.preventDefault(); var k = $('#admin-key').value.trim(), name = $('#staff-name').value.trim();
+    if (!name) { say($('#admin-msg'), '이름을 적어 주세요. 상태를 바꾸면 기록에 남아요.', true); return $('#staff-name').focus(); }
+    if (!k) { say($('#admin-msg'), '팀 열쇠를 적어 주세요.', true); return $('#admin-key').focus(); }
+    store(KEY.admin, { key: k, name: name.slice(0, 20) }); $('#admin-key').value = ''; adminLoad();
   });
   $('#admin-reload').addEventListener('click', adminLoad);
-  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); adminLoad(); say($('#admin-msg'), '닫았어요.'); });
-  $('#admin-body').addEventListener('change', function (e) { if (e.target.dataset.status) changeStatus(e.target.dataset.status, e.target.value, e.target); });
+  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; adminLoad(); say($('#admin-msg'), '닫았어요.'); });
+  $('#admin-body').addEventListener('change', function (e) { if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value); });
 
   // ----- 시작 -----
   Promise.all([
