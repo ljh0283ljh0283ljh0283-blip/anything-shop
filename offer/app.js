@@ -52,7 +52,7 @@
       if (!d || !d.id || typeof d.name !== 'string' || !d.name) return;
       products[d.id] = {
         name: d.name, seller: String(d.seller || ''), cat: String(d.cat || '기타'), desc: String(d.desc || ''),
-        unit: String(d.unit || ''), order: Number(d.order) || 0, closed: !!d.closed
+        unit: String(d.unit || ''), order: Number(d.order) || 0, closed: !!d.closed, sample: d.sample === true
       };
       order.push(d.id);
     });
@@ -64,6 +64,7 @@
 
   function bidText(id) {
     var b = bids[id], p = products[id];
+    if (p && p.sample) return '샘플 상품 · 제안을 받지 않아요';
     if (p && p.closed) return b && b.accepted ? '제안 마감 · 거래 ' + b.accepted + '건' : '제안 마감';
     if (!b || !b.count) return '첫 제안을 기다려요';
     return '제안 ' + b.count + '건 · 최고 ' + won(b.top);
@@ -76,7 +77,8 @@
       var li = tpl.content.firstElementChild.cloneNode(true);
       li.dataset.id = id;
       li.classList.toggle('closed', p.closed);
-      li.querySelector('.kind').textContent = p.cat;
+      li.querySelector('.kind').textContent = p.sample ? '샘플 · ' + p.cat : p.cat;
+      li.classList.toggle('is-sample', p.sample);
       li.querySelector('.detail-link').textContent = p.name;
       var sel = li.querySelector('.seller');
       sel.textContent = p.seller ? '판매자 ' + p.seller : '';
@@ -87,10 +89,12 @@
       var add = li.querySelector('.add');
       add.dataset.offer = id;
       if (p.closed) { add.textContent = '마감'; add.disabled = true; }
+      if (p.sample) { add.textContent = '샘플'; add.disabled = true; }
       li.hidden = currentCat !== 'all' && p.cat !== currentCat;
       grid.appendChild(li);
     });
     if (loaded) status.textContent = order.length ? '' : '아직 등록된 상품이 없어요.';
+    $('#sample-note').hidden = !order.some(function (id) { return products[id].sample; });
     renderCats();
     renderAdminList();
   }
@@ -170,8 +174,9 @@
     $('#d-desc').textContent = p.desc || '';
     $('#d-unit').textContent = p.unit || '-';
     $('#d-bids').textContent = bidText(detailId);
-    $('#d-closed').hidden = !p.closed;
-    $('#o-submit').disabled = p.closed || !isOpen();
+    $('#d-closed').hidden = !p.closed || p.sample;
+    $('#d-sample').hidden = !p.sample;
+    $('#o-submit').disabled = p.closed || p.sample || !isOpen();
   }
   function openDetail(id, from) {
     if (!products[id]) return;
@@ -183,7 +188,7 @@
     renderDetail();
     if (!isOpen()) oSay('지금은 오픈 준비 중이라 제안을 받지 않아요. 정식 오픈 후에 제안해 주세요.', true);
     else oSay('');
-    if (!products[id].closed) offerForm.oprice.focus();
+    if (!products[id].closed && !products[id].sample) offerForm.oprice.focus();
   }
   grid.addEventListener('click', function (e) {
     var card = e.target.closest('.product');
@@ -193,7 +198,7 @@
   offerForm.addEventListener('submit', function (e) {
     e.preventDefault();
     var p = products[detailId];
-    if (!p || p.closed || !isOpen()) return;
+    if (!p || p.closed || p.sample || !isOpen()) return;
     var f = offerForm, n = offerNumbers();
     var data = {
       id: detailId, price: n.price, qty: n.qty,
@@ -508,7 +513,7 @@
     var p = products[id]; if (!p) return;
     editingId = id;
     form.name.value = p.name; form.seller.value = p.seller; form.cat.value = p.cat;
-    form.unit.value = p.unit; form.desc.value = p.desc; form.closed.checked = p.closed;
+    form.unit.value = p.unit; form.desc.value = p.desc; form.closed.checked = p.closed; form.sample.checked = p.sample;
     $('#form-title').textContent = '상품 수정';
     $('#f-save').textContent = '수정 저장';
     $('#f-cancel').hidden = false;
@@ -535,6 +540,7 @@
       desc: form.desc.value.trim(), unit: form.unit.value.trim()
     };
     if (form.closed.checked) data.closed = true;
+    if (form.sample.checked) data.sample = true;
     if (!data.name) { say('상품 이름을 적어 주세요.', true); form.name.focus(); return; }
     if (!data.cat) { say('분류를 적어 주세요.', true); form.cat.focus(); return; }
 
@@ -561,7 +567,7 @@
       li.dataset.id = id;
       if (id === editingId) li.className = 'editing';
       li.innerHTML = '<span class="a-name"></span><span class="a-actions"><button type="button" data-edit>수정</button><button type="button" class="del" data-del>삭제</button></span><span class="a-meta"></span>';
-      li.querySelector('.a-name').textContent = p.name + (p.closed ? ' (마감)' : '');
+      li.querySelector('.a-name').textContent = p.name + (p.sample ? ' (샘플)' : '') + (p.closed ? ' (마감)' : '');
       li.querySelector('.a-meta').textContent = (p.seller ? p.seller + ' · ' : '') + p.cat + (p.unit ? ' · ' + p.unit : '') +
         (b && b.count ? ' · 제안 ' + b.count + '건, 최고 ' + won(b.top) : '');
       adminList.appendChild(li);

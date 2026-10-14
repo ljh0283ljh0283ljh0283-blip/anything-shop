@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261014">
+<link rel="stylesheet" href="style.css?v=20261014b">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -37,6 +37,8 @@
   </header>
 
   <p class="notice" id="notice"><strong>오픈 준비 중</strong><span>지금은 상품을 둘러보실 수 있어요. 주문은 정식 오픈 후에 받을게요.</span></p>
+
+  <p class="sample-note" id="sample-note" hidden><strong>샘플 상품</strong><span>지금 보이는 상품은 이 상점에서 무엇을 사고팔 수 있는지 보여 드리는 예시예요. 판매자 이름도 예시이고, 주문은 받지 않아요.</span></p>
 
   <section class="intro">
     <h1>물건도, 마음도, 시간도<br>사고 팔 수 있습니다</h1>
@@ -112,6 +114,7 @@
   <div class="panel-foot">
     <div class="total"><span>합계</span><span id="d-total">0원</span></div>
     <div class="two">
+      <p class="d-sample" id="d-sample" hidden>이 상품은 상점을 보여 드리기 위한 샘플이라 주문할 수 없어요.</p>
       <button class="ghost" id="d-add" type="button">장바구니 담기</button>
       <button class="primary" id="d-buy" type="button">바로 구매</button>
     </div>
@@ -195,6 +198,7 @@
       <input id="f-unit" name="unit" maxlength="20" placeholder="예: 1회, 30분, 355ml">
       <label for="f-desc">설명</label>
       <textarea id="f-desc" name="desc" rows="3" maxlength="200" placeholder="손님에게 보여줄 한두 문장"></textarea>
+      <label class="check"><input id="f-sample" name="sample" type="checkbox"> 샘플 상품 (보여 주기만 하고 주문은 받지 않아요)</label>
       <p class="form-msg" id="form-msg" role="status"></p>
       <div class="form-actions">
         <button class="primary" id="f-save" type="submit">등록하기</button>
