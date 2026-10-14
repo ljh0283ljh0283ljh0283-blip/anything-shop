@@ -64,7 +64,7 @@
 
   function bidText(id) {
     var b = bids[id], p = products[id];
-    if (p && p.sample) return '샘플 상품 · 제안을 받지 않아요';
+    if (p && p.sample) return '샘플 상품';
     if (p && p.closed) return b && b.accepted ? '제안 마감 · 거래 ' + b.accepted + '건' : '제안 마감';
     if (!b || !b.count) return '첫 제안을 기다려요';
     return '제안 ' + b.count + '건 · 최고 ' + won(b.top);
@@ -90,29 +90,39 @@
       add.dataset.offer = id;
       if (p.closed) { add.textContent = '마감'; add.disabled = true; }
       if (p.sample) { add.textContent = '샘플'; add.disabled = true; }
-      li.hidden = currentCat !== 'all' && p.cat !== currentCat;
+      li.hidden = !inView(p);
       grid.appendChild(li);
     });
-    if (loaded) status.textContent = order.length ? '' : '아직 등록된 상품이 없어요.';
-    $('#sample-note').hidden = !order.some(function (id) { return products[id].sample; });
     renderCats();
+    // "전체"에는 진짜 상품과 판매자 등록 신청서, "샘플"에는 샘플 상품만 보인다
+    if (loaded) status.textContent = currentCat === 'all' || order.some(function (id) { return inView(products[id]); }) ? '' : '아직 등록된 상품이 없어요.';
+    $('#sample-note').hidden = currentCat !== 'sample';
+    $('#seller-signup').hidden = currentCat !== 'all';
     renderAdminList();
   }
 
+  function inView(p) {
+    if (currentCat === 'sample') return p.sample;
+    return !p.sample && (currentCat === 'all' || p.cat === currentCat);
+  }
+  // 분류 버튼은 진짜 상품의 분류만 만든다(샘플은 "샘플" 버튼 하나로 모은다)
   function renderCats() {
-    var box = $('#cats'), cats = [], sellers = [];
+    var box = $('#cats'), cats = [], sellers = [], samples = false;
     order.forEach(function (id) {
       var c = products[id].cat, s = products[id].seller;
-      if (c && cats.indexOf(c) < 0) cats.push(c);
+      if (products[id].sample) samples = true;
+      else if (c && cats.indexOf(c) < 0) cats.push(c);
       if (s && sellers.indexOf(s) < 0) sellers.push(s);
     });
-    if (currentCat !== 'all' && cats.indexOf(currentCat) < 0) currentCat = 'all';
+    var heads = samples ? ['sample', 'all'] : ['all'];
+    if (heads.concat(cats).indexOf(currentCat) < 0) currentCat = 'all';
     box.innerHTML = '';
-    ['all'].concat(cats).forEach(function (c) {
+    heads.concat(cats).forEach(function (c) {
       var b = document.createElement('button');
       b.type = 'button';
       b.dataset.cat = c;
-      b.textContent = c === 'all' ? '전체' : c;
+      b.textContent = c === 'all' ? '전체' : c === 'sample' ? '샘플' : c;
+      if (c === 'sample') b.className = 'cat-sample';
       b.setAttribute('aria-pressed', String(c === currentCat));
       box.appendChild(b);
     });

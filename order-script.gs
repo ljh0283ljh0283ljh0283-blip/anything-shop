@@ -10,6 +10,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var d = JSON.parse(e.postData.contents);
+    if (d.type === 'seller') return sellerSignup(d);
     var name = clip(d.name, 20), phone = clip(d.phone, 20);
     if (!name || !phone) return reply({ ok: false, error: '이름과 연락처가 필요해요.' });
 
@@ -40,6 +41,20 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 판매자 등록 신청은 "판매자 신청" 탭에 쌓는다
+var SELLER_HEADER = ['신청 시각', '상점', '판매자 이름', '실명', '연락처', '이메일', '구분', '사업자등록번호', '팔고 싶은 것', '은행', '계좌번호', '예금주', '상태'];
+function sellerSignup(d) {
+  var nick = clip(d.nick, 20), realName = clip(d.realName, 20), tel = clip(d.tel, 20);
+  if (!nick || !realName || !tel) return reply({ ok: false, error: '이름과 연락처가 필요해요.' });
+  var book = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = book.getSheetByName('판매자 신청') || book.insertSheet('판매자 신청');
+  if (sheet.getLastRow() === 0) sheet.appendRow(SELLER_HEADER);
+  sheet.appendRow([new Date(), text(clip(d.shop, 20)), text(nick), text(realName), "'" + tel, text(clip(d.email, 60)),
+    text(clip(d.kind, 5)), "'" + clip(d.biz, 12), text(clip(d.what, 400)), text(clip(d.bank, 15)), "'" + clip(d.acct, 30),
+    text(clip(d.holder, 20)), '확인 전']);
+  return reply({ ok: true, seller: true });
 }
 
 function clip(v, n) { return String(v || '').trim().slice(0, n); }

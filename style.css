@@ -184,3 +184,27 @@ footer a { color: var(--muted); }
 #d-add:disabled, #d-buy:disabled { opacity: .45; cursor: default; }
 .form .check { display: flex; gap: 8px; align-items: center; font-size: .85rem; color: var(--fg); }
 .form .check input { width: auto; }
+
+/* 판매자 등록 신청 ("전체" 칸) */
+.cats .cat-sample { border-style: dashed; }
+.signup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px 40px; padding: 28px; border: 1px solid var(--line);
+  border-radius: 14px; background: var(--surface); }
+.signup[hidden] { display: none; }
+.su-intro h2 { font-family: var(--display); font-size: 1.6rem; line-height: 1.35; margin: 4px 0 12px; text-wrap: balance; }
+.su-intro p { margin: 0 0 12px; color: var(--muted); }
+.su-eyebrow { margin: 0; font-size: .78rem; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+.su-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: .92rem; }
+.su-points li::before { content: "✓"; color: var(--accent); margin-right: 8px; }
+.su-form { padding-block: 0; }
+.su-kind { border: 0; margin: 6px 0 0; padding: 0; display: flex; gap: 16px; }
+.su-kind legend { font-size: .8rem; color: var(--muted); padding: 0; margin-bottom: 4px; }
+.su-bank { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 8px; }
+.su-privacy { font-size: .82rem; color: var(--muted); margin-top: 8px; }
+.su-privacy summary { cursor: pointer; }
+.su-privacy p { margin: 6px 0 0; line-height: 1.7; }
+.su-form .check a { color: var(--accent); }
+.su-form .primary { margin-top: 4px; }
+.su-done { display: grid; gap: 8px; align-content: start; }
+.su-done p { margin: 0; }
+@media (max-width: 720px) { .signup { grid-template-columns: 1fr; padding: 20px 16px; } .su-bank { grid-template-columns: 1fr 1fr; } .su-bank input:nth-child(2) { grid-column: 1 / -1; grid-row: 2; } }
+.add { white-space: nowrap; }
