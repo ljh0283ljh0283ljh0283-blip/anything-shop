@@ -132,7 +132,9 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 .sync-msg:empty { display: none; }
 
 /* 내 웹사이트용 관리자 로그인 */
-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+footer .broker { margin: 0 0 8px; }
+footer .foot-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+footer a { color: var(--muted); }
 .admin-entry { border: 0; background: transparent; color: var(--muted); font-size: .8rem; text-decoration: underline; padding: 4px; }
 .gh-login { display: grid; gap: 8px; padding-block: 12px; }
 .gh-login p { margin: 0; color: var(--muted); font-size: .88rem; }
@@ -162,6 +164,10 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .receipt { display: grid; gap: 14px; padding-block: 16px; }
 .r-title { font-family: var(--display); font-size: 1.4rem; margin: 0; }
 .r-note { margin: 0; color: var(--muted); font-size: .88rem; }
+.r-sub { margin: 4px 0 -6px; font-weight: 600; font-size: .92rem; }
+.r-pay dd { display: grid; gap: 2px; }
+.r-pay .r-acct { font-weight: 400; color: var(--muted); font-size: .88rem; }
+.pay-note a { color: var(--accent); }
 
 /* 오픈 준비 중 안내 */
 .notice { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 16px 0 0; padding: 12px 16px;

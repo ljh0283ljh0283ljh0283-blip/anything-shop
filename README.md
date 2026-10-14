@@ -6,7 +6,8 @@
 - `style.css` 디자인
 - `app.js` 장바구니, 분류 필터
 - `products.json` 상품 목록 (상품을 바꾸려면 이 파일을 고칩니다)
-- `settings.json` 주문 받을 주소(orderUrl)와 입금 계좌
+- `settings.json` 주문 받을 주소(orderUrl), 판매자별 입금 계좌(sellers: 판매자 이름 → 계좌), 판매자를 비워 둔 상품(운영자 직접 판매)의 계좌(bank)
+- `terms/` 이용약관 페이지
 - `order-script.gs` 주문을 구글 시트에 쌓는 스크립트 (구글 시트 > 확장 프로그램 > Apps Script에 붙여 넣고 웹 앱으로 배포)
 
 ## 어떻게든 팔거야 (`offer/`)
