@@ -7,7 +7,7 @@
 //           단가는 사이트의 관리 > 거래처 단가에서 고치는 것이 기본이지만, 이 시트에서 직접 고쳐도 됩니다.
 // 스크립트 속성(프로젝트 설정 > 스크립트 속성)
 //   ADMIN_KEY     관리자 열쇠. 모든 일을 합니다: 거래처 단가, 상태 되돌리기, 취소된 발주 살리기.
-//   SALES_KEY     영업팀 열쇠. 발주를 보고 상태를 앞으로만 바꿉니다(접수 대기 → 생산 확정 → 생산 중 → 출하 완료). 취소는 사유를 적어야 합니다.
+//   SALES_KEY     영업팀 열쇠. 발주를 보고 상태를 앞으로만 바꿉니다(접수 대기 → 생산 지시 → 생산 중 → 입고 완료 → 출하). 취소는 사유를 적어야 합니다.
 //   VIEW_KEY      조회 전용 열쇠(선택). 생산, 물류 같은 다른 팀이 발주와 상태를 보기만 합니다.
 //   열쇠를 아는 사람이 팀을 떠나면 그 열쇠 값만 바꾸면 됩니다.
 //   PRODUCTS_URL  products.json 주소. 저장소를 옮기면 이 값만 바꾸면 됩니다.
@@ -21,7 +21,10 @@ var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', 
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
 var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
-var STATUSES = ['접수 대기', '생산 확정', '생산 중', '출하 완료', '취소'];
+var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
+// 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
+var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
+function statusOf(v) { v = String(v || STATUSES[0]); return OLD_STATUS[v] || v; }
 
 function doGet() { return reply({ ok: true }); }
 
@@ -173,11 +176,11 @@ function mine(d) {
 }
 
 // 상태 규칙 (pomall/app.js의 canMove, needsReason과 같다)
-//   영업팀: 앞으로만. 출하 완료나 취소가 된 발주는 못 바꾼다. 취소는 사유가 있어야 한다.
+//   영업팀: 앞으로만. 출하나 취소가 된 발주는 못 바꾼다. 취소는 사유가 있어야 한다.
 //   관리자: 아무 상태로나. 되돌리거나 취소된 발주를 살릴 때도 사유가 있어야 한다.
 function canMove(role, from, to) {
   if (role === 'admin') return true;
-  if (role !== 'sales' || from === '출하 완료' || from === '취소') return false;
+  if (role !== 'sales' || from === '출하' || from === '취소') return false;
   return to === '취소' || STATUSES.indexOf(to) > STATUSES.indexOf(from);
 }
 function needsReason(from, to) { return to === '취소' || from === '취소' || STATUSES.indexOf(to) < STATUSES.indexOf(from); }
@@ -189,7 +192,7 @@ function setStatus(d, role) {
   var s = orderSheet(), all = rows(), hit = [];
   for (var i = 0; i < all.length; i++) if (String(all[i][COL['발주번호']]) === String(d.no)) hit.push(i);
   if (!hit.length) return { ok: false, error: '없는 발주예요.' };
-  var from = String(all[hit[0]][COL['상태']] || STATUSES[0]);
+  var from = statusOf(all[hit[0]][COL['상태']]);
   if (from === to) return { ok: false, error: '이미 ' + to + ' 상태예요. 새로고침해 주세요.' };
   if (!canMove(role, from, to)) return { ok: false, error: from + '에서 ' + to + '(으)로는 관리자만 바꿀 수 있어요.' };
   if (needsReason(from, to) && reason.length < 2) return { ok: false, error: '사유를 적어 주세요.' };
@@ -227,7 +230,7 @@ function orders(withLog) {
         code: String(r[COL['거래처 코드']]), company: String(r[COL['거래처']]), contact: String(r[COL['담당자']]), phone: String(r[COL['연락처']]),
         customerPo: String(r[COL['거래처 PO']]), address: String(r[COL['납품 주소']]), memo: String(r[COL['요청 사항']]),
         requestedDate: day(r[COL['희망 출하일']]), eta: day(r[COL['최단 출하일']]),
-        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, status: String(r[COL['상태']] || STATUSES[0]), items: [], log: log[no] || []
+        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]),

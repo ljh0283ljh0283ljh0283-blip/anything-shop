@@ -15,15 +15,15 @@
     return null;
   }
 
-  var STATUS = { '접수 대기': 'st-received', '생산 확정': 'st-confirmed', '생산 중': 'st-production', '출하 완료': 'st-shipped', '취소': 'st-canceled' };
+  var STATUS = { '접수 대기': 'st-received', '생산 지시': 'st-confirmed', '생산 중': 'st-production', '입고 완료': 'st-stocked', '출하': 'st-shipped', '취소': 'st-canceled' };
   var STATUS_LIST = Object.keys(STATUS);
   var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
   // 상태 규칙 (pomall-script.gs의 canMove, needsReason과 같다. 진짜 검사는 서버가 한다)
-  //   영업팀: 앞으로만. 출하 완료나 취소가 된 발주는 못 바꾼다.   관리자: 아무 상태로나.   조회 전용: 못 바꾼다.
+  //   영업팀: 앞으로만. 출하나 취소가 된 발주는 못 바꾼다.   관리자: 아무 상태로나.   조회 전용: 못 바꾼다.
   //   취소, 되돌리기, 취소된 발주 살리기는 사유가 있어야 한다.
   function canMove(role, from, to) {
     if (role === 'admin') return true;
-    if (role !== 'sales' || from === '출하 완료' || from === '취소') return false;
+    if (role !== 'sales' || from === '출하' || from === '취소') return false;
     return to === '취소' || STATUS_LIST.indexOf(to) > STATUS_LIST.indexOf(from);
   }
   function needsReason(from, to) { return to === '취소' || from === '취소' || STATUS_LIST.indexOf(to) < STATUS_LIST.indexOf(from); }
@@ -304,7 +304,9 @@
   }
 
   // ----- 주문 조회 -----
-  function pill(s) { return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(s || '접수 대기') + '</span>'; }
+  // 예전 상태 이름으로 남은 발주는 새 이름으로 보여 준다
+  var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
+  function pill(s) { s = OLD_STATUS[s] || s; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(s || '접수 대기') + '</span>'; }
   function itemsHtml(o) { return '<ul class="order-items">' + o.items.map(function (i) { return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + '</li>'; }).join('') + '</ul>'; }
   function loadHistory() {
     var msg = $('#history-msg');
