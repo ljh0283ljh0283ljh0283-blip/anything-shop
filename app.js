@@ -123,31 +123,41 @@
       li.querySelector('.add').dataset.add = id;
       // 샘플 상품은 상점을 보여 주기 위한 것이라 담을 수 없다
       if (p.sample) { li.querySelector('.add').textContent = '샘플'; li.querySelector('.add').disabled = true; }
-      li.hidden = currentCat !== 'all' && p.cat !== currentCat;
+      li.hidden = !inView(p);
       grid.appendChild(li);
     });
-    if (loaded) status.textContent = order.length ? '' : '아직 등록된 상품이 없어요.';
-    $('#sample-note').hidden = !order.some(function (id) { return products[id].sample; });
     renderCats();
+    // "전체"에는 진짜 상품과 판매자 등록 신청서, "샘플"에는 샘플 상품만 보인다
+    if (loaded) status.textContent = currentCat === 'all' || order.some(function (id) { return inView(products[id]); }) ? '' : '아직 등록된 상품이 없어요.';
+    $('#sample-note').hidden = currentCat !== 'sample';
+    $('#seller-signup').hidden = currentCat !== 'all';
     renderCart();
     renderAdminList();
   }
 
+  function inView(p) {
+    if (currentCat === 'sample') return p.sample;
+    return !p.sample && (currentCat === 'all' || p.cat === currentCat);
+  }
+  function hasSamples() { return order.some(function (id) { return products[id].sample; }); }
+  // 분류 버튼은 진짜 상품의 분류만 만든다(샘플은 "샘플" 버튼 하나로 모은다)
   function catsInUse() {
     var seen = [];
-    order.forEach(function (id) { var c = products[id].cat; if (c && seen.indexOf(c) < 0) seen.push(c); });
+    order.forEach(function (id) { var c = products[id].cat; if (c && !products[id].sample && seen.indexOf(c) < 0) seen.push(c); });
     return seen;
   }
 
   function renderCats() {
     var box = $('#cats'), cats = catsInUse();
-    if (currentCat !== 'all' && cats.indexOf(currentCat) < 0) currentCat = 'all';
+    var heads = hasSamples() ? ['sample', 'all'] : ['all'];
+    if (heads.concat(cats).indexOf(currentCat) < 0) currentCat = 'all';
     box.innerHTML = '';
-    ['all'].concat(cats).forEach(function (c) {
+    heads.concat(cats).forEach(function (c) {
       var b = document.createElement('button');
       b.type = 'button';
       b.dataset.cat = c;
-      b.textContent = c === 'all' ? '전체' : c;
+      b.textContent = c === 'all' ? '전체' : c === 'sample' ? '샘플' : c;
+      if (c === 'sample') b.className = 'cat-sample';
       b.setAttribute('aria-pressed', String(c === currentCat));
       box.appendChild(b);
     });
