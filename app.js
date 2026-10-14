@@ -712,7 +712,8 @@
       openPanel(panel, this); mode = ''; loginMsg(''); show('login'); $('#l-id').focus();
     });
     $('#admin-entry').addEventListener('click', function () { openAdmin(this); });
-    $('#open-admin').addEventListener('click', function () { if (sellerKey()) openSeller(this); else openAdmin(this); });
+    $('#open-admin').addEventListener('click', function () { openSeller(this); });
+    $('#open-manage').addEventListener('click', function () { openAdmin(this); });
     document.addEventListener('click', function (e) {
       if (e.target.closest('[data-seller-signup]')) showSignup();
       if (e.target.closest('[data-seller-login]')) openSeller();
@@ -723,7 +724,7 @@
       if (!id || !pw) { loginMsg('아이디와 비밀번호를 적어 주세요.', true); return; }
       loginMsg('확인하는 중이에요…');
       api({ action: 'sellerLogin', loginId: id, password: pw }).then(function (res) {
-        keep(SELLER_KEY, res.key); keep(TOKEN_KEY, '');
+        keep(SELLER_KEY, res.key);
         $('#l-pw').value = '';
         enterSeller(res.nick);
       }).catch(function (err) { loginMsg(writeError(err), true); });
@@ -731,7 +732,7 @@
     $('#l-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#l-go').click(); });
     // 판매자 되기(가입)를 마치면 바로 로그인된다
     document.addEventListener('seller-login', function (e) {
-      keep(SELLER_KEY, e.detail.key); keep(TOKEN_KEY, '');
+      keep(SELLER_KEY, e.detail.key);
       sellerPost({ action: 'sellerMe' }).then(function (res) { enterSeller(res.nick); say('가입을 마쳤어요. 첫 상품을 올려 보세요.'); })
         .catch(function (err) { show('login'); loginMsg(writeError(err), true); });
     });
@@ -740,7 +741,7 @@
       var t = $('#gh-token').value.trim();
       if (!t) { loginMsg('GitHub 열쇠(토큰)를 붙여 넣어 주세요.', true); return; }
       $('#gh-token').value = '';
-      keep(TOKEN_KEY, t); keep(SELLER_KEY, '');
+      keep(TOKEN_KEY, t);
       enterAdmin();
     });
     $('#admin-tabs').addEventListener('click', function (e) {
@@ -750,16 +751,17 @@
       say('');
       resetForm();
     });
-    function logout() {
-      var wasAdmin = !sellerKey() && !!ghToken();
-      keep(TOKEN_KEY, ''); keep(SELLER_KEY, '');
+    // 판매자 로그인과 관리자 로그인은 따로 유지된다. 로그아웃은 지금 보고 있는 쪽만 한다.
+    function logout(which) {
+      var wasAdmin = which ? which === 'admin' : mode === 'admin';
+      keep(wasAdmin ? TOKEN_KEY : SELLER_KEY, '');
       mode = ''; sellerNick = '';
       show(wasAdmin ? 'adminLogin' : 'login');
       loginMsg('로그아웃했어요.');
     }
-    $('#gh-logout').addEventListener('click', logout);
+    $('#gh-logout').addEventListener('click', function () { logout(); });
 
-    $('#seller-out').addEventListener('click', function () { logout(); });
+    $('#seller-out').addEventListener('click', function () { logout('seller'); });
 
     if (location.hash === '#seller') showSignup();
     refreshEntries();
@@ -767,9 +769,10 @@
 
   // 버튼 역할: 판매자 되기 = 가입, 판매자 로그인 = 들어가기(로그아웃 상태에서만 보임), 내 상품 = 로그인한 판매자의 상품 올리기·고치기
   function refreshEntries() {
-    var seller = !!sellerKey(), admin = !seller && !!ghToken();
-    $('#open-admin').hidden = !(seller || admin);
-    $('#open-admin').textContent = seller ? '내 상품' : '관리';
+    var seller = !!sellerKey(), admin = !!ghToken();
+    $('#open-admin').hidden = !seller;
+    $('#open-admin').textContent = '내 상품';
+    $('#open-manage').hidden = !admin;
     $('#signup-entry').hidden = seller;
     $('#seller-entry').hidden = seller;
     $('#seller-out').hidden = !seller;
