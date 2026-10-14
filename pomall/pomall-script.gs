@@ -1,16 +1,22 @@
 // SEKI POmall 발주: 거래처 로그인, 거래처별 단가, 발주를 구글 시트에 두는 Apps Script
-// 시트 탭 두 개를 씁니다. 없으면 처음 쓸 때 만들어집니다.
+// 시트 탭 세 개를 씁니다. 없으면 처음 쓸 때 만들어집니다.
 //   발주    발주 한 건의 품목마다 한 줄 (같은 발주번호). 생산 현장에서 줄 단위로 보기 쉽게 하려는 것입니다.
+//   상태 기록  상태를 바꿀 때마다 한 줄: 누가, 언제, 무엇에서 무엇으로, 왜(취소나 되돌리기).
 //   거래처  거래처 코드, 비밀번호(암호화), 사용 여부, 할인율(%), 모델마다 한 칸씩 단가(원/EA, 부가세 별도). 빈 칸은 "단가 문의".
 //           최종 단가 = 모델 단가 × (1 - 할인율/100). 할인율이 비어 있으면 적은 단가 그대로입니다.
 //           단가는 사이트의 관리 > 거래처 단가에서 고치는 것이 기본이지만, 이 시트에서 직접 고쳐도 됩니다.
 // 스크립트 속성(프로젝트 설정 > 스크립트 속성)
-//   ADMIN_KEY     관리자 열쇠. 관리 화면에서 발주를 보고 거래처 단가를 고칠 때 씁니다.
+//   ADMIN_KEY     관리자 열쇠. 모든 일을 합니다: 거래처 단가, 상태 되돌리기, 취소된 발주 살리기.
+//   SALES_KEY     영업팀 열쇠. 발주를 보고 상태를 앞으로만 바꿉니다(접수 대기 → 생산 확정 → 생산 중 → 출하 완료). 취소는 사유를 적어야 합니다.
+//   VIEW_KEY      조회 전용 열쇠(선택). 생산, 물류 같은 다른 팀이 발주와 상태를 보기만 합니다.
+//   열쇠를 아는 사람이 팀을 떠나면 그 열쇠 값만 바꾸면 됩니다.
 //   PRODUCTS_URL  products.json 주소. 저장소를 옮기면 이 값만 바꾸면 됩니다.
 // 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
 
 var DEFAULT_PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/pomall/products.json';
-var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처';
+var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 기록';
+var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
+var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
@@ -28,10 +34,11 @@ function doPost(e) {
       case 'login': return reply(login(d.code, d.pw));
       case 'order': return reply(placeOrder(d));
       case 'mine': return reply(mine(d));
-      case 'list': return reply(admin(d.key, function () { return { ok: true, orders: orders() }; }));
-      case 'status': return reply(admin(d.key, function () { return setStatus(d); }));
-      case 'customers': return reply(admin(d.key, function () { return { ok: true, customers: customerList() }; }));
-      case 'saveCustomer': return reply(admin(d.key, function () { return saveCustomer(d.customer || {}); }));
+      case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
+      case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
+      case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
+      case 'customers': return reply(staff(d.key, ['admin'], function () { return { ok: true, customers: customerList() }; }));
+      case 'saveCustomer': return reply(staff(d.key, ['admin'], function () { return saveCustomer(d.customer || {}); }));
     }
     return reply({ ok: false, error: '알 수 없는 요청이에요.' });
   } catch (err) {
@@ -149,21 +156,51 @@ function mine(d) {
   return { ok: true, orders: orders().filter(function (o) { return o.code === cust.code; }) };
 }
 
-function setStatus(d) {
-  if (STATUSES.indexOf(d.status) < 0) return { ok: false, error: '알 수 없는 상태예요.' };
-  var s = orderSheet(), all = rows(), n = 0, now = new Date();
-  for (var i = 0; i < all.length; i++) {
-    if (String(all[i][COL['발주번호']]) !== String(d.no)) continue;
-    s.getRange(i + 2, COL['상태'] + 1).setValue(d.status);
+// 상태 규칙 (pomall/app.js의 canMove, needsReason과 같다)
+//   영업팀: 앞으로만. 출하 완료나 취소가 된 발주는 못 바꾼다. 취소는 사유가 있어야 한다.
+//   관리자: 아무 상태로나. 되돌리거나 취소된 발주를 살릴 때도 사유가 있어야 한다.
+function canMove(role, from, to) {
+  if (role === 'admin') return true;
+  if (role !== 'sales' || from === '출하 완료' || from === '취소') return false;
+  return to === '취소' || STATUSES.indexOf(to) > STATUSES.indexOf(from);
+}
+function needsReason(from, to) { return to === '취소' || from === '취소' || STATUSES.indexOf(to) < STATUSES.indexOf(from); }
+
+function setStatus(d, role) {
+  var to = String(d.status || ''), by = clip(d.by, 20), reason = clip(d.reason, 200);
+  if (STATUSES.indexOf(to) < 0) return { ok: false, error: '알 수 없는 상태예요.' };
+  if (!by) return { ok: false, error: '바꾸는 사람 이름이 필요해요.' };
+  var s = orderSheet(), all = rows(), hit = [];
+  for (var i = 0; i < all.length; i++) if (String(all[i][COL['발주번호']]) === String(d.no)) hit.push(i);
+  if (!hit.length) return { ok: false, error: '없는 발주예요.' };
+  var from = String(all[hit[0]][COL['상태']] || STATUSES[0]);
+  if (from === to) return { ok: false, error: '이미 ' + to + ' 상태예요. 새로고침해 주세요.' };
+  if (!canMove(role, from, to)) return { ok: false, error: from + '에서 ' + to + '(으)로는 관리자만 바꿀 수 있어요.' };
+  if (needsReason(from, to) && reason.length < 2) return { ok: false, error: '사유를 적어 주세요.' };
+  var now = new Date();
+  hit.forEach(function (i) {
+    s.getRange(i + 2, COL['상태'] + 1).setValue(to);
     s.getRange(i + 2, COL['바뀐 시각'] + 1).setValue(now);
-    n++;
-  }
-  return n ? { ok: true, status: d.status } : { ok: false, error: '없는 발주예요.' };
+  });
+  logSheet().appendRow([now, String(d.no), text(String(all[hit[0]][COL['거래처']])), from, to, text(by), ROLES[role], text(reason)]);
+  return { ok: true, status: to };
+}
+
+// 상태 기록을 발주번호별로 모은다 (오래된 것부터)
+function statusLog() {
+  var s = logSheet(), n = s.getLastRow(), map = {};
+  if (n < 2) return map;
+  s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().forEach(function (r) {
+    var no = String(r[1]); if (!no) return;
+    (map[no] = map[no] || []).push({ at: r[0] instanceof Date ? r[0].toISOString() : String(r[0]), from: String(r[3]), to: String(r[4]),
+      by: String(r[5]), role: String(r[6]), reason: String(r[7]) });
+  });
+  return map;
 }
 
 // 시트의 줄을 발주번호별로 묶어 최신 발주가 먼저 오게 돌려준다
-function orders() {
-  var map = {}, keys = [];
+function orders(withLog) {
+  var map = {}, keys = [], log = withLog ? statusLog() : {};
   rows().forEach(function (r) {
     var no = String(r[COL['발주번호']]);
     if (!no) return;
@@ -174,7 +211,7 @@ function orders() {
         code: String(r[COL['거래처 코드']]), company: String(r[COL['거래처']]), contact: String(r[COL['담당자']]), phone: String(r[COL['연락처']]),
         customerPo: String(r[COL['거래처 PO']]), address: String(r[COL['납품 주소']]), memo: String(r[COL['요청 사항']]),
         requestedDate: day(r[COL['희망 출하일']]), eta: day(r[COL['최단 출하일']]),
-        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, status: String(r[COL['상태']] || STATUSES[0]), items: []
+        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, status: String(r[COL['상태']] || STATUSES[0]), items: [], log: log[no] || []
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]),
@@ -221,10 +258,26 @@ function rows() {
   var s = orderSheet(), n = s.getLastRow();
   return n < 2 ? [] : s.getRange(2, 1, n - 1, HEADER.length).getValues();
 }
-function admin(key, fn) {
-  var real = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
-  if (!real || String(key || '') !== real) return { ok: false, error: '관리자 열쇠가 맞지 않아요.' };
-  return fn();
+function logSheet() {
+  var s = tab(LOG_SHEET);
+  if (s.getLastRow() === 0) { s.appendRow(LOG_HEADER); s.setFrozenRows(1); }
+  return s;
+}
+// 열쇠로 권한을 정한다. 같은 값이면 높은 권한이 먼저다.
+function roleOf(key) {
+  key = String(key || '');
+  if (!key) return null;
+  var p = PropertiesService.getScriptProperties();
+  if (key === p.getProperty('ADMIN_KEY')) return 'admin';
+  if (key === p.getProperty('SALES_KEY')) return 'sales';
+  if (key === p.getProperty('VIEW_KEY')) return 'view';
+  return null;
+}
+function staff(key, allowed, fn) {
+  var role = roleOf(key);
+  if (!role) return { ok: false, error: '열쇠가 맞지 않아요.' };
+  if (allowed.indexOf(role) < 0) return { ok: false, error: ROLES[role] + ' 열쇠로는 할 수 없어요. ' + (allowed[0] === 'admin' && allowed.length === 1 ? '관리자' : '영업팀') + ' 권한이 필요해요.' };
+  return fn(role);
 }
 function day(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd') : String(v || ''); }
 function digits(v) { return String(v || '').replace(/\D/g, ''); }
