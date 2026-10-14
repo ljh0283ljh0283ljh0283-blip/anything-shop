@@ -117,7 +117,14 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 .form-msg.err { color: var(--danger); }
 .form-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 
-.admin-list-title { font-size: .95rem; margin: 8px 0 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+.admin-list-title { font-size: .95rem; margin: 4px 0 4px; }
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.admin-tabs button { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .85rem; color: var(--fg); background: var(--surface); }
+.admin-tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.admin-empty { font-size: .9rem; color: var(--muted); margin: 6px 0 10px; }
+.admin-list li.is-off .a-name, .admin-list li.is-off .a-meta { opacity: .55; }
+#admin-list-wrap + .form { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.form-title { font-size: .95rem; margin: 0 0 4px; }
 .admin-list { list-style: none; margin: 0; padding: 0; }
 .admin-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding-block: 10px; border-bottom: 1px solid var(--line); }
 .admin-list li.editing { background: var(--tag); margin-inline: -8px; padding-inline: 8px; border-radius: 6px; }
