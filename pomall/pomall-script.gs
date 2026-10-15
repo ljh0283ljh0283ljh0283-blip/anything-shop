@@ -195,7 +195,8 @@ function placeOrder(d) {
   var wanted = /^\d{4}-\d{2}-\d{2}$/.test(o.requestedDate || '') && o.requestedDate >= eta ? o.requestedDate : eta;
 
   var s = orderSheet(), now = new Date();
-  var no = nextOrderNo(now);
+  if (!cust.no) cust.no = (numberCustomers().filter(function (c) { return c.code === cust.code; })[0] || {}).no;
+  var no = nextOrderNo(now, cust.no);
   var file = saveAttachment(o.attachment, no, cust.name);
   if (file.error) return file;
   lines.forEach(function (l, k) {
@@ -208,14 +209,16 @@ function placeOrder(d) {
 
 // 발주번호: PO-날짜-그날의 일련번호 (PO-261015-001, PO-261015-002 …). 예전 번호(PO-261015-124600-59)는 그대로 둔다.
 // doPost가 잠금을 걸고 부르므로 두 발주가 같은 번호를 받지 않는다.
-function nextOrderNo(now) {
+// 발주번호: PO-날짜-거래처번호-그날 몇 번째 발주 (예: PO-261015-1-002 = 10월 15일, 1번 거래처, 그날 회사 전체 두 번째 발주)
+// 일련번호는 거래처와 상관없이 그날 전체로 센다. 거래처 번호가 생기기 전 번호(PO-261015-002)도 함께 센다.
+function nextOrderNo(now, custNo) {
   var prefix = 'PO-' + Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd') + '-', max = 0;
   rows().forEach(function (r) {
-    var m = String(r[COL['발주번호']]).match(/^PO-\d{6}-(\d{3,})$/);
+    var m = String(r[COL['발주번호']]).match(/^PO-\d{6}-(?:\d+-)?(\d{3,})$/);
     if (m && String(r[COL['발주번호']]).indexOf(prefix) === 0) max = Math.max(max, Number(m[1]));
   });
   var n = String(max + 1);
-  return prefix + (n.length < 3 ? ('00' + n).slice(-3) : n);
+  return prefix + (custNo ? custNo + '-' : '') + (n.length < 3 ? ('00' + n).slice(-3) : n);
 }
 
 // 발주서 첨부: PDF, 사진, 엑셀, 워드, 한글 파일을 10MB까지 받는다
