@@ -560,7 +560,7 @@
   }
 
   // ----- 거래처 정보: 한 거래처의 거래내역을 일별·월별·연별로 묶는다 -----
-  var infoCode = null, infoPeriod = 'month', infoKey = null;
+  var infoCode = null, infoPeriod = 'month', infoKey = null, infoData = null;
   var PERIOD = { day: { len: 10, name: '날짜' }, month: { len: 7, name: '월' }, year: { len: 4, name: '연도' } };
   function openCustInfo(code) {
     infoCode = code; infoKey = null;
@@ -589,6 +589,7 @@
       g.qty += o.items.reduce(function (s, i) { return s + (Number(i.qty) || 0); }, 0);
     });
     keys.sort().reverse();
+    infoData = { c: c, keys: keys, groups: groups, P: P };
     var all = keys.reduce(function (t, k) { var g = groups[k]; t.n += g.n; t.qty += g.qty; t.supply += g.supply; t.total += g.total; t.cancel += g.cancel; return t; }, { n: 0, qty: 0, supply: 0, total: 0, cancel: 0 });
     var row = function (label, g, attr) {
       return '<tr' + attr + '><td class="mono">' + label + '</td><td class="num">' + g.n + '건</td><td class="num">' + g.qty.toLocaleString() + 'EA</td><td class="num">' + won(g.supply) + '</td><td class="num">' + won(g.total) + '</td><td class="num">' + (g.cancel ? g.cancel + '건' : '-') + '</td></tr>';
@@ -596,6 +597,7 @@
     $('#ci-sum').innerHTML = keys.map(function (k) { return row(esc(k), groups[k], ' data-period-key="' + esc(k) + '" aria-selected="' + (infoKey === k) + '"'); }).join('') +
       (keys.length ? row('전체', all, ' class="total"') : '');
     var list = mine.filter(function (o) { return !infoKey || kst(o.createdAt).slice(0, P.len) === infoKey; });
+    infoData.list = list; infoData.all = all;
     $('#ci-list-title').textContent = infoKey ? infoKey + ' 발주 목록' : '발주 목록 (전체)';
     $('#ci-orders').innerHTML = list.map(function (o) {
       return '<tr><td class="mono">' + esc(o.no) + '</td><td class="mono">' + esc(kst(o.createdAt)) + '</td><td>' + itemsHtml(o) + '</td><td class="mono">' + won(o.total) + '</td><td>' + pill(o.status) + '</td></tr>';
@@ -603,27 +605,52 @@
     $('#ci-empty').hidden = mine.length > 0;
   }
   $('#ci-back').addEventListener('click', closeCustInfo);
+  // 거래처 정보의 거래내역(지금 고른 일별·월별·연별 그대로)과 발주 목록(품목 한 줄씩)을 엑셀 파일로
+  var PERIOD_FILE = { day: 'daily', month: 'monthly', year: 'yearly' };
+  $('#ci-sum-excel').addEventListener('click', function () {
+    var D = infoData; if (!D || !D.keys.length) { toast('내려받을 거래내역이 없어요'); return; }
+    var row = function (label, g) { return [csvText(label), g.n, g.qty, Math.round(g.supply), Math.round(g.total), g.cancel].join(','); };
+    var lines = [['거래처', D.c.name + ' (' + D.c.code + ')'].map(csvCell).join(','), [D.P.name, '발주(건)', '수량(EA)', '공급가(원)', '합계 VAT 포함(원)', '취소(건)'].map(csvCell).join(',')]
+      .concat(D.keys.map(function (k) { return row(k, D.groups[k]); }), [row('전체', D.all)]);
+    saveCsv('POmall_' + D.c.code + '_' + PERIOD_FILE[infoPeriod], lines);
+  });
+  $('#ci-orders-excel').addEventListener('click', function () {
+    var D = infoData; if (!D || !D.list.length) { toast('내려받을 발주가 없어요'); return; }
+    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
+    var lines = [head.map(csvCell).join(',')];
+    D.list.forEach(function (o) {
+      o.items.forEach(function (i) {
+        lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '',
+          csvCell(i.finish || ''), i.temp || '', i.qty || '', i.unit || '', (Number(i.unit) || 0) * (Number(i.qty) || 0), csvCell(i.memo || ''), o.total || ''].join(','));
+      });
+    });
+    saveCsv('POmall_' + D.c.code + '_orders' + (infoKey ? '_' + infoKey : ''), lines);
+  });
   $('#ci-sum').addEventListener('click', function (e) {
     var tr = e.target.closest('tr[data-period-key]'); if (!tr) return;
     infoKey = infoKey === tr.dataset.periodKey ? null : tr.dataset.periodKey; renderCustInfo();
   });
 
   // 거래처 목록을 엑셀에서 바로 열리는 파일(CSV, 한글 깨짐 방지 BOM 포함)로 내려받는다. 비밀번호는 넣지 않는다.
+  function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  // 0으로 시작하는 연락처·코드·날짜는 엑셀이 숫자나 날짜로 바꾸므로 글자로 고정한다
+  function csvText(v) { v = String(v || ''); return v ? '="' + v.replace(/"/g, '""') + '"' : ''; }
+  function saveCsv(name, lines) {
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name + '_' + kst(new Date().toISOString()).slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
   function downloadCustomers() {
     if (!customers.length) { toast('내려받을 거래처가 없어요'); return; }
-    var cell = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    // 0으로 시작하는 연락처·코드는 엑셀이 숫자로 바꿔 0을 지우므로 글자로 고정한다
-    var asText = function (v) { v = String(v || ''); return v ? '="' + v.replace(/"/g, '""') + '"' : ''; };
+    var cell = csvCell, asText = csvText;
     var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
     var lines = [head.map(cell).join(',')].concat(customers.map(function (c) {
       return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.address)]
         .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.active ? '사용' : '중지']).join(',');
     }));
-    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'POmall_customers_' + kst(new Date().toISOString()).slice(0, 10) + '.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    saveCsv('POmall_customers', lines);
   }
   $('#cust-excel').addEventListener('click', downloadCustomers);
 
