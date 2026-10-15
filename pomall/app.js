@@ -384,10 +384,10 @@
       return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.memo ? '<div class="item-memo">메모: ' + esc(i.memo) + '</div>' : '') + '</li>';
     }).join('') + '</ul>';
   }
-  // 담당자가 확정 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다
+  // 담당자가 예상 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다 (시트 칸 이름은 '확정 출하일' 그대로)
   function shipText(o) {
-    return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">확정</div>'
-      : esc(o.requestedDate) + '<div class="order-items">희망 · 확정 전</div>';
+    return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">예상 출하일</div>'
+      : esc(o.requestedDate) + '<div class="order-items">희망 · 예상일 미정</div>';
   }
   function loadHistory() {
     var msg = $('#history-msg');
@@ -466,8 +466,8 @@
   function canEdit() { return role === 'admin' || role === 'sales'; }
   function shipCell(o) {
     var head = '<div class="order-items">희망 ' + esc(o.requestedDate) + ' · 최단 ' + esc(o.eta) + '</div>';
-    if (!canEdit()) return (o.shipDate ? '<b>' + esc(o.shipDate) + '</b>' : '<span class="order-items">확정 전</span>') + head;
-    return '<label class="ship"><span class="order-items">확정 출하일</span><input type="date" data-ship="' + esc(o.no) + '" value="' + esc(o.shipDate || '') + '"></label>' + head;
+    if (!canEdit()) return (o.shipDate ? '<b>' + esc(o.shipDate) + '</b>' : '<span class="order-items">예상일 미정</span>') + head;
+    return '<label class="ship"><span class="order-items">예상 출하일</span><input type="date" data-ship="' + esc(o.no) + '" value="' + esc(o.shipDate || '') + '"></label>' + head;
   }
   function saveShip(input) {
     var no = input.dataset.ship, date = input.value;
