@@ -18,7 +18,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" id="tab-order" data-view="order" aria-selected="true">주문하기 <span class="count" id="cart-count" hidden>0</span></button>
       <button type="button" role="tab" id="tab-history" data-view="history" aria-selected="false">주문 조회</button>
-      <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>관리</button>
+      <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>주문관리</button>
     </nav>
     <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout">로그아웃</button></div>
   </div>
@@ -167,7 +167,7 @@
 
 <!-- 관리 (회사용) -->
 <section class="view" id="view-admin" hidden>
-  <h2>관리</h2>
+  <h2>주문관리</h2>
   <p class="lede">회사 담당자만 쓰는 화면입니다. 팀마다 받은 열쇠로 엽니다. 상태 변경과 거래처 단가는 영업팀과 관리자만 할 수 있습니다.</p>
   <form class="lookup-form" id="key-form" novalidate>
     <div class="field"><label for="staff-name">이름</label><input id="staff-name" maxlength="20" autocomplete="name" placeholder="예: 김영업"><span class="hint">상태를 바꾸면 이 이름이 기록에 남아요.</span></div>
