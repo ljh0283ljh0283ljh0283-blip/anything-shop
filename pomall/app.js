@@ -608,6 +608,25 @@
     infoKey = infoKey === tr.dataset.periodKey ? null : tr.dataset.periodKey; renderCustInfo();
   });
 
+  // 거래처 목록을 엑셀에서 바로 열리는 파일(CSV, 한글 깨짐 방지 BOM 포함)로 내려받는다. 비밀번호는 넣지 않는다.
+  function downloadCustomers() {
+    if (!customers.length) { toast('내려받을 거래처가 없어요'); return; }
+    var cell = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    // 0으로 시작하는 연락처·코드는 엑셀이 숫자로 바꿔 0을 지우므로 글자로 고정한다
+    var asText = function (v) { v = String(v || ''); return v ? '="' + v.replace(/"/g, '""') + '"' : ''; };
+    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
+    var lines = [head.map(cell).join(',')].concat(customers.map(function (c) {
+      return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.address)]
+        .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.active ? '사용' : '중지']).join(',');
+    }));
+    var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'POmall_customers_' + kst(new Date().toISOString()).slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  $('#cust-excel').addEventListener('click', downloadCustomers);
+
   // 거래처 단가
   function renderCustomers() {
     $('#cust-head').innerHTML = '<tr><th>번호</th><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>할인율</th><th>상태</th><th></th></tr>';
