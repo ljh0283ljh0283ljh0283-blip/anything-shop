@@ -668,7 +668,8 @@
     store(KEY.admin, { key: k, name: name.slice(0, 20) }); $('#admin-key').value = ''; adminLoad();
   });
   $('#admin-reload').addEventListener('click', adminLoad);
-  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; adminLoad(); say($('#admin-msg'), '닫았어요.'); });
+  // 닫기: 저장된 열쇠를 지우고 주문관리 탭도 감춘다 (다시 열려면 맨 아래 관리자 버튼)
+  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; $('#tab-admin').hidden = true; show('order'); toast('주문관리를 닫았어요'); });
   $('#admin-body').addEventListener('change', function (e) {
     if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value);
     if (e.target.dataset.ship) saveShip(e.target);
