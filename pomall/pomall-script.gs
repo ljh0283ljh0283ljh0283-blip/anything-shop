@@ -21,7 +21,7 @@ var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 �
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
-  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감'];
+  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
 var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
@@ -160,10 +160,13 @@ function placeOrder(d) {
     // 마감(products.json의 finishes: T Twisted, TD Tin Dipped)은 선택 사항: 비어 있으면 '마감 없음'
     var finishes = (C.finishes || []).map(function (f) { return f.code; }), finish = String(it.finish || '');
     if (finish && finishes.indexOf(finish) < 0) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
+    // 탈피 길이는 선택 사항(0이면 없음): 0.1mm 단위, 와이어 길이보다 짧아야 한다
+    var strip = Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
+    if (!okStrip(strip, len) || !okStrip(strip2, len2)) return { ok: false, error: p.id + ' 탈피 길이는 와이어 길이보다 짧게 0.1mm 단위로 적어 주세요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
     var unit = unitPrice(cust.prices[p.id], cust.discount);
-    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len: len, len2: len2, finish: finish, temp: temp, qty: qty, unit: unit, amount: unit * qty, memo: clip(it.memo, 100) });
+    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len: len, len2: len2, strip: strip, strip2: strip2, finish: finish, temp: temp, qty: qty, unit: unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   var net = lines.reduce(function (s, l) { return s + l.amount; }, 0);
   var total = Math.round(net * (1 + C.price.vat));
@@ -178,7 +181,7 @@ function placeOrder(d) {
   lines.forEach(function (l, k) {
     // 거래처가 적은 칸은 수식으로 해석되지 않도록 글자로 저장한다
     s.appendRow([no, now, cust.code, text(cust.name), text(contact), "'" + phone, text(clip(o.customerPo, 40)), text(address), text(clip(o.memo, 200)),
-      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish]);
+      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish, l.strip || '', l.strip2 || '']);
   });
   return { ok: true, order: { no: no, total: total, eta: eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -318,6 +321,7 @@ function orders(withLog) {
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]), len2: Number(r[COL['와이어2(mm)']]) || 0, finish: String(r[COL['마감']] || ''),
+      strip: Number(r[COL['탈피(mm)']]) || 0, strip2: Number(r[COL['탈피2(mm)']]) || 0,
       temp: Number(r[COL['온도(°C)']]), qty: Number(r[COL['수량']]), unit: Number(r[COL['단가']]), memo: String(r[COL['품목 메모']]) });
   });
   return keys.reverse().map(function (k) { return map[k]; });
@@ -333,6 +337,7 @@ function findProduct(C, id) { for (var i = 0; i < C.products.length; i++) if (C.
 function specCode(model, len, temp, len2, finish) {
   return model + '-L' + ('00' + len).slice(-3) + (len2 ? '-L' + ('00' + len2).slice(-3) : '') + '-T' + ('00' + temp).slice(-3) + (finish ? '-' + finish : '');
 }
+function okStrip(v, len) { return v === 0 || (v > 0 && v < len && Math.abs(Math.round(v * 10) - v * 10) < 1e-9); }
 function okLen(C, v) { return v >= C.length.min && v <= C.length.max && v % C.length.step === 0; }
 function unitPrice(base, discount) { return Math.round(base * (1 - (discount || 0) / 100) * 10) / 10; }
 function addBizDays(n) {

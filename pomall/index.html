@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015g">
+<link rel="stylesheet" href="style.css?v=20261015h">
 </head>
 <body>
 
@@ -45,12 +45,14 @@
         <div class="fields">
           <div class="field">
             <label for="len" id="len-label">와이어 길이</label>
-            <div class="inrow"><input class="num" id="len" type="number" inputmode="numeric"><span class="unit">mm</span></div>
+            <div class="inrow"><input class="num" id="len" type="number" inputmode="numeric"><span class="unit">mm</span>
+              <label class="strip-label" for="strip">탈피</label><input class="num" id="strip" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
             <div class="hint" id="len-hint"></div>
           </div>
           <div class="field" id="len2-field" hidden>
             <label for="len2">와이어 길이 2</label>
-            <div class="inrow"><input class="num" id="len2" type="number" inputmode="numeric"><span class="unit">mm</span></div>
+            <div class="inrow"><input class="num" id="len2" type="number" inputmode="numeric"><span class="unit">mm</span>
+              <label class="strip-label" for="strip2">탈피</label><input class="num" id="strip2" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
             <div class="hint">두 줄 길이가 같으면 같은 값을 적으세요.</div>
           </div>
           <div class="field">
@@ -262,6 +264,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015g"></script>
+<script src="app.js?v=20261015h"></script>
 </body>
 </html>
