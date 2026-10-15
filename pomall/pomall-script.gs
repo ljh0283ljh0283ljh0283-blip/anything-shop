@@ -157,9 +157,9 @@ function placeOrder(d) {
     // 와이어가 두 줄인 모델(products.json의 wires: 2)은 두 번째 길이도 받는다
     var len2 = p.wires === 2 ? Math.floor(Number(it.len2)) : 0;
     if (p.wires === 2 && !okLen(C, len2)) return { ok: false, error: p.id + ' 와이어 길이 2가 범위를 벗어났어요.' };
-    // 마감(products.json의 finishes: T Twisted, TD Tin Dipped)은 하나를 꼭 골라야 한다
+    // 마감(products.json의 finishes: T Twisted, TD Tin Dipped)은 선택 사항: 비어 있으면 '마감 없음'
     var finishes = (C.finishes || []).map(function (f) { return f.code; }), finish = String(it.finish || '');
-    if (finishes.length && finishes.indexOf(finish) < 0) return { ok: false, error: p.id + ' 마감을 골라 주세요.' };
+    if (finish && finishes.indexOf(finish) < 0) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
     var unit = unitPrice(cust.prices[p.id], cust.discount);
