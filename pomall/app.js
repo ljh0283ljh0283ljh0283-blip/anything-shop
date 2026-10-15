@@ -75,7 +75,7 @@
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
             // 이 브라우저 저장 방식은 파일 내용을 두지 않고 이름만 남긴다
-            var o = Object.assign({}, order, { attachment: '', attachmentName: order.attachment ? order.attachment.name : '', no: orderNo(), code: c.code, company: c.name, createdAt: new Date().toISOString(), status: '접수 대기' });
+            var o = Object.assign({}, order, { attachment: '', attachmentName: order.attachment ? order.attachment.name : '', no: orderNo(orders()), code: c.code, company: c.name, createdAt: new Date().toISOString(), status: '접수 대기' });
             var list = orders(); list.unshift(o); store(KEY.localOrders, list); return o;
           });
         },
@@ -132,7 +132,12 @@
   var kday = function (d) { return (d.getMonth() + 1) + '/' + d.getDate() + '(' + '일월화수목금토'[d.getDay()] + ')'; };
   function digits(v) { return String(v || '').replace(/\D/g, ''); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function orderNo() { var d = new Date(); return 'PO-' + String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(); }
+  // 이 브라우저 저장 방식에서도 시트와 같은 모양: PO-날짜-그날의 일련번호
+  function orderNo(list) {
+    var d = new Date(), prefix = 'PO-' + String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate()) + '-', max = 0;
+    (list || []).forEach(function (o) { var m = String(o.no).match(/^PO-\d{6}-(\d{3,})$/); if (m && o.no.indexOf(prefix) === 0) max = Math.max(max, +m[1]); });
+    return prefix + String(max + 1).padStart(3, '0');
+  }
   function addBizDays(n) { var d = new Date(); d.setHours(0, 0, 0, 0); var k = 0; while (k < n) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) k++; } return d; }
   function product(id) { return C.products.filter(function (p) { return p.id === id; })[0]; }
   // 와이어가 두 줄인 모델은 길이를 둘 다 적는다: ST-22W-L070-L100-T100
