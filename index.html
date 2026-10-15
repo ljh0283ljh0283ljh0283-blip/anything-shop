@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261014h">
+<link rel="stylesheet" href="style.css?v=20261015a">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -184,6 +184,9 @@
       <input id="l-pw" type="password" autocomplete="current-password" maxlength="64">
       <button class="primary" id="l-go" type="button">로그인</button>
       <p class="su-switch">아직 판매자가 아니라면 <button class="link-btn" type="button" data-seller-signup>판매자 되기</button></p>
+      <details class="su-privacy"><summary>아이디나 비밀번호를 잊었나요?</summary>
+        <p>상점 운영자에게 가입할 때 적은 판매자 이름과 연락처를 알려 주세요. 본인인지 확인한 뒤 아이디와 임시 비밀번호를 알려 드려요. 로그인한 다음 "비밀번호 바꾸기"에서 새 비밀번호로 바꿔 주세요.</p>
+      </details>
     </div>
     <div class="gh-login" id="login-admin" hidden>
       <p>사이트 관리자만 들어올 수 있어요. 관리자 비밀번호를 넣어 주세요. 비밀번호는 이 브라우저에만 저장돼요.</p>
@@ -232,12 +235,25 @@
       </div>
     </form>
 
+    <details class="pw-change" id="pw-change" hidden>
+      <summary>비밀번호 바꾸기</summary>
+      <div class="form">
+        <label for="pw-old">지금 비밀번호 (임시 비밀번호도 돼요)</label>
+        <input id="pw-old" type="password" autocomplete="current-password" maxlength="64">
+        <label for="pw-new">새 비밀번호</label>
+        <input id="pw-new" type="password" autocomplete="new-password" maxlength="64" placeholder="6자 이상">
+        <label for="pw-new2">새 비밀번호 확인</label>
+        <input id="pw-new2" type="password" autocomplete="new-password" maxlength="64">
+        <p class="form-msg" id="pw-msg" role="status"></p>
+        <button class="primary" id="pw-go" type="button">비밀번호 바꾸기</button>
+      </div>
+    </details>
     <p class="sync-msg" id="sync-msg" role="status"></p>
     <button class="ghost logout" id="gh-logout" type="button" hidden>로그아웃</button>
   </div>
 </aside>
 
-<script src="app.js?v=20261014h"></script>
-<script src="seller.js?v=20261014h"></script>
+<script src="app.js?v=20261015a"></script>
+<script src="seller.js?v=20261015a"></script>
 </body>
 </html>

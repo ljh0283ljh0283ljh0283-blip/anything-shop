@@ -505,7 +505,7 @@
         var stopped = s.status === '정지';
         listItem(s.nick, s.nick + (stopped ? ' (정지)' : ''),
           [s.loginId && '아이디 ' + s.loginId, s.realName, s.tel, s.kind, s.at && '가입 ' + s.at].filter(Boolean).join(' · '),
-          [[stopped ? '다시 활동' : '정지', 'data-seller-toggle', stopped ? '' : 'del']], stopped ? 'is-off' : '');
+          [['비밀번호 초기화', 'data-seller-reset'], [stopped ? '다시 활동' : '정지', 'data-seller-toggle', stopped ? '' : 'del']], stopped ? 'is-off' : '');
       });
       $('#admin-empty').hidden = adminData.sellers.length > 0;
       return;
@@ -538,6 +538,24 @@
         .then(reloadAdmin).then(loadSellerItems)
         .then(function () { say('"' + it.name + '"을(를) ' + (it.status === '내림' ? '다시 게시했어요.' : '내렸어요.')); })
         .catch(function (err) { tog.disabled = false; say(writeError(err), true); });
+      return;
+    }
+    var rs = e.target.closest('[data-seller-reset]');
+    if (rs) {
+      // 한 번 더 눌러야 초기화된다. 임시 비밀번호는 판매자 본인인지 연락처로 확인한 뒤 알려 준다.
+      if (!rs.classList.contains('confirm')) {
+        rs.classList.add('confirm'); rs.textContent = '정말 초기화';
+        setTimeout(function () { if (rs.isConnected) { rs.classList.remove('confirm'); rs.textContent = '비밀번호 초기화'; } }, 3000);
+        return;
+      }
+      rs.disabled = true;
+      adminPost({ action: 'adminSellerReset', nick: id }).then(function (res) {
+        var m = $('#gh-msg'); m.classList.remove('err');
+        m.textContent = '"' + id + '" 아이디 ' + res.loginId + ' · 임시 비밀번호 ' + res.tempPassword +
+          ' — 본인인지 연락처로 확인한 뒤 알려 주세요. 판매자는 로그인 후 내 상품 아래 "비밀번호 바꾸기"에서 바꿀 수 있어요.';
+        m.scrollIntoView({ block: 'nearest' });
+        rs.disabled = false; rs.classList.remove('confirm'); rs.textContent = '비밀번호 초기화';
+      }).catch(function (err) { rs.disabled = false; $('#gh-msg').textContent = writeError(err); $('#gh-msg').classList.add('err'); });
       return;
     }
     var st = e.target.closest('[data-seller-toggle]');
@@ -615,11 +633,11 @@
 
   function setupPanels() {
     var panel = $('#admin'), signup = $('#seller-signup');
-    var views = ['#login-seller', '#login-admin', '#seller-signup', '#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout'];
+    var views = ['#login-seller', '#login-admin', '#seller-signup', '#admin-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'];
     function show(view) {
       var on = {
         login: ['#login-seller'], adminLogin: ['#login-admin'], signup: ['#seller-signup'],
-        seller: ['#admin-list-wrap', '#product-form', '#gh-logout'], admin: ['#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout']
+        seller: ['#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'], admin: ['#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout']
       }[view];
       views.forEach(function (v) { $(v).hidden = on.indexOf(v) < 0; });
       $('#panel-title').textContent = { login: '판매자 로그인', adminLogin: '사이트 관리자', signup: '판매자 되기',
@@ -715,6 +733,18 @@
     }
     $('#gh-logout').addEventListener('click', function () { logout(); });
 
+    $('#pw-go').addEventListener('click', function () {
+      var oldPw = $('#pw-old').value, newPw = $('#pw-new').value, m = $('#pw-msg');
+      function note(t, isErr) { m.textContent = t; m.classList.toggle('err', !!isErr); }
+      if (!oldPw) { note('지금 비밀번호를 적어 주세요.', true); return; }
+      if (newPw.length < 6) { note('새 비밀번호는 6자 이상으로 적어 주세요.', true); return; }
+      if (newPw !== $('#pw-new2').value) { note('새 비밀번호 확인이 맞지 않아요.', true); return; }
+      note('바꾸는 중이에요…');
+      sellerPost({ action: 'sellerPassword', oldPassword: oldPw, newPassword: newPw }).then(function () {
+        ['#pw-old', '#pw-new', '#pw-new2'].forEach(function (x) { $(x).value = ''; });
+        note('비밀번호를 바꿨어요.');
+      }).catch(function (err) { note(writeError(err), true); });
+    });
     $('#seller-out').addEventListener('click', function () { logout('seller'); });
 
     if (location.hash === '#seller') showSignup();
