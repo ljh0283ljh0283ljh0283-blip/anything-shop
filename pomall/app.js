@@ -135,7 +135,11 @@
   function orderNo() { var d = new Date(); return 'PO-' + String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + Math.random().toString(36).slice(2, 6).toUpperCase(); }
   function addBizDays(n) { var d = new Date(); d.setHours(0, 0, 0, 0); var k = 0; while (k < n) { d.setDate(d.getDate() + 1); if (d.getDay() % 6) k++; } return d; }
   function product(id) { return C.products.filter(function (p) { return p.id === id; })[0]; }
-  function specCode(model, len, temp) { return model + '-L' + String(len).padStart(3, '0') + '-T' + String(temp).padStart(3, '0'); }
+  // 와이어가 두 줄인 모델은 길이를 둘 다 적는다: ST-22W-L070-L100-T100
+  function specCode(model, len, temp, len2) {
+    return model + '-L' + String(len).padStart(3, '0') + (len2 ? '-L' + String(len2).padStart(3, '0') : '') + '-T' + String(temp).padStart(3, '0');
+  }
+  function twoWires(p) { return !!p && p.wires === 2; }
   function basePrice(model) { var v = session && session.prices ? Number(session.prices[model]) : 0; return v > 0 ? v : null; }
   // 최종 단가 = 거래처 모델 단가 × (1 - 거래처 할인율). 와이어 길이, 온도, 수량과 상관없다. 단가가 없으면 null.
   function unitPrice(p) {
@@ -195,24 +199,26 @@
   }
   function renderChips() {
     var p = product(sel.model), L = C.length, Q = C.qty;
-    $('#len-chips').innerHTML = L.presets.map(function (v) { return '<button type="button" class="chip" data-len="' + v + '">' + v + '</button>'; }).join('');
-    $('#temp-chips').innerHTML = (C.tempPresets[p.family] || []).map(function (v) { return '<button type="button" class="chip" data-temp="' + v + '">' + v + '</button>'; }).join('');
-    $('#qty-chips').innerHTML = Q.presets.map(function (v) { return '<button type="button" class="chip" data-qty="' + v + '">' + v.toLocaleString() + '</button>'; }).join('');
+    $('#len2-field').hidden = !twoWires(p);
+    $('#len-label').textContent = twoWires(p) ? '와이어 길이 1' : '와이어 길이';
+    if (twoWires(p) && !$('#len2').value) $('#len2').value = $('#len').value;
     $('#len-hint').textContent = L.min + '~' + L.max + 'mm, ' + L.step + 'mm 단위';
     $('#temp-hint').textContent = p.id + ': ' + p.temp[0] + '~' + p.temp[1] + '°C, ' + C.tempStep + '°C 단위';
     $('#qty-hint').textContent = '최소 ' + Q.min.toLocaleString() + 'EA, ' + Q.step + 'EA 단위';
   }
   function validate() {
     var p = product(sel.model), L = C.length, Q = C.qty;
-    var len = +$('#len').value, temp = +$('#temp').value, qty = +$('#qty').value, errs = [];
-    if (!len || len < L.min || len > L.max || len % L.step) errs.push('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
+    var len = +$('#len').value, len2 = twoWires(p) ? +$('#len2').value : 0, temp = +$('#temp').value, qty = +$('#qty').value, errs = [];
+    var badLen = function (v) { return !v || v < L.min || v > L.max || v % L.step; };
+    if (badLen(len)) errs.push('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
+    if (twoWires(p) && badLen(len2)) errs.push('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
     if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.');
     if (!qty || qty < Q.min || qty % Q.step) errs.push('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.');
-    return { p: p, len: len, temp: temp, qty: qty, errs: errs };
+    return { p: p, len: len, len2: len2, temp: temp, qty: qty, errs: errs };
   }
   function renderSpec() {
     var v = validate(), add = $('#add-btn');
-    $('#spec-code').textContent = specCode(v.p.id, v.len || 0, v.temp || 0);
+    $('#spec-code').textContent = specCode(v.p.id, v.len || 0, v.temp || 0, twoWires(v.p) ? v.len2 || 0 : 0);
     if (v.errs.length) { $('#spec-meta').textContent = ''; $('#spec-err').textContent = v.errs[0]; add.disabled = true; return; }
     $('#spec-err').textContent = '';
     if (!session) { $('#spec-meta').textContent = '로그인하면 우리 회사 단가로 금액이 나옵니다.'; add.disabled = true; return; }
@@ -226,9 +232,9 @@
     var p = product(id), t = +$('#temp').value;
     if (!(t >= p.temp[0] && t <= p.temp[1])) $('#temp').value = (C.tempPresets[p.family] || [p.temp[0]])[0];
   }
-  function setSpec(model, len, temp, qty) {
+  function setSpec(model, len, temp, qty, len2) {
     if (!product(model)) return;
-    $('#len').value = len; $('#temp').value = temp; if (qty) $('#qty').value = qty;
+    $('#len').value = len; $('#len2').value = len2 || ''; $('#temp').value = temp; if (qty) $('#qty').value = qty;
     selectModel(model); renderSpec();
   }
 
@@ -258,10 +264,10 @@
   function addToCart() {
     var v = validate(); if (v.errs.length || !session) return;
     var unit = unitPrice(v.p); if (unit == null) return;
-    var code = specCode(v.p.id, v.len, v.temp), memo = $('#item-memo').value.trim();
+    var code = specCode(v.p.id, v.len, v.temp, v.len2), memo = $('#item-memo').value.trim();
     var ex = cart.filter(function (i) { return i.code === code && i.memo === memo; })[0];
     if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p); }
-    else cart.push({ code: code, model: v.p.id, len: v.len, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
+    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
     toast(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다');
@@ -285,7 +291,7 @@
     var order = {
       contact: v.name, phone: v.phone, customerPo: v.po, address: v.addr,
       memo: $('#c-memo').value.trim(), requestedDate: $('#c-date').value || ymd(ship), eta: ymd(ship),
-      items: cart.map(function (i) { return { model: i.model, len: i.len, temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
+      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
@@ -328,13 +334,13 @@
   // ----- 최근 사양 (이 기기) -----
   function rememberSpecs(items) {
     var rec = store(KEY.recent) || [];
-    items.forEach(function (i) { rec = rec.filter(function (r) { return r.code !== i.code; }); rec.unshift({ code: i.code, model: i.model, len: i.len, temp: i.temp, qty: i.qty }); });
+    items.forEach(function (i) { rec = rec.filter(function (r) { return r.code !== i.code; }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, temp: i.temp, qty: i.qty }); });
     store(KEY.recent, rec.slice(0, 8)); renderRecent();
   }
   function renderRecent() {
     var rec = store(KEY.recent) || [];
     $('#reorder-panel').hidden = !rec.length;
-    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty].join('|')) + '">' + esc(i.code) + '</button>'; }).join('');
+    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0].join('|')) + '">' + esc(i.code) + '</button>'; }).join('');
   }
 
   // ----- 주문 조회 -----
@@ -369,7 +375,7 @@
     o.items.forEach(function (i) {
       var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
     toast(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가 없는 ' + skipped + '개 제외)' : ''));
@@ -598,13 +604,13 @@
     if (d.temp) { $('#temp').value = d.temp; return renderSpec(); }
     if (d.qty) { $('#qty').value = d.qty; return renderSpec(); }
     if (d.del !== undefined) { cart.splice(+d.del, 1); saveCart(); return renderCart(); }
-    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3]); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
     if (d.adminTab) return showAdminTab(d.adminTab);
     if (d.edit) { fillCustomerForm(customers.filter(function (x) { return x.code === d.edit; })[0]); return $('#cust-form').scrollIntoView({ behavior: 'smooth' }); }
   });
-  ['len', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
+  ['len', 'len2', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
   $('#add-btn').addEventListener('click', addToCart);
   $('#cart').addEventListener('change', function (e) {
     var k = e.target.dataset.k; if (k === undefined) return;
