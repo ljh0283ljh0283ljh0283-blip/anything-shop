@@ -429,14 +429,14 @@
     say(msg, '불러오는 중이에요…');
     api.staff(key).then(function (r) {
       role = r;
-      return Promise.all([api.list(key), role === 'admin' ? api.customers(key) : []]);
+      return Promise.all([api.list(key), canEdit() ? api.customers(key) : []]);
     }).then(function (r) {
       adminOrders = r[0] || []; customers = r[1] || []; say(msg, '');
       $('#staff-badge').textContent = ROLES[role] + ' · ' + staffInfo().name;
       $('#staff-badge').className = 'role role-' + role;
-      $('#cust-tab').hidden = role !== 'admin';
-      showAdminTab(role === 'admin' ? adminTab : 'orders');
-      renderAdmin(); renderLead(); if (role === 'admin') renderCustomers();
+      $('#cust-tab').hidden = !canEdit();
+      showAdminTab(canEdit() ? adminTab : 'orders');
+      renderAdmin(); renderLead(); if (canEdit()) renderCustomers();
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
       say(msg, errText(err, '불러오지 못했어요.'), true);
