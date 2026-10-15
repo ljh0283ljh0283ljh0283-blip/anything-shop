@@ -23,7 +23,7 @@ var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
+var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 // 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
 var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -71,9 +71,26 @@ function authCustomer(code, pw) {
   var c = findCustomer(code);
   return c && c.hash && c.hash === hash(code, pw) ? c : null;
 }
-function customerList() { return customers().map(publicCustomer); }
+// 거래처 고유번호: 등록 순서대로 1, 2, 3… 지운 번호는 다시 쓰지 않는다(스크립트 속성 CUST_SEQ에 마지막 번호를 기억).
+// 번호 칸이 생기기 전에 등록된 거래처는 시트 줄 순서대로 번호를 붙인다.
+function numberCustomers() {
+  var list = customers(), seq = custSeq(list);
+  var todo = list.filter(function (c) { return !c.no; });
+  if (!todo.length) return list;
+  var s = customerSheet(), col = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0].indexOf('번호') + 1;
+  todo.forEach(function (c) { c.no = ++seq; s.getRange(c.index, col).setValue(c.no); });
+  PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(seq));
+  return list;
+}
+function custSeq(list) {
+  var stored = Number(PropertiesService.getScriptProperties().getProperty('CUST_SEQ')) || 0;
+  return list.reduce(function (m, c) { return Math.max(m, c.no || 0); }, stored);
+}
+function customerList() {
+  return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(publicCustomer);
+}
 function publicCustomer(c) {
-  return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
 }
 // oldCode가 있으면 그 거래처를 고친다. 코드를 바꾸면 비밀번호가 코드와 묶여 있어 새 비밀번호가 필요하고, 지난 발주의 거래처 코드도 함께 바꾼다.
 function saveCustomer(c) {
@@ -82,6 +99,7 @@ function saveCustomer(c) {
   var name = clip(c.name, 40);
   if (!name) return { ok: false, error: '거래처명이 필요해요.' };
   var pw = String(c.pw || '');
+  numberCustomers();
   var ex = findCustomer(oldCode || code), renamed = !!(oldCode && oldCode !== code);
   if (oldCode && !ex) return { ok: false, error: '고치려는 거래처가 없어요. 새로고침해 주세요.' };
   if (renamed && findCustomer(code)) return { ok: false, error: '이미 있는 거래처 코드예요.' };
@@ -98,6 +116,8 @@ function saveCustomer(c) {
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
   set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date());
   if (pw) set('비밀번호', hash(code, pw));
+  var no = ex ? ex.no : custSeq(customers()) + 1;
+  if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
   var prices = c.prices || {};
   head.forEach(function (h, i) {
     if (CUST_BASE.indexOf(h) >= 0 || !h) return;
@@ -109,7 +129,7 @@ function saveCustomer(c) {
     var os = orderSheet(), all = rows();
     for (var i = 0; i < all.length; i++) if (String(all[i][COL['거래처 코드']]) === oldCode) os.getRange(i + 2, COL['거래처 코드'] + 1).setValue(code);
   }
-  return { ok: true, code: code };
+  return { ok: true, code: code, no: no };
 }
 // 거래처 탭에서 줄을 지운다. 지난 발주는 발주 탭에 그대로 남는다.
 function deleteCustomer(code) {
@@ -126,7 +146,7 @@ function customers() {
   return data.map(function (r, k) {
     var prices = {};
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
-    return { index: k + 2, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
+    return { index: k + 2, no: Number(at(r, '번호')) || 0, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
       phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), hash: String(at(r, '비밀번호')),
       active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices };
   }).filter(function (c) { return c.code; });
