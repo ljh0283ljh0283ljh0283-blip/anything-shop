@@ -224,9 +224,14 @@
     var badLen = function (v) { return !v || v < L.min || v > L.max || v % L.step; };
     if (badLen(len)) errs.push('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
     if (twoWires(p) && badLen(len2)) errs.push('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
+    // 탈피는 선택 사항: 비워 두면 0, 적으면 0.1mm 단위로 와이어 길이보다 짧게
+    var strip = +$('#strip').value || 0, strip2 = twoWires(p) ? +$('#strip2').value || 0 : 0;
+    var badStrip = function (v, l) { return v && (v < 0 || v >= l || Math.abs(Math.round(v * 10) - v * 10) > 1e-9); };
+    if (badStrip(strip, len)) errs.push('탈피' + (twoWires(p) ? ' 1' : '') + '은 와이어 길이보다 짧게 0.1mm 단위로 입력하세요.');
+    if (badStrip(strip2, len2)) errs.push('탈피 2는 와이어 길이 2보다 짧게 0.1mm 단위로 입력하세요.');
     if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.');
     if (!qty || qty < Q.min || qty % Q.step) errs.push('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.');
-    return { p: p, len: len, len2: len2, temp: temp, qty: qty, finish: sel.finish || '', errs: errs };
+    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, temp: temp, qty: qty, finish: sel.finish || '', errs: errs };
   }
   function renderSpec() {
     var v = validate(), add = $('#add-btn');
@@ -244,10 +249,10 @@
     var p = product(id), t = +$('#temp').value;
     if (!(t >= p.temp[0] && t <= p.temp[1])) $('#temp').value = (C.tempPresets[p.family] || [p.temp[0]])[0];
   }
-  function setSpec(model, len, temp, qty, len2, finish) {
+  function setSpec(model, len, temp, qty, len2, finish, strip, strip2) {
     if (!product(model)) return;
     if (finish) { sel.finish = finish; renderFinish(); }
-    $('#len').value = len; $('#len2').value = len2 || ''; $('#temp').value = temp; if (qty) $('#qty').value = qty;
+    $('#len').value = len; $('#len2').value = len2 || ''; $('#strip').value = strip || ''; $('#strip2').value = strip2 || ''; $('#temp').value = temp; if (qty) $('#qty').value = qty;
     selectModel(model); renderSpec();
   }
 
@@ -261,7 +266,7 @@
     $('#cart').innerHTML = cart.map(function (i, k) {
       return '<li class="cart-item"><code>' + esc(i.code) + '</code><span class="money">' + won(i.unit * i.qty) + '</span>' +
         '<div class="sub"><label for="cq-' + k + '">수량</label><input class="num" id="cq-' + k + '" data-k="' + k + '" type="number" step="' + C.qty.step + '" min="' + C.qty.min + '" value="' + i.qty + '">' +
-        '<span>× ' + won(i.unit) + '</span>' + (i.memo ? '<span>· ' + esc(i.memo) + '</span>' : '') +
+        '<span>× ' + won(i.unit) + '</span>' + (stripText(i) ? '<span>· ' + esc(stripText(i)) + '</span>' : '') + (i.memo ? '<span>· ' + esc(i.memo) + '</span>' : '') +
         '<button type="button" class="btn ghost small" data-del="' + k + '">빼기</button></div></li>';
     }).join('');
     $('#cart-empty').hidden = cart.length > 0;
@@ -278,9 +283,9 @@
     var v = validate(); if (v.errs.length || !session) return;
     var unit = unitPrice(v.p); if (unit == null) return;
     var code = specCode(v.p.id, v.len, v.temp, v.len2, v.finish), memo = $('#item-memo').value.trim();
-    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo; })[0];
+    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo && (i.strip || 0) === v.strip && (i.strip2 || 0) === v.strip2; })[0];
     if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p); }
-    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
+    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
     toast(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다');
@@ -304,7 +309,7 @@
     var order = {
       contact: v.name, phone: v.phone, customerPo: v.po, address: v.addr,
       memo: $('#c-memo').value.trim(), requestedDate: $('#c-date').value || ymd(ship), eta: ymd(ship),
-      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
+      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
@@ -347,13 +352,14 @@
   // ----- 최근 사양 (이 기기) -----
   function rememberSpecs(items) {
     var rec = store(KEY.recent) || [];
-    items.forEach(function (i) { rec = rec.filter(function (r) { return r.code !== i.code; }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, finish: i.finish || '', temp: i.temp, qty: i.qty }); });
+    var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0); };
+    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, finish: i.finish || '', temp: i.temp, qty: i.qty }); });
     store(KEY.recent, rec.slice(0, 8)); renderRecent();
   }
   function renderRecent() {
     var rec = store(KEY.recent) || [];
     $('#reorder-panel').hidden = !rec.length;
-    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || ''].join('|')) + '">' + esc(i.code) + '</button>'; }).join('');
+    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
   }
 
   // ----- 주문 조회 -----
@@ -366,10 +372,16 @@
     var f = finishes().filter(function (x) { return x.code === i.finish; })[0];
     return '<div class="item-finish">마감: ' + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : '마감 없음') + '</div>';
   }
+  // 탈피 길이: 와이어가 두 줄이면 1·2를 나눠 적는다. 적지 않았으면 빈 글자
+  function stripText(i) {
+    var a = +i.strip || 0, b = +i.strip2 || 0;
+    if (!a && !b) return '';
+    return '탈피 ' + (i.len2 ? '1: ' + (a ? a + 'mm' : '없음') + ', 2: ' + (b ? b + 'mm' : '없음') : a + 'mm');
+  }
   // 품목 메모는 사양 코드 아래에 작게 보여 준다
   function itemsHtml(o) {
     return '<ul class="order-items">' + o.items.map(function (i) {
-      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (i.memo ? '<div class="item-memo">메모: ' + esc(i.memo) + '</div>' : '') + '</li>';
+      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.memo ? '<div class="item-memo">메모: ' + esc(i.memo) + '</div>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   // 담당자가 확정 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다
@@ -399,7 +411,7 @@
     o.items.forEach(function (i) {
       var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
     toast(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''));
@@ -630,13 +642,13 @@
     if (d.temp) { $('#temp').value = d.temp; return renderSpec(); }
     if (d.qty) { $('#qty').value = d.qty; return renderSpec(); }
     if (d.del !== undefined) { cart.splice(+d.del, 1); saveCart(); return renderCart(); }
-    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || ''); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
     if (d.adminTab) return showAdminTab(d.adminTab);
     if (d.edit) { fillCustomerForm(customers.filter(function (x) { return x.code === d.edit; })[0]); return $('#cust-form').scrollIntoView({ behavior: 'smooth' }); }
   });
-  ['len', 'len2', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
+  ['len', 'len2', 'strip', 'strip2', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
   $('#add-btn').addEventListener('click', addToCart);
   $('#cart').addEventListener('change', function (e) {
     var k = e.target.dataset.k; if (k === undefined) return;
