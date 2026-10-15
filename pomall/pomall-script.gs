@@ -46,9 +46,9 @@ function doPost(e) {
       case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
       case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
       case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
-      case 'customers': return reply(staff(d.key, ['admin'], function () { return { ok: true, customers: customerList() }; }));
-      case 'saveCustomer': return reply(staff(d.key, ['admin'], function () { return saveCustomer(d.customer || {}); }));
-      case 'deleteCustomer': return reply(staff(d.key, ['admin'], function () { return deleteCustomer(d.code); }));
+      case 'customers': return reply(staff(d.key, ['admin', 'sales'], function () { return { ok: true, customers: customerList() }; }));
+      case 'saveCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return saveCustomer(d.customer || {}); }));
+      case 'deleteCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return deleteCustomer(d.code); }));
     }
     return reply({ ok: false, error: '알 수 없는 요청이에요.' });
   } catch (err) {
