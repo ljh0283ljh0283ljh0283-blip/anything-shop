@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015l">
+<link rel="stylesheet" href="style.css?v=20261015m">
 </head>
 <body>
 
@@ -201,6 +201,32 @@
     </div>
 
     <div id="admin-customers" hidden>
+      <!-- 거래처 정보: 목록에서 코드를 누르면 열린다 -->
+      <div id="cust-info" hidden>
+        <button type="button" class="btn ghost small" id="ci-back">← 거래처 목록</button>
+        <div class="panel" style="margin-top:12px">
+          <h3 id="ci-title"></h3>
+          <div class="ci-meta" id="ci-meta"></div>
+        </div>
+        <h3 style="margin-top:22px">거래내역</h3>
+        <div class="kpis" id="ci-period">
+          <button type="button" data-period="day" aria-pressed="false">일별</button>
+          <button type="button" data-period="month" aria-pressed="true">월별</button>
+          <button type="button" data-period="year" aria-pressed="false">연별</button>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th id="ci-col">기간</th><th>발주</th><th>수량</th><th>공급가</th><th>합계(VAT 포함)</th><th>취소</th></tr></thead>
+          <tbody id="ci-sum"></tbody>
+        </table></div>
+        <p class="note">취소된 발주는 수량과 금액에 넣지 않고 취소 칸에 건수만 셉니다. 날짜는 발주가 들어온 한국 시간 기준이에요. 줄을 누르면 그 기간의 발주가 아래에 보여요.</p>
+        <h3 style="margin-top:22px" id="ci-list-title">발주 목록</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>발주번호</th><th>날짜</th><th>품목</th><th>합계</th><th>상태</th></tr></thead>
+          <tbody id="ci-orders"></tbody>
+        </table></div>
+        <div class="empty" id="ci-empty" hidden>아직 이 거래처의 발주가 없습니다.</div>
+      </div>
+      <div id="cust-main">
       <p class="note">모델 단가는 1EA 기준 공급가(부가세 별도)입니다. 비워 둔 모델은 그 거래처 화면에 "단가 문의"로 보이고 주문할 수 없습니다. 와이어 길이, 온도, 수량과 상관없이 적은 단가가 그대로 적용되고, 할인율을 적은 거래처만 그만큼 깎입니다.</p>
       <div class="table-wrap"><table class="price-table">
         <thead id="cust-head"></thead>
@@ -230,6 +256,7 @@
             <span class="msg" id="cu-msg" role="status"></span>
           </div>
         </form>
+      </div>
       </div>
     </div>
   </div>
@@ -261,6 +288,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015l"></script>
+<script src="app.js?v=20261015m"></script>
 </body>
 </html>
