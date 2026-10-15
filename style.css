@@ -220,3 +220,7 @@ footer a { color: var(--muted); }
 .su-key span { font-size: .8rem; color: var(--muted); }
 .su-key strong { font-size: 1.2rem; letter-spacing: .06em; font-variant-numeric: tabular-nums; user-select: all; overflow-wrap: anywhere; }
 .add { white-space: nowrap; }
+.pw-change { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pw-change summary { cursor: pointer; font-size: .95rem; font-weight: 500; }
+.pw-change .form { margin-top: 8px; }
+.gh-login .su-privacy { margin-top: 12px; }

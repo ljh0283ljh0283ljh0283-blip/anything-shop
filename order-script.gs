@@ -43,6 +43,7 @@ function doPost(e) {
     if (d.type === 'seller') return reply(sellerSignup(d));
     if (d.action === 'sellerLogin') return reply(sellerLogin(d));
     if (d.action === 'sellerMe') return reply(sellerMe(d.key));
+    if (d.action === 'sellerPassword') return reply(sellerPassword(d));
     if (String(d.action || '').indexOf('admin') === 0) return reply(admin(d));
     if (d.action === 'sellerSave') return reply(sellerSave(d));
     if (d.action === 'sellerRemove') return reply(sellerRemove(d));
@@ -129,6 +130,19 @@ function sellerMe(key) {
   return { ok: true, nick: s.nick };
 }
 
+// 로그인한 판매자가 비밀번호를 바꾼다(관리자가 준 임시 비밀번호를 바꿀 때도 쓴다)
+function sellerPassword(d) {
+  var key = String(d.key || ''), hit = null;
+  if (key.length < 8) return { ok: false, error: '다시 로그인해 주세요.' };
+  sellerRows().forEach(function (r) { if (String(r.row[S.key]) === key && r.row[S.status] !== STOPPED) hit = r; });
+  if (!hit) return { ok: false, error: '다시 로그인해 주세요.' };
+  if (!checkPassword(String(d.oldPassword || ''), String(hit.row[S.pw]))) return { ok: false, error: '지금 비밀번호가 맞지 않아요.' };
+  var pw = String(d.newPassword || '');
+  if (pw.length < 6 || pw.length > 64) return { ok: false, error: '새 비밀번호는 6자 이상으로 적어 주세요.' };
+  sellerSheet().getRange(hit.index, S.pw + 1).setValue(hashPassword(pw));
+  return { ok: true };
+}
+
 function sellerSave(d) {
   var s = sellerByKey(d.key);
   if (!s) return { ok: false, error: '다시 로그인해 주세요.' };
@@ -212,6 +226,16 @@ function admin(d) {
     if (!hit) return { ok: false, error: '없는 판매자예요.' };
     sellerSheet().getRange(hit.index, S.status + 1).setValue(d.status);
     return { ok: true };
+  }
+  // 비밀번호를 잊은 판매자: 임시 비밀번호를 만들어 돌려준다. 기존 로그인은 모두 풀린다.
+  if (d.action === 'adminSellerReset') {
+    var who = null;
+    sellerRows().forEach(function (r) { if (String(r.row[S.nick]) === String(d.nick)) who = r; });
+    if (!who) return { ok: false, error: '없는 판매자예요.' };
+    var temp = tempPassword();
+    sellerSheet().getRange(who.index, S.key + 1).setValue('');
+    sellerSheet().getRange(who.index, S.pw + 1).setValue(hashPassword(temp));
+    return { ok: true, loginId: String(who.row[S.loginId]), tempPassword: temp };
   }
   if (d.action === 'adminOwnSave') {
     var p = d.product || {};
@@ -321,6 +345,12 @@ function findItem(id) {
 }
 
 function newKey() { return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 8); }
+function tempPassword() {
+  var chars = 'abcdefghjkmnpqrstuvwxyz23456789', out = '';
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid());
+  for (var i = 0; i < 8; i++) out += chars.charAt(((bytes[i] % 256) + 256) % chars.length);
+  return out;
+}
 function hashPassword(pw) {
   var salt = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
   return salt + '$' + digest(salt + pw);
