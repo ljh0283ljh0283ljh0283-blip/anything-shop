@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015c">
+<link rel="stylesheet" href="style.css?v=20261015d">
 </head>
 <body>
 
@@ -63,9 +63,15 @@
             <div class="inrow"><input class="num" id="qty" type="number" inputmode="numeric" value="1000"><span class="unit">EA</span></div>
             <div class="hint" id="qty-hint"></div>
           </div>
-          <div class="field">
-            <label for="item-memo">품목 메모 <span class="hint">(선택)</span></label>
-            <input id="item-memo" type="text" maxlength="100" placeholder="예: 튜브 색상, 단자 사양">
+          <div class="fields-row">
+            <div class="field">
+              <span class="field-label" id="finish-label">마감</span>
+              <div class="seg" id="finish" role="group" aria-labelledby="finish-label"></div>
+            </div>
+            <div class="field">
+              <label for="item-memo">품목 메모 <span class="hint">(선택)</span></label>
+              <input id="item-memo" type="text" maxlength="100" placeholder="예: 튜브 색상, 단자 사양">
+            </div>
           </div>
         </div>
 
@@ -256,6 +262,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015c"></script>
+<script src="app.js?v=20261015d"></script>
 </body>
 </html>
