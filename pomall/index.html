@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015n">
+<link rel="stylesheet" href="style.css?v=20261015o">
 </head>
 <body>
 
@@ -208,7 +208,7 @@
           <h3 id="ci-title"></h3>
           <div class="ci-meta" id="ci-meta"></div>
         </div>
-        <h3 style="margin-top:22px">거래내역</h3>
+        <div class="ci-head"><h3>거래내역</h3><button type="button" class="btn ghost small" id="ci-sum-excel">엑셀로 받기</button></div>
         <div class="kpis" id="ci-period">
           <button type="button" data-period="day" aria-pressed="false">일별</button>
           <button type="button" data-period="month" aria-pressed="true">월별</button>
@@ -219,7 +219,7 @@
           <tbody id="ci-sum"></tbody>
         </table></div>
         <p class="note">취소된 발주는 수량과 금액에 넣지 않고 취소 칸에 건수만 셉니다. 날짜는 발주가 들어온 한국 시간 기준이에요. 줄을 누르면 그 기간의 발주가 아래에 보여요.</p>
-        <h3 style="margin-top:22px" id="ci-list-title">발주 목록</h3>
+        <div class="ci-head"><h3 id="ci-list-title">발주 목록</h3><button type="button" class="btn ghost small" id="ci-orders-excel">엑셀로 받기</button></div>
         <div class="table-wrap"><table>
           <thead><tr><th>발주번호</th><th>날짜</th><th>품목</th><th>합계</th><th>상태</th></tr></thead>
           <tbody id="ci-orders"></tbody>
@@ -289,6 +289,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015n"></script>
+<script src="app.js?v=20261015o"></script>
 </body>
 </html>
