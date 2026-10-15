@@ -44,6 +44,9 @@ function doPost(e) {
     if (d.action === 'sellerLogin') return reply(sellerLogin(d));
     if (d.action === 'sellerMe') return reply(sellerMe(d.key));
     if (d.action === 'sellerPassword') return reply(sellerPassword(d));
+    if (d.action === 'sellerEmail') return reply(sellerEmail(d));
+    if (d.action === 'sellerFindStart') return reply(sellerFindStart(d));
+    if (d.action === 'sellerFindFinish') return reply(sellerFindFinish(d));
     if (String(d.action || '').indexOf('admin') === 0) return reply(admin(d));
     if (d.action === 'sellerSave') return reply(sellerSave(d));
     if (d.action === 'sellerRemove') return reply(sellerRemove(d));
@@ -99,6 +102,7 @@ function sellerSignup(d) {
   if (!/^[a-z0-9_]{4,20}$/.test(loginId)) return { ok: false, error: '아이디는 영어 소문자와 숫자로 4~20자로 적어 주세요.' };
   if (password.length < 6 || password.length > 64) return { ok: false, error: '비밀번호는 6자 이상으로 적어 주세요.' };
   if (!nick || !realName || !tel) return { ok: false, error: '이름과 연락처가 필요해요.' };
+  if (!isEmail(d.email)) return { ok: false, error: '아이디·비밀번호를 찾을 때 쓸 이메일을 적어 주세요.' };
   if (!clip(d.bank, 15) || !clip(d.acct, 30) || !clip(d.holder, 20)) return { ok: false, error: '입금받을 계좌가 필요해요.' };
   var rows = sellerRows();
   if (rows.some(function (r) { return String(r.row[S.loginId]).toLowerCase() === loginId; })) return { ok: false, error: '이미 쓰고 있는 아이디예요. 다른 아이디를 적어 주세요.' };
@@ -106,7 +110,7 @@ function sellerSignup(d) {
   if (nickTaken || nick === '무엇이든 상점') return { ok: false, error: '이미 쓰고 있는 판매자 이름이에요. 다른 이름을 적어 주세요.' };
 
   var key = newKey();
-  sellerSheet().appendRow([new Date(), text(clip(d.shop, 20)), text(nick), text(realName), "'" + tel, text(clip(d.email, 60)),
+  sellerSheet().appendRow([new Date(), text(clip(d.shop, 20)), text(nick), text(realName), "'" + tel, normEmail(d.email),
     text(clip(d.kind, 5)), "'" + clip(d.biz, 12), text(clip(d.what, 400)), text(clip(d.bank, 15)), "'" + clip(d.acct, 30),
     text(clip(d.holder, 20)), ACTIVE, key, "'" + loginId, hashPassword(password)]);
   return { ok: true, seller: true, nick: nick, key: key };
@@ -132,15 +136,70 @@ function sellerMe(key) {
 
 // 로그인한 판매자가 비밀번호를 바꾼다(관리자가 준 임시 비밀번호를 바꿀 때도 쓴다)
 function sellerPassword(d) {
-  var key = String(d.key || ''), hit = null;
-  if (key.length < 8) return { ok: false, error: '다시 로그인해 주세요.' };
-  sellerRows().forEach(function (r) { if (String(r.row[S.key]) === key && r.row[S.status] !== STOPPED) hit = r; });
+  var hit = sellerRowByKey(d.key);
   if (!hit) return { ok: false, error: '다시 로그인해 주세요.' };
   if (!checkPassword(String(d.oldPassword || ''), String(hit.row[S.pw]))) return { ok: false, error: '지금 비밀번호가 맞지 않아요.' };
   var pw = String(d.newPassword || '');
   if (pw.length < 6 || pw.length > 64) return { ok: false, error: '새 비밀번호는 6자 이상으로 적어 주세요.' };
   sellerSheet().getRange(hit.index, S.pw + 1).setValue(hashPassword(pw));
   return { ok: true };
+}
+
+// 로그인한 판매자가 이메일을 등록하거나 바꾼다(전에 이메일 없이 가입한 판매자용)
+function sellerEmail(d) {
+  var hit = sellerRowByKey(d.key);
+  if (!hit) return { ok: false, error: '다시 로그인해 주세요.' };
+  if (!isEmail(d.email)) return { ok: false, error: '이메일 주소를 확인해 주세요.' };
+  sellerSheet().getRange(hit.index, S.email + 1).setValue(normEmail(d.email));
+  return { ok: true };
+}
+
+// ---------- 아이디·비밀번호 찾기 (이메일 인증번호) ----------
+// 1) 가입한 이메일을 넣으면 그 메일로 아이디와 6자리 인증번호를 보낸다(10분 동안 유효).
+// 2) 인증번호와 새 비밀번호를 넣으면 비밀번호가 바뀌고 바로 로그인된다.
+// 가입되지 않은 메일이어도 같은 답을 돌려줘서, 누가 가입했는지 알 수 없게 한다.
+function sellerFindStart(d) {
+  var email = normEmail(d.email);
+  if (!isEmail(email)) return { ok: false, error: '이메일 주소를 확인해 주세요.' };
+  var cache = CacheService.getScriptCache(), ck = 'find:' + email;
+  if (cache.get(ck + ':wait')) return { ok: false, error: '방금 보냈어요. 1분 뒤에 다시 눌러 주세요.' };
+  var ids = sellerRows().filter(function (r) { return normEmail(r.row[S.email]) === email && r.row[S.status] !== STOPPED; })
+    .map(function (r) { return String(r.row[S.loginId]); }).filter(Boolean);
+  cache.put(ck + ':wait', '1', 60);
+  if (!ids.length) return { ok: true };
+  var code = String(100000 + Math.floor(Math.random() * 900000));
+  cache.put(ck, JSON.stringify({ code: code, tries: 0 }), 600);
+  MailApp.sendEmail({
+    to: email,
+    subject: '[무엇이든 상점] 아이디와 인증번호',
+    body: '무엇이든 상점 판매자 아이디: ' + ids.join(', ') + '\n\n' +
+      '비밀번호를 새로 정하려면 아래 인증번호를 10분 안에 상점 화면에 넣어 주세요.\n인증번호: ' + code + '\n\n' +
+      '직접 요청하지 않았다면 이 메일은 무시해도 돼요.'
+  });
+  return { ok: true };
+}
+
+function sellerFindFinish(d) {
+  var email = normEmail(d.email), cache = CacheService.getScriptCache(), ck = 'find:' + email;
+  var saved = cache.get(ck);
+  if (!saved) return { ok: false, error: '인증번호가 없거나 시간이 지났어요. 인증번호를 다시 받아 주세요.' };
+  saved = JSON.parse(saved);
+  if (saved.tries >= 5) { cache.remove(ck); return { ok: false, error: '여러 번 틀렸어요. 인증번호를 다시 받아 주세요.' }; }
+  if (String(d.code || '').trim() !== saved.code) {
+    saved.tries++; cache.put(ck, JSON.stringify(saved), 600);
+    return { ok: false, error: '인증번호가 맞지 않아요.' };
+  }
+  var loginId = clip(d.loginId, 20).toLowerCase(), pw = String(d.newPassword || ''), hit = null;
+  if (pw.length < 6 || pw.length > 64) return { ok: false, error: '새 비밀번호는 6자 이상으로 적어 주세요.' };
+  sellerRows().forEach(function (r) {
+    if (normEmail(r.row[S.email]) === email && String(r.row[S.loginId]).toLowerCase() === loginId && r.row[S.status] !== STOPPED) hit = r;
+  });
+  if (!hit) return { ok: false, error: '메일에 적힌 아이디를 적어 주세요.' };
+  cache.remove(ck);
+  var key = newKey();
+  sellerSheet().getRange(hit.index, S.key + 1).setValue(key);
+  sellerSheet().getRange(hit.index, S.pw + 1).setValue(hashPassword(pw));
+  return { ok: true, nick: String(hit.row[S.nick]), key: key };
 }
 
 function sellerSave(d) {
@@ -310,6 +369,13 @@ function toItem(row) {
     price: Number(row[I.price]) || 0, unit: String(row[I.unit]), desc: String(row[I.desc]) };
 }
 
+function sellerRowByKey(key) {
+  key = String(key || '');
+  if (key.length < 8) return null;
+  var hit = null;
+  sellerRows().forEach(function (r) { if (String(r.row[S.key]) === key && r.row[S.status] !== STOPPED) hit = r; });
+  return hit;
+}
 function sellerByKey(key) {
   key = String(key || '');
   if (key.length < 8) return null;
@@ -362,6 +428,8 @@ function checkPassword(pw, stored) {
 function digest(v) { return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, v, Utilities.Charset.UTF_8)); }
 function stamp(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd HH:mm') : String(v || ''); }
 
+function normEmail(v) { return String(v || '').trim().toLowerCase().slice(0, 60); }
+function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail(v)); }
 function clip(v, n) { return String(v || '').trim().slice(0, n); }
 function text(v) { return /^[=+\-@]/.test(v) ? "'" + v : v; }
 function reply(obj) {
