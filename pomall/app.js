@@ -226,7 +226,6 @@
     if (twoWires(p) && badLen(len2)) errs.push('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
     if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.');
     if (!qty || qty < Q.min || qty % Q.step) errs.push('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.');
-    if (finishes().length && !sel.finish) errs.push('마감을 골라 주세요.');
     return { p: p, len: len, len2: len2, temp: temp, qty: qty, finish: sel.finish || '', errs: errs };
   }
   function renderSpec() {
@@ -365,7 +364,7 @@
   function finishTag(i) {
     if (!finishes().length) return '';
     var f = finishes().filter(function (x) { return x.code === i.finish; })[0];
-    return '<div class="item-finish">마감: ' + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : '기록 없음') + '</div>';
+    return '<div class="item-finish">마감: ' + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : '마감 없음') + '</div>';
   }
   // 품목 메모는 사양 코드 아래에 작게 보여 준다
   function itemsHtml(o) {
@@ -399,12 +398,11 @@
     var n = 0, skipped = 0;
     o.items.forEach(function (i) {
       var p = product(i.model), unit = p ? unitPrice(p) : null;
-      // 마감을 고르기 전에 들어온 예전 품목은 마감을 다시 골라야 해서 담지 않는다
-      if (unit == null || (finishes().length && !i.finish)) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, finish: i.finish, temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      if (unit == null) { skipped++; return; }
+      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
-    toast(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없거나 마감이 정해지지 않은 ' + skipped + '개 제외)' : ''));
+    toast(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''));
   }
 
   // ----- 관리 -----
@@ -626,7 +624,8 @@
     var d = t.dataset;
     if (d.view) return show(d.view);
     if (t.classList.contains('model')) { selectModel(d.id); return renderSpec(); }
-    if (d.finish) { sel.finish = d.finish; renderFinish(); return renderSpec(); }
+    // 마감은 선택 사항: 이미 고른 것을 한 번 더 누르면 선택이 풀린다
+    if (d.finish) { sel.finish = sel.finish === d.finish ? '' : d.finish; renderFinish(); return renderSpec(); }
     if (d.len) { $('#len').value = d.len; return renderSpec(); }
     if (d.temp) { $('#temp').value = d.temp; return renderSpec(); }
     if (d.qty) { $('#qty').value = d.qty; return renderSpec(); }
