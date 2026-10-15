@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261014d">
+<link rel="stylesheet" href="style.css?v=20261015a">
 </head>
 <body>
 
@@ -108,7 +108,7 @@
             <span class="grand">합계</span><span class="money grand" id="sum-total"></span>
           </div>
           <div class="eta" id="eta"></div>
-          <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px">발주 정보 입력</button>
+          <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px">주문하기</button>
         </div>
       </div>
     </aside>
@@ -125,6 +125,7 @@
       <div class="field full"><label for="c-addr">납품 주소</label><input id="c-addr" maxlength="120" autocomplete="street-address"></div>
       <div class="field"><label for="c-date">희망 출하일</label><input id="c-date" type="date"><span class="hint" id="date-hint"></span></div>
       <div class="field"><label for="c-memo">요청 사항 <span class="hint">(선택)</span></label><input id="c-memo" maxlength="200" placeholder="포장, 분할 납품 등"></div>
+      <div class="field full"><label for="c-file">발주서 첨부 <span class="hint">(선택)</span></label><input id="c-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.doc,.docx,.hwp,.hwpx"><span class="hint">귀사 발주서가 있으면 올려 주세요. PDF, 사진, 엑셀, 워드, 한글 파일 10MB까지.</span></div>
       <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <button class="btn" type="submit" id="submit-btn">생산 발주 확정</button>
         <button class="btn ghost" type="button" id="cancel-checkout">취소</button>
@@ -253,6 +254,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261014d"></script>
+<script src="app.js?v=20261015a"></script>
 </body>
 </html>

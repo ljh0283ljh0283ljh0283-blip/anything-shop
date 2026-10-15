@@ -74,7 +74,8 @@
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
-            var o = Object.assign({}, order, { no: orderNo(), code: c.code, company: c.name, createdAt: new Date().toISOString(), status: '접수 대기' });
+            // 이 브라우저 저장 방식은 파일 내용을 두지 않고 이름만 남긴다
+            var o = Object.assign({}, order, { attachment: '', attachmentName: order.attachment ? order.attachment.name : '', no: orderNo(), code: c.code, company: c.name, createdAt: new Date().toISOString(), status: '접수 대기' });
             var list = orders(); list.unshift(o); store(KEY.localOrders, list); return o;
           });
         },
@@ -287,9 +288,15 @@
       items: cart.map(function (i) { return { model: i.model, len: i.len, temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
-    $('#submit-btn').disabled = true; err.textContent = '발주를 보내는 중이에요…';
-    api.submit(auth(), order).then(function (saved) {
-      err.textContent = '';
+    var f = $('#c-file').files[0];
+    if (f && !ATTACH_OK.test(f.name)) { err.textContent = '발주서는 PDF, 사진, 엑셀, 워드, 한글 파일만 첨부할 수 있어요.'; return; }
+    if (f && f.size > 10 * 1024 * 1024) { err.textContent = '발주서 파일은 10MB까지 첨부할 수 있어요.'; return; }
+    $('#submit-btn').disabled = true; err.textContent = f ? '발주서와 함께 보내는 중이에요…' : '발주를 보내는 중이에요…';
+    readFile(f).then(function (att) {
+      if (att) order.attachment = att;
+      return api.submit(auth(), order);
+    }).then(function (saved) {
+      err.textContent = ''; $('#c-file').value = '';
       rememberSpecs(cart);
       cart = []; saveCart(); renderCart();
       $('#checkout').hidden = true; $('#done').hidden = false;
@@ -299,6 +306,23 @@
     }).catch(function (e2) {
       err.textContent = errText(e2, '발주를 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
     }).then(function () { $('#submit-btn').disabled = false; });
+  }
+
+  // 첨부한 발주서를 글자(base64)로 바꿔 함께 보낸다
+  var ATTACH_OK = /\.(pdf|jpe?g|png|xlsx?|docx?|hwpx?)$/i;
+  function readFile(f) {
+    if (!f) return Promise.resolve(null);
+    return new Promise(function (ok, fail) {
+      var r = new FileReader();
+      r.onload = function () { ok({ name: f.name, data: String(r.result).split(',')[1] || '' }); };
+      r.onerror = function () { fail(new Error('발주서 파일을 읽지 못했어요. 다시 골라 주세요.')); };
+      r.readAsDataURL(f);
+    });
+  }
+  // 시트에 남은 구글 드라이브 링크만 연다
+  function fileLink(o) {
+    if (/^https:\/\/(drive|docs)\.google\.com\//.test(o.attachment || '')) return '<div class="order-items"><a href="' + esc(o.attachment) + '" target="_blank" rel="noopener">발주서 보기</a></div>';
+    return o.attachmentName ? '<div class="order-items">발주서 ' + esc(o.attachmentName) + '</div>' : '';
   }
 
   // ----- 최근 사양 (이 기기) -----
@@ -332,7 +356,7 @@
       $('#history-wrap').hidden = !history.length;
       say(msg, history.length ? '' : '아직 접수한 발주가 없어요.');
       $('#history-body').innerHTML = history.map(function (o) {
-        return '<tr><td class="mono">' + esc(o.no) + (o.customerPo ? '<div class="order-items">귀사 PO ' + esc(o.customerPo) + '</div>' : '') + '</td>' +
+        return '<tr><td class="mono">' + esc(o.no) + (o.customerPo ? '<div class="order-items">귀사 PO ' + esc(o.customerPo) + '</div>' : '') + fileLink(o) + '</td>' +
           '<td class="mono">' + esc(String(o.createdAt).slice(0, 10)) + '</td><td>' + itemsHtml(o) + '</td>' +
           '<td class="mono">' + won(o.total) + '</td><td class="mono">' + shipText(o) + '</td><td>' + pill(o.status) + '</td>' +
           '<td><button type="button" class="btn ghost small" data-reorder="' + esc(o.no) + '">재주문</button></td></tr>';
@@ -389,7 +413,7 @@
     }).join('');
     var list = adminOrders.filter(function (o) { return adminFilter === 'all' || o.status === adminFilter; });
     $('#admin-body').innerHTML = list.map(function (o) {
-      return '<tr><td class="mono">' + esc(o.no) + '<div class="order-items">' + esc(String(o.createdAt).slice(0, 16).replace('T', ' ')) + '</div>' + (o.customerPo ? '<div class="order-items">PO ' + esc(o.customerPo) + '</div>' : '') + '</td>' +
+      return '<tr><td class="mono">' + esc(o.no) + '<div class="order-items">' + esc(String(o.createdAt).slice(0, 16).replace('T', ' ')) + '</div>' + (o.customerPo ? '<div class="order-items">PO ' + esc(o.customerPo) + '</div>' : '') + fileLink(o) + '</td>' +
         '<td><b>' + esc(o.company) + '</b> <span class="order-items">' + esc(o.code || '') + '</span><div class="order-items">' + esc(o.contact) + ' · ' + esc(o.phone) + '</div><div class="order-items">' + esc(o.address) + '</div>' + (o.memo ? '<div class="order-items">요청: ' + esc(o.memo) + '</div>' : '') + '</td>' +
         '<td>' + itemsHtml(o) + '</td><td class="mono">' + won(o.total) + '</td>' +
         '<td class="mono">' + shipCell(o) + '</td>' +

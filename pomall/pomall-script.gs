@@ -12,6 +12,8 @@
 //   열쇠를 아는 사람이 팀을 떠나면 그 열쇠 값만 바꾸면 됩니다.
 //   LEAD          생산 소요일. 관리 화면에서 바꾸면 여기에 저장됩니다. 직접 만들 필요는 없습니다.
 //   PRODUCTS_URL  products.json 주소. 저장소를 옮기면 이 값만 바꾸면 됩니다.
+//   ATTACH_FOLDER 거래처가 첨부한 발주서를 넣는 구글 드라이브 폴더 ID. 처음 첨부가 오면 "SEKI POmall 발주서" 폴더를 만들고 여기에 적습니다.
+// 발주서 파일은 드라이브 폴더에 저장되고, 발주 탭의 "발주서" 칸에 링크가 남습니다. 링크를 아는 사람만 볼 수 있습니다.
 // 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
 
 var DEFAULT_PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/pomall/products.json';
@@ -19,7 +21,7 @@ var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 �
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
-  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일'];
+  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
 var CUST_BASE = ['거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
@@ -165,12 +167,39 @@ function placeOrder(d) {
 
   var s = orderSheet(), now = new Date();
   var no = 'PO-' + Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 90 + 10);
+  var file = saveAttachment(o.attachment, no, cust.name);
+  if (file.error) return file;
   lines.forEach(function (l, k) {
     // 거래처가 적은 칸은 수식으로 해석되지 않도록 글자로 저장한다
     s.appendRow([no, now, cust.code, text(cust.name), text(contact), "'" + phone, text(clip(o.customerPo, 40)), text(address), text(clip(o.memo, 200)),
-      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now]);
+      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '']);
   });
-  return { ok: true, order: { no: no, total: total, eta: eta, requestedDate: wanted } };
+  return { ok: true, order: { no: no, total: total, eta: eta, requestedDate: wanted, attachment: file.url || '' } };
+}
+
+// 발주서 첨부: PDF, 사진, 엑셀, 워드, 한글 파일을 10MB까지 받는다
+var ATTACH_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  hwp: 'application/x-hwp', hwpx: 'application/hwp+zip' };
+var ATTACH_MAX = 10 * 1024 * 1024;
+function saveAttachment(a, no, company) {
+  if (!a || !a.data) return {};
+  var name = String(a.name || '').trim().slice(-80).replace(/[\\/:*?"<>|]/g, '_'), ext = (name.match(/\.([a-z0-9]+)$/i) || [])[1];
+  var type = ext && ATTACH_TYPES[ext.toLowerCase()];
+  if (!type) return { ok: false, error: '발주서는 PDF, 사진, 엑셀, 워드, 한글 파일만 첨부할 수 있어요.' };
+  var bytes = Utilities.base64Decode(String(a.data));
+  if (bytes.length > ATTACH_MAX) return { ok: false, error: '발주서 파일은 10MB까지 첨부할 수 있어요.' };
+  var f = attachFolder().createFile(Utilities.newBlob(bytes, type, no + ' ' + company + ' ' + name));
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return { url: f.getUrl() };
+}
+function attachFolder() {
+  var p = PropertiesService.getScriptProperties(), id = p.getProperty('ATTACH_FOLDER');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  var folder = DriveApp.createFolder('SEKI POmall 발주서');
+  p.setProperty('ATTACH_FOLDER', folder.getId());
+  return folder;
 }
 
 function mine(d) {
@@ -267,7 +296,7 @@ function orders(withLog) {
         code: String(r[COL['거래처 코드']]), company: String(r[COL['거래처']]), contact: String(r[COL['담당자']]), phone: String(r[COL['연락처']]),
         customerPo: String(r[COL['거래처 PO']]), address: String(r[COL['납품 주소']]), memo: String(r[COL['요청 사항']]),
         requestedDate: day(r[COL['희망 출하일']]), eta: day(r[COL['최단 출하일']]),
-        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, shipDate: day(r[COL['확정 출하일']]), status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
+        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, shipDate: day(r[COL['확정 출하일']]), attachment: String(r[COL['발주서']] || ''), status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]),
