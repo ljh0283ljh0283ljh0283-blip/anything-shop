@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015a">
+<link rel="stylesheet" href="style.css?v=20261015b">
 </head>
 <body>
 
@@ -44,21 +44,23 @@
 
         <div class="fields">
           <div class="field">
-            <label for="len">와이어 길이</label>
+            <label for="len" id="len-label">와이어 길이</label>
             <div class="inrow"><input class="num" id="len" type="number" inputmode="numeric"><span class="unit">mm</span></div>
-            <div class="chips" id="len-chips"></div>
             <div class="hint" id="len-hint"></div>
+          </div>
+          <div class="field" id="len2-field" hidden>
+            <label for="len2">와이어 길이 2</label>
+            <div class="inrow"><input class="num" id="len2" type="number" inputmode="numeric"><span class="unit">mm</span></div>
+            <div class="hint">두 줄 길이가 같으면 같은 값을 적으세요.</div>
           </div>
           <div class="field">
             <label for="temp">동작온도</label>
             <div class="inrow"><input class="num" id="temp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
-            <div class="chips" id="temp-chips"></div>
             <div class="hint" id="temp-hint"></div>
           </div>
           <div class="field">
             <label for="qty">수량</label>
             <div class="inrow"><input class="num" id="qty" type="number" inputmode="numeric" value="1000"><span class="unit">EA</span></div>
-            <div class="chips" id="qty-chips"></div>
             <div class="hint" id="qty-hint"></div>
           </div>
           <div class="field">
@@ -254,6 +256,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015a"></script>
+<script src="app.js?v=20261015b"></script>
 </body>
 </html>
