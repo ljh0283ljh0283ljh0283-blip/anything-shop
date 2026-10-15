@@ -552,7 +552,7 @@
       adminPost({ action: 'adminSellerReset', nick: id }).then(function (res) {
         var m = $('#gh-msg'); m.classList.remove('err');
         m.textContent = '"' + id + '" 아이디 ' + res.loginId + ' · 임시 비밀번호 ' + res.tempPassword +
-          ' — 본인인지 연락처로 확인한 뒤 알려 주세요. 판매자는 로그인 후 내 상품 아래 "비밀번호 바꾸기"에서 바꿀 수 있어요.';
+          ' — 본인인지 연락처로 확인한 뒤 알려 주세요. 판매자는 로그인 후 내 상품 아래 "이메일·비밀번호 바꾸기"에서 바꿀 수 있어요.';
         m.scrollIntoView({ block: 'nearest' });
         rs.disabled = false; rs.classList.remove('confirm'); rs.textContent = '비밀번호 초기화';
       }).catch(function (err) { rs.disabled = false; $('#gh-msg').textContent = writeError(err); $('#gh-msg').classList.add('err'); });
@@ -633,14 +633,14 @@
 
   function setupPanels() {
     var panel = $('#admin'), signup = $('#seller-signup');
-    var views = ['#login-seller', '#login-admin', '#seller-signup', '#admin-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'];
+    var views = ['#login-seller', '#find-box', '#login-admin', '#seller-signup', '#admin-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'];
     function show(view) {
       var on = {
-        login: ['#login-seller'], adminLogin: ['#login-admin'], signup: ['#seller-signup'],
+        login: ['#login-seller'], find: ['#find-box'], adminLogin: ['#login-admin'], signup: ['#seller-signup'],
         seller: ['#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'], admin: ['#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout']
       }[view];
       views.forEach(function (v) { $(v).hidden = on.indexOf(v) < 0; });
-      $('#panel-title').textContent = { login: '판매자 로그인', adminLogin: '사이트 관리자', signup: '판매자 되기',
+      $('#panel-title').textContent = { login: '판매자 로그인', find: '아이디·비밀번호 찾기', adminLogin: '사이트 관리자', signup: '판매자 되기',
         seller: '내 상품', admin: '사이트 관리자' }[view];
       refreshEntries();
       if (view === 'seller' || view === 'admin') resetForm();
@@ -733,6 +733,40 @@
     }
     $('#gh-logout').addEventListener('click', function () { logout(); });
 
+    // 아이디·비밀번호 찾기: 이메일로 인증번호를 받고, 새 비밀번호를 정하면 바로 로그인된다
+    $('#find-open').addEventListener('click', function () {
+      loginMsg(''); show('find'); $('#fd-step2').hidden = true; $('#fd-email').focus();
+    });
+    $('#fd-send').addEventListener('click', function () {
+      var email = $('#fd-email').value.trim(), btn = this;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { loginMsg('가입할 때 적은 이메일을 적어 주세요.', true); return; }
+      btn.disabled = true; loginMsg('보내는 중이에요…');
+      api({ action: 'sellerFindStart', email: email }).then(function () {
+        loginMsg('가입된 이메일이면 아이디와 인증번호를 보냈어요. 메일을 확인해 주세요.');
+        $('#fd-step2').hidden = false; $('#fd-code').focus();
+      }).catch(function (err) { loginMsg(writeError(err), true); }).then(function () { btn.disabled = false; });
+    });
+    $('#fd-go').addEventListener('click', function () {
+      var code = $('#fd-code').value.trim(), id = $('#fd-id').value.trim().toLowerCase(), pw = $('#fd-pw').value;
+      if (!/^\d{6}$/.test(code)) { loginMsg('메일로 받은 6자리 인증번호를 적어 주세요.', true); return; }
+      if (!id) { loginMsg('메일에 적힌 아이디를 적어 주세요.', true); return; }
+      if (pw.length < 6) { loginMsg('새 비밀번호는 6자 이상으로 적어 주세요.', true); return; }
+      if (pw !== $('#fd-pw2').value) { loginMsg('새 비밀번호 확인이 맞지 않아요.', true); return; }
+      loginMsg('확인하는 중이에요…');
+      api({ action: 'sellerFindFinish', email: $('#fd-email').value.trim(), code: code, loginId: id, newPassword: pw }).then(function (res) {
+        ['#fd-code', '#fd-id', '#fd-pw', '#fd-pw2'].forEach(function (x) { $(x).value = ''; });
+        keep(SELLER_KEY, res.key);
+        enterSeller(res.nick).then(function () { say('비밀번호를 바꾸고 로그인했어요.'); });
+      }).catch(function (err) { loginMsg(writeError(err), true); });
+    });
+    $('#em-go').addEventListener('click', function () {
+      var email = $('#em-new').value.trim(), m = $('#em-msg');
+      function note(t, isErr) { m.textContent = t; m.classList.toggle('err', !!isErr); }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { note('이메일 주소를 확인해 주세요.', true); return; }
+      note('저장하는 중이에요…');
+      sellerPost({ action: 'sellerEmail', email: email }).then(function () { $('#em-new').value = ''; note('이메일을 저장했어요.'); })
+        .catch(function (err) { note(writeError(err), true); });
+    });
     $('#pw-go').addEventListener('click', function () {
       var oldPw = $('#pw-old').value, newPw = $('#pw-new').value, m = $('#pw-msg');
       function note(t, isErr) { m.textContent = t; m.classList.toggle('err', !!isErr); }

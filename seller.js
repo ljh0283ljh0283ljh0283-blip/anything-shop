@@ -29,7 +29,7 @@
       '</div>' +
       '<div class="row">' +
         '<div><label for="su-phone">연락처</label><input id="su-phone" name="phone" maxlength="20" required inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></div>' +
-        '<div><label for="su-email">이메일 (선택)</label><input id="su-email" name="email" type="email" maxlength="60" autocomplete="email"></div>' +
+        '<div><label for="su-email">이메일 (아이디·비밀번호 찾기에 써요)</label><input id="su-email" name="email" type="email" maxlength="60" required autocomplete="email"></div>' +
       '</div>' +
       '<fieldset class="su-kind"><legend>판매자 구분</legend>' +
         '<label class="check"><input type="radio" name="kind" value="개인" checked> 개인</label>' +
@@ -46,7 +46,7 @@
       '</div>' +
       '<details class="su-privacy"><summary>개인정보 수집·이용 안내</summary>' +
         '<p>수집 항목: 판매자 이름, 실명, 연락처, 이메일, 사업자등록번호, 입금 계좌<br>' +
-        '이용 목적: 판매자 확인과 연락, 손님에게 입금 계좌 안내<br>' +
+        '이용 목적: 판매자 확인과 연락, 아이디·비밀번호 찾기, 손님에게 입금 계좌 안내<br>' +
         '보관 기간: 판매를 그만두면 지체 없이 파기하고, 등록되지 않은 신청은 확인 후 바로 파기<br>' +
         '동의하지 않을 수 있지만, 그러면 판매자로 등록할 수 없어요.</p>' +
       '</details>' +
@@ -78,6 +78,7 @@
     if (!data.nick) { say('상점에 보일 판매자 이름을 적어 주세요.', true); f.nick.focus(); return; }
     if (!data.realName) { say('실명을 적어 주세요.', true); f.name.focus(); return; }
     if (!/^[0-9+\-\s()]{8,20}$/.test(data.tel)) { say('연락처를 숫자로 적어 주세요. 예: 010-1234-5678', true); f.phone.focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { say('아이디·비밀번호를 찾을 때 쓸 이메일을 적어 주세요.', true); f.email.focus(); return; }
     if (data.kind === '사업자' && !/^[0-9\-]{10,12}$/.test(data.biz)) { say('사업자등록번호를 적어 주세요.', true); f.biz.focus(); return; }
     if (!data.what) { say('팔고 싶은 것을 적어 주세요.', true); f.what.focus(); return; }
     if (!data.bank || !data.acct || !data.holder) { say('입금받을 계좌의 은행, 계좌번호, 예금주를 모두 적어 주세요.', true); (data.bank ? data.acct ? f.holder : f.acct : f.bank).focus(); return; }
