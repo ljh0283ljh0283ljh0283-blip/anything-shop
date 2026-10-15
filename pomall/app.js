@@ -347,7 +347,12 @@
   // 예전 상태 이름으로 남은 발주는 새 이름으로 보여 준다
   var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
   function pill(s) { s = OLD_STATUS[s] || s; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(s || '접수 대기') + '</span>'; }
-  function itemsHtml(o) { return '<ul class="order-items">' + o.items.map(function (i) { return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + '</li>'; }).join('') + '</ul>'; }
+  // 품목 메모는 사양 코드 아래에 작게 보여 준다
+  function itemsHtml(o) {
+    return '<ul class="order-items">' + o.items.map(function (i) {
+      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + (i.memo ? '<div class="item-memo">메모: ' + esc(i.memo) + '</div>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
   // 담당자가 확정 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다
   function shipText(o) {
     return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">확정</div>'
