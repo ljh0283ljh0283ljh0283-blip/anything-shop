@@ -169,3 +169,9 @@ label.ship input{font-size:13px;padding:4px 6px;min-width:140px}
 .item-finish{font-family:var(--font-body);color:var(--ink);margin:2px 0}
 .item-finish b{font-family:var(--font-mono);color:var(--accent)}
 .strip-label{font-weight:600;font-size:13px;white-space:nowrap;margin-left:6px}
+.ci-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px 18px;margin-top:10px;font-size:14px}
+.ci-meta span{display:block;font-size:12px;color:var(--muted)}
+#ci-sum tr{cursor:pointer}
+#ci-sum tr[aria-selected="true"]{background:var(--accent-soft)}
+#ci-sum tr.total{cursor:default;font-weight:600}
+.code-link{font:inherit;font-family:var(--font-mono);background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
