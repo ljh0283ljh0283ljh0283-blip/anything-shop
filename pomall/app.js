@@ -68,7 +68,7 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
@@ -97,7 +97,12 @@
           o.status = c.status; store(KEY.localOrders, list);
           return Promise.resolve({ ok: true });
         },
-        customers: function () { return Promise.resolve(custs().map(pub)); },
+        customers: function () {
+          // 번호가 없는 거래처는 목록 순서대로 번호를 붙인다
+          var list = custs(), seq = list.reduce(function (m, c) { return Math.max(m, c.no || 0); }, 0);
+          list.forEach(function (c) { if (!c.no) c.no = ++seq; }); store(KEY.localCustomers, list);
+          return Promise.resolve(list.map(pub).sort(function (a, b) { return a.no - b.no; }));
+        },
         saveCustomer: function (key, c) {
           var list = custs(), ex = list.filter(function (x) { return x.code === (c.oldCode || c.code); })[0];
           var renamed = !!(c.oldCode && c.oldCode !== c.code);
@@ -105,7 +110,7 @@
           if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
           var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount });
           if (c.pw) row.pw = c.pw;
-          if (!ex) list.push(row);
+          if (!ex) { row.no = list.reduce(function (m, x) { return Math.max(m, x.no || 0); }, 0) + 1; list.push(row); }
           store(KEY.localCustomers, list);
           if (renamed) store(KEY.localOrders, orders().map(function (o) { if (o.code === c.oldCode) o.code = c.code; return o; }));
           return Promise.resolve({ ok: true });
@@ -434,8 +439,8 @@
       adminOrders = r[0] || []; customers = r[1] || []; say(msg, '');
       $('#staff-badge').textContent = ROLES[role] + ' · ' + staffInfo().name;
       $('#staff-badge').className = 'role role-' + role;
-      $('#cust-tab').hidden = !canEdit();
-      showAdminTab(canEdit() ? adminTab : 'orders');
+      $('#tab-cust').hidden = !canEdit();
+      if (!canEdit() && adminTab === 'customers') { toast('거래처 관리는 영업팀과 관리자만 열 수 있어요'); return show('admin'); }
       renderAdmin(); renderLead(); if (canEdit()) renderCustomers();
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
@@ -444,7 +449,7 @@
   }
   function showAdminTab(tab) {
     adminTab = tab;
-    document.querySelectorAll('[data-admin-tab]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.adminTab === tab); });
+    $('#admin-title').textContent = tab === 'customers' ? '거래처 관리' : '주문관리';
     $('#admin-orders').hidden = tab !== 'orders'; $('#admin-customers').hidden = tab !== 'customers';
   }
   function renderAdmin() {
@@ -549,9 +554,9 @@
 
   // 거래처 단가
   function renderCustomers() {
-    $('#cust-head').innerHTML = '<tr><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>할인율</th><th>상태</th><th></th></tr>';
+    $('#cust-head').innerHTML = '<tr><th>번호</th><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>할인율</th><th>상태</th><th></th></tr>';
     $('#cust-body').innerHTML = customers.map(function (c) {
-      return '<tr class="' + (c.active ? '' : 'off') + (editing === c.code ? ' editing' : '') + '"><td class="mono">' + esc(c.code) + '</td><td><b>' + esc(c.name) + '</b></td>' +
+      return '<tr class="' + (c.active ? '' : 'off') + (editing === c.code ? ' editing' : '') + '"><td class="num">' + (c.no || '-') + '</td><td class="mono">' + esc(c.code) + '</td><td><b>' + esc(c.name) + '</b></td>' +
         '<td>' + esc(c.contact) + '<div class="order-items">' + esc(c.phone) + '</div></td>' +
         C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return '<td class="num">' + (v > 0 ? v.toLocaleString() : '-') + '</td>'; }).join('') +
         '<td class="num">' + (c.discount ? c.discount + '%' : '-') + '</td><td>' + (c.active ? '사용' : '중지') + '</td><td><button type="button" class="btn ghost small" data-edit="' + esc(c.code) + '">수정</button></td></tr>';
@@ -565,7 +570,7 @@
   }
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
-    $('#cust-form-title').textContent = c ? c.name + ' 수정' : '거래처 추가';
+    $('#cust-form-title').textContent = c ? (c.no ? c.no + '번 ' : '') + c.name + ' 수정' : '거래처 추가';
     $('#cu-code').value = c ? c.code : '';
     $('#cu-code-hint').textContent = c ? '바꾸면 비밀번호도 새로 정해야 해요. 지난 발주도 새 코드로 옮겨져요.' : '거래처가 로그인할 때 씁니다.';
     $('#cu-delete').hidden = !c;
@@ -624,8 +629,10 @@
   // ----- 탭 -----
   function show(view) {
     document.querySelectorAll('nav.tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.view === view); });
-    ['order', 'history', 'admin'].forEach(function (v) { $('#view-' + v).hidden = v !== view; });
-    if (view === 'admin') { $('#tab-admin').hidden = false; adminLoad(); }
+    // 거래처 관리는 주문관리와 같은 화면(같은 팀 열쇠)에서 거래처 부분만 보여 준다
+    var page = view === 'customers' ? 'admin' : view;
+    ['order', 'history', 'admin'].forEach(function (v) { $('#view-' + v).hidden = v !== page; });
+    if (page === 'admin') { $('#tab-admin').hidden = false; showAdminTab(view === 'customers' ? 'customers' : 'orders'); adminLoad(); }
     if (view === 'history') loadHistory();
     window.scrollTo(0, 0);
   }
@@ -645,7 +652,6 @@
     if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
-    if (d.adminTab) return showAdminTab(d.adminTab);
     if (d.edit) { fillCustomerForm(customers.filter(function (x) { return x.code === d.edit; })[0]); return $('#cust-form').scrollIntoView({ behavior: 'smooth' }); }
   });
   ['len', 'len2', 'strip', 'strip2', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
@@ -669,7 +675,7 @@
   });
   $('#admin-reload').addEventListener('click', adminLoad);
   // 닫기: 저장된 열쇠를 지우고 주문관리 탭도 감춘다 (다시 열려면 맨 아래 관리자 버튼)
-  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; $('#tab-admin').hidden = true; show('order'); toast('주문관리를 닫았어요'); });
+  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; $('#tab-admin').hidden = true; $('#tab-cust').hidden = true; show('order'); toast('주문관리를 닫았어요'); });
   $('#admin-body').addEventListener('change', function (e) {
     if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value);
     if (e.target.dataset.ship) saveShip(e.target);
@@ -685,7 +691,7 @@
     api = STORAGES[kind](settings);
     $('#notice').hidden = !!(settings.open && api.ready);
     if (settings.company) { $('.brand b').textContent = settings.company; $('#footer-company').textContent = '© 2026 ' + settings.company; }
-    if (adminKey()) $('#tab-admin').hidden = false;
+    if (adminKey()) { $('#tab-admin').hidden = false; $('#tab-cust').hidden = false; }
     setSpec(C.products[0].id, 70, 100, 1000); renderFinish();
     renderRecent();
     // 담당자가 관리 화면에서 바꾼 생산 소요일을 받아 온다

@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261015k">
+<link rel="stylesheet" href="style.css?v=20261015l">
 </head>
 <body>
 
@@ -19,6 +19,7 @@
       <button type="button" role="tab" id="tab-order" data-view="order" aria-selected="true">주문하기 <span class="count" id="cart-count" hidden>0</span></button>
       <button type="button" role="tab" id="tab-history" data-view="history" aria-selected="false">주문 조회</button>
       <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>주문관리</button>
+      <button type="button" role="tab" id="tab-cust" data-view="customers" aria-selected="false" hidden>거래처 관리</button>
     </nav>
     <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout">로그아웃</button></div>
   </div>
@@ -167,7 +168,7 @@
 
 <!-- 관리 (회사용) -->
 <section class="view" id="view-admin" hidden>
-  <h2>주문관리</h2>
+  <h2 id="admin-title">주문관리</h2>
   <p class="lede">회사 담당자만 쓰는 화면입니다. 팀마다 받은 열쇠로 엽니다. 상태 변경과 거래처 단가는 영업팀과 관리자만 할 수 있습니다.</p>
   <form class="lookup-form" id="key-form" novalidate>
     <div class="field"><label for="staff-name">이름</label><input id="staff-name" maxlength="20" autocomplete="name" placeholder="예: 김영업"><span class="hint">상태를 바꾸면 이 이름이 기록에 남아요.</span></div>
@@ -176,11 +177,7 @@
   </form>
   <div id="admin-wrap" hidden>
     <div class="admin-bar">
-      <nav class="kpis" aria-label="관리 메뉴">
-        <button type="button" data-admin-tab="orders" aria-pressed="true">발주 접수</button>
-        <button type="button" data-admin-tab="customers" aria-pressed="false" id="cust-tab">거래처 단가</button>
-      </nav>
-      <div style="display:flex;gap:8px;align-items:center"><span class="role" id="staff-badge"></span><button type="button" class="btn ghost small" id="admin-reload">새로고침</button><button type="button" class="btn ghost small" id="admin-logout">닫기</button></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto"><span class="role" id="staff-badge"></span><button type="button" class="btn ghost small" id="admin-reload">새로고침</button><button type="button" class="btn ghost small" id="admin-logout">닫기</button></div>
     </div>
 
     <div id="admin-orders">
@@ -209,7 +206,7 @@
         <thead id="cust-head"></thead>
         <tbody id="cust-body"></tbody>
       </table></div>
-      <div class="empty" id="cust-empty" hidden>등록된 거래처가 없습니다. 아래에서 첫 거래처를 추가하세요.</div>
+      <div class="empty" id="cust-empty" hidden>등록된 거래처가 없습니다. 아래에서 첫 거래처를 추가하세요. 등록한 순서대로 1번부터 고유번호가 붙어요.</div>
 
       <div class="panel" style="margin-top:20px">
         <h3 id="cust-form-title">거래처 추가</h3>
@@ -264,6 +261,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261015k"></script>
+<script src="app.js?v=20261015l"></script>
 </body>
 </html>
