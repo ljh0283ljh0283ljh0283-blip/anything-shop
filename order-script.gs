@@ -173,10 +173,12 @@ function sellerLogin(d) {
   return { ok: true, nick: String(hit.row[S.nick]), key: key };
 }
 
+// 판매자 본인 확인. 어떻게든 팔거야 시트도 이걸로 판매자를 확인하고, 수락한 제안에 판매자 계좌를 붙인다.
 function sellerMe(key) {
-  var s = sellerByKey(key);
-  if (!s) return { ok: false, error: '다시 로그인해 주세요.' };
-  return { ok: true, nick: s.nick };
+  var hit = sellerRowByKey(key);
+  if (!hit) return { ok: false, error: '다시 로그인해 주세요.' };
+  var r = hit.row;
+  return { ok: true, nick: String(r[S.nick]), bank: r[S.acct] ? { name: String(r[S.bank]), account: String(r[S.acct]), holder: String(r[S.holder]) } : null };
 }
 
 // 로그인한 판매자가 비밀번호를 바꾼다(관리자가 준 임시 비밀번호를 바꿀 때도 쓴다)
