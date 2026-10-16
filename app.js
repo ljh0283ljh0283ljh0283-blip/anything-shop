@@ -505,7 +505,7 @@
         var stopped = s.status === '정지';
         listItem(s.nick, s.nick + (stopped ? ' (정지)' : ''),
           [s.loginId && '아이디 ' + s.loginId, s.realName, s.tel, s.kind, s.at && '가입 ' + s.at].filter(Boolean).join(' · '),
-          [['비밀번호 초기화', 'data-seller-reset'], [stopped ? '다시 활동' : '정지', 'data-seller-toggle', stopped ? '' : 'del']], stopped ? 'is-off' : '');
+          [['비밀번호 초기화', 'data-seller-reset'], [stopped ? '다시 활동' : '정지', 'data-seller-toggle', stopped ? '' : 'del'], ['삭제', 'data-seller-del', 'del']], stopped ? 'is-off' : '');
       });
       $('#admin-empty').hidden = adminData.sellers.length > 0;
       return;
@@ -556,6 +556,23 @@
         m.scrollIntoView({ block: 'nearest' });
         rs.disabled = false; rs.classList.remove('confirm'); rs.textContent = '비밀번호 초기화';
       }).catch(function (err) { rs.disabled = false; $('#gh-msg').textContent = writeError(err); $('#gh-msg').classList.add('err'); });
+      return;
+    }
+    var sd = e.target.closest('[data-seller-del]');
+    if (sd) {
+      // 한 번 더 눌러야 지워진다. 판매자와 그 판매자의 상품이 모두 지워진다.
+      if (!sd.classList.contains('confirm')) {
+        sd.classList.add('confirm'); sd.textContent = '정말 삭제';
+        setTimeout(function () { if (sd.isConnected) { sd.classList.remove('confirm'); sd.textContent = '삭제'; } }, 3000);
+        return;
+      }
+      sd.disabled = true;
+      adminPost({ action: 'adminSellerDelete', nick: id }).then(function (res) {
+        return reloadAdmin().then(loadSellerItems).then(function () {
+          var m = $('#gh-msg'); m.classList.remove('err');
+          m.textContent = '판매자 "' + id + '"을(를) 삭제했어요.' + (res.items ? ' 올린 상품 ' + res.items + '개도 지웠어요.' : '');
+        });
+      }).catch(function (err) { sd.disabled = false; $('#gh-msg').textContent = writeError(err); $('#gh-msg').classList.add('err'); });
       return;
     }
     var st = e.target.closest('[data-seller-toggle]');
