@@ -896,7 +896,7 @@
   function refreshEntries() {
     var seller = !!sellerKey(), admin = !!adminKey();
     $('#open-admin').hidden = !seller;
-    $('#open-admin').textContent = '내 상품';
+    $('#open-admin').textContent = '내 상품 올리기';
     $('#open-manage').hidden = !admin;
     $('#signup-entry').hidden = seller;
     $('#seller-entry').hidden = seller;
