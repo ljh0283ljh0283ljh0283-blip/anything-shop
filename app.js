@@ -496,8 +496,67 @@
     adminList.appendChild(li);
   }
 
+  // 판매 기록: 판매자별로 일·월·연 단위로 묶어 주문 수와 금액을 보여 준다
+  var salesUnit = 'day';
+  function renderSales() {
+    var rows = adminData.sales || [], pick = $('#sales-seller'), chosen = pick.value;
+    var names = {};
+    rows.forEach(function (r) { names[r.seller] = true; });
+    pick.innerHTML = '<option value="">모든 판매자</option>';
+    Object.keys(names).sort().forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; pick.appendChild(o); });
+    if (names[chosen]) pick.value = chosen; else chosen = '';
+    var cut = { day: 10, month: 7, year: 4 }[salesUnit];
+    var groups = {}, totals = {};
+    rows.forEach(function (r) {
+      if (chosen && r.seller !== chosen) return;
+      var k = r.day.slice(0, cut) + '\u0000' + r.seller;
+      var g = groups[k] || (groups[k] = { period: r.day.slice(0, cut), seller: r.seller, orders: {}, amount: 0 });
+      g.orders[r.orderNo] = true; g.amount += r.amount;
+      var t = totals[r.seller] || (totals[r.seller] = { orders: {}, amount: 0 });
+      t.orders[r.orderNo] = true; t.amount += r.amount;
+    });
+    function cells(tr, vals) {
+      vals.forEach(function (v, i) { var td = document.createElement('td'); td.textContent = v; if (i >= vals.length - 2) td.className = 'num'; tr.appendChild(td); });
+    }
+    var body = $('#sales-body'); body.innerHTML = '';
+    Object.keys(groups).map(function (k) { return groups[k]; })
+      .sort(function (a, b) { return a.period < b.period ? 1 : a.period > b.period ? -1 : a.seller < b.seller ? -1 : 1; })
+      .forEach(function (g) {
+        var label = salesUnit === 'day' ? g.period : salesUnit === 'month' ? g.period.replace('-', '년 ') + '월' : g.period + '년';
+        var tr = document.createElement('tr'); cells(tr, [label, g.seller, Object.keys(g.orders).length + '건', won(g.amount)]); body.appendChild(tr);
+      });
+    var tot = $('#sales-total'); tot.innerHTML = '';
+    Object.keys(totals).sort(function (a, b) { return totals[b].amount - totals[a].amount; }).forEach(function (n) {
+      var tr = document.createElement('tr'); cells(tr, [n, Object.keys(totals[n].orders).length + '건', won(totals[n].amount)]); tot.appendChild(tr);
+    });
+    $('#admin-count').textContent = Object.keys(totals).length;
+    $('#admin-empty').hidden = rows.length > 0;
+    $('#admin-empty').textContent = '아직 판매 기록이 없어요.';
+  }
+  function loadSales() {
+    $('#admin-empty').hidden = false; $('#admin-empty').textContent = '판매 기록을 읽는 중이에요…';
+    return adminPost({ action: 'adminSales' }).then(function (res) {
+      adminData.sales = res.sales || [];
+      if (mode === 'admin' && adminTab === 'sales') renderAdminList();
+    }).catch(function (err) { $('#admin-empty').textContent = writeError(err); });
+  }
+  $('#sales-unit').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-unit]'); if (!b) return;
+    salesUnit = b.dataset.unit;
+    document.querySelectorAll('#sales-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    renderSales();
+  });
+  $('#sales-seller').addEventListener('change', renderSales);
+
   function renderAdminList() {
     adminList.innerHTML = '';
+    var salesTab = mode === 'admin' && adminTab === 'sales';
+    $('#sales-box').hidden = !salesTab;
+    if (salesTab) {
+      $('#admin-list-label').textContent = '판매 기록 · 판매자';
+      if (adminData.sales) renderSales();
+      return;
+    }
     if (mode === 'admin' && adminTab === 'sellers') {
       $('#admin-list-label').textContent = '판매자';
       $('#admin-count').textContent = adminData.sellers.length;
@@ -739,6 +798,7 @@
       document.querySelectorAll('#admin-tabs button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
       say('');
       resetForm();
+      if (adminTab === 'sales') loadSales();
     });
     // 판매자 로그인과 관리자 로그인은 따로 유지된다. 로그아웃은 지금 보고 있는 쪽만 한다.
     function logout(which) {

@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016c">
+<link rel="stylesheet" href="style.css?v=20261016d">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -216,11 +216,33 @@
       <button type="button" data-tab="items" aria-pressed="true">판매자 상품</button>
       <button type="button" data-tab="sellers" aria-pressed="false">판매자</button>
       <button type="button" data-tab="own" aria-pressed="false">샘플·운영 상품</button>
+      <button type="button" data-tab="sales" aria-pressed="false">판매 기록</button>
     </div>
     <div id="admin-list-wrap" hidden>
       <h3 class="admin-list-title"><span id="admin-list-label">내 상품</span> <span id="admin-count">0</span>개</h3>
       <p class="admin-empty" id="admin-empty" hidden></p>
       <ul class="admin-list" id="admin-list"></ul>
+      <div class="sales" id="sales-box" hidden>
+        <div class="sales-ctrl">
+          <div class="admin-tabs" id="sales-unit" role="group" aria-label="기간">
+            <button type="button" data-unit="day" aria-pressed="true">일별</button>
+            <button type="button" data-unit="month" aria-pressed="false">월별</button>
+            <button type="button" data-unit="year" aria-pressed="false">연별</button>
+          </div>
+          <label class="sr-only" for="sales-seller">판매자</label>
+          <select id="sales-seller"><option value="">모든 판매자</option></select>
+        </div>
+        <p class="sales-note">취소된 주문은 빼고, 입금 대기 주문까지 모두 셌어요.</p>
+        <table class="sales-table">
+          <thead><tr><th>기간</th><th>판매자</th><th class="num">주문</th><th class="num">금액</th></tr></thead>
+          <tbody id="sales-body"></tbody>
+        </table>
+        <h4 class="sales-sub">판매자별 합계</h4>
+        <table class="sales-table">
+          <thead><tr><th>판매자</th><th class="num">주문</th><th class="num">금액</th></tr></thead>
+          <tbody id="sales-total"></tbody>
+        </table>
+      </div>
     </div>
     <form id="product-form" class="form" novalidate hidden>
       <h3 class="form-title" id="form-title">새 상품 올리기</h3>
@@ -274,7 +296,7 @@
   </div>
 </aside>
 
-<script src="app.js?v=20261016c"></script>
-<script src="seller.js?v=20261016c"></script>
+<script src="app.js?v=20261016d"></script>
+<script src="seller.js?v=20261016d"></script>
 </body>
 </html>

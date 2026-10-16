@@ -226,3 +226,13 @@ footer a { color: var(--muted); }
 .gh-login .su-privacy { margin-top: 12px; }
 .field-err { color: var(--danger, #b3261e); font-size: .82rem; margin: -2px 0 8px; }
 .su-form .row { align-items: start; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sales-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.sales-ctrl .admin-tabs { margin: 0; }
+.sales-ctrl select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; font-size: .85rem; }
+.sales-note { font-size: .8rem; color: var(--muted); margin: 4px 0 8px; }
+.sales-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-bottom: 12px; }
+.sales-table th, .sales-table td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+.sales-table th { font-weight: 500; color: var(--muted); font-size: .78rem; }
+.sales-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sales-sub { font-size: .9rem; margin: 14px 0 2px; }
