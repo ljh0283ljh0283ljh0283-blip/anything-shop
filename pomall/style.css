@@ -120,6 +120,8 @@ footer.site button{font:inherit;background:none;border:none;color:var(--muted);t
 .admin-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px}
 td select{min-width:110px}
 .who{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:13px}
+.lang-btn{margin-left:auto}
+.lang-btn + .who{margin-left:0}
 .who span{font-weight:600}
 .price-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:6px}
 .price-grid label{display:grid;gap:2px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
