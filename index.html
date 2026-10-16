@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016g">
+<link rel="stylesheet" href="style.css?v=20261016h">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -214,6 +214,7 @@
     <section class="signup" id="seller-signup" hidden data-shop="무엇이든 상점" data-settings="settings.json" data-terms="terms/" aria-label="판매자 되기"></section>
     <div class="admin-tabs" id="seller-tabs" hidden>
       <button type="button" data-stab="items" aria-pressed="true">내 상품</button>
+      <button type="button" data-stab="uploads" aria-pressed="false">올린 상품</button>
       <button type="button" data-stab="sales" aria-pressed="false">판매 기록</button>
     </div>
     <div class="admin-tabs" id="admin-tabs" hidden>
@@ -226,6 +227,23 @@
       <h3 class="admin-list-title"><span id="admin-list-label">내 상품</span> <span id="admin-count">0</span>개</h3>
       <p class="admin-empty" id="admin-empty" hidden></p>
       <ul class="admin-list" id="admin-list"></ul>
+      <div class="sales" id="up-box" hidden>
+        <div class="admin-tabs" id="up-unit" role="group" aria-label="기간">
+          <button type="button" data-unit="day" aria-pressed="false">일별</button>
+          <button type="button" data-unit="month" aria-pressed="true">월별</button>
+          <button type="button" data-unit="year" aria-pressed="false">연별</button>
+        </div>
+        <table class="sales-table">
+          <thead><tr><th id="up-col">월</th><th class="num">올린 상품</th><th class="num">게시 중</th></tr></thead>
+          <tbody id="up-body"></tbody>
+        </table>
+        <p class="sales-note">기간 줄을 누르면 그 기간에 올린 상품이 아래에 보여요. 내린 상품도 기록에 남아요.</p>
+        <h4 class="sales-sub" id="up-list-title">상품 목록</h4>
+        <table class="sales-table">
+          <thead><tr><th>올린 날</th><th>상품</th><th class="num">가격</th><th>상태</th></tr></thead>
+          <tbody id="up-items"></tbody>
+        </table>
+      </div>
       <div class="sales" id="sales-box" hidden>
         <div id="sales-main">
           <p class="sales-note">판매자를 누르면 일별·월별·연별 판매 현황이 보여요. 취소된 주문은 빼고, 입금 대기 주문까지 셌어요.</p>
@@ -307,7 +325,7 @@
   </div>
 </aside>
 
-<script src="app.js?v=20261016g"></script>
-<script src="seller.js?v=20261016g"></script>
+<script src="app.js?v=20261016h"></script>
+<script src="seller.js?v=20261016h"></script>
 </body>
 </html>
