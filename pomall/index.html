@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016b">
+<link rel="stylesheet" href="style.css?v=20261016c">
 </head>
 <body>
 
@@ -16,130 +16,131 @@
   <div class="top-inner">
     <div class="brand"><b>SEKI POmall</b></div>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" id="tab-order" data-view="order" aria-selected="true">주문하기 <span class="count" id="cart-count" hidden>0</span></button>
-      <button type="button" role="tab" id="tab-history" data-view="history" aria-selected="false">주문 조회</button>
+      <button type="button" role="tab" id="tab-order" data-view="order" aria-selected="true"><span data-en="Order">주문하기</span> <span class="count" id="cart-count" hidden>0</span></button>
+      <button type="button" role="tab" id="tab-history" data-view="history" aria-selected="false" data-en="My orders">주문 조회</button>
       <button type="button" role="tab" id="tab-admin" data-view="admin" aria-selected="false" hidden>주문관리</button>
       <button type="button" role="tab" id="tab-cust" data-view="customers" aria-selected="false" hidden>거래처 관리</button>
     </nav>
-    <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout">로그아웃</button></div>
+    <button type="button" class="btn ghost small lang-btn" id="lang-btn" lang="en">English</button>
+    <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout" data-en="Sign out">로그아웃</button></div>
   </div>
 </header>
 
 <div class="wrap">
 
-<p class="notice" id="notice" hidden><b>주문 접수 준비 중</b><span>지금은 사양을 확인해 보실 수 있어요. 로그인과 발주는 정식 오픈 후에 받습니다.</span></p>
+<p class="notice" id="notice" hidden><b data-en="Opening soon">주문 접수 준비 중</b><span data-en="You can check specifications now. Sign-in and ordering open at launch.">지금은 사양을 확인해 보실 수 있어요. 로그인과 발주는 정식 오픈 후에 받습니다.</span></p>
 
 <!-- 주문하기 -->
 <section class="view" id="view-order">
-  <h2>사양을 고르면 바로 생산 발주가 됩니다</h2>
-  <p class="lede">재고 없이 주문 받은 수량만 생산합니다. 모델, 와이어 길이, 동작온도를 정하면 사양 코드와 예상 출하일이 자동으로 나옵니다. 단가는 거래처마다 따로 정해져 있어 로그인하면 보입니다.</p>
+  <h2 data-en="Choose a specification and place a production order">사양을 고르면 바로 생산 발주가 됩니다</h2>
+  <p class="lede" data-en="We build to order, with no stock. Choose the model, wire length and operating temperature to get the spec code and estimated ship date. Unit prices are set per customer and appear after you sign in.">재고 없이 주문 받은 수량만 생산합니다. 모델, 와이어 길이, 동작온도를 정하면 사양 코드와 예상 출하일이 자동으로 나옵니다. 단가는 거래처마다 따로 정해져 있어 로그인하면 보입니다.</p>
   <ol class="steps">
-    <li><i>1</i>거래처 로그인</li><li><i>2</i>모델 · 와이어 길이 · 동작온도</li><li><i>3</i>수량 담기</li><li><i>4</i>발주 확정</li>
+    <li data-en="&lt;i&gt;1&lt;/i&gt;Sign in"><i>1</i>거래처 로그인</li><li data-en="&lt;i&gt;2&lt;/i&gt;Model · wire length · temperature"><i>2</i>모델 · 와이어 길이 · 동작온도</li><li data-en="&lt;i&gt;3&lt;/i&gt;Add quantity"><i>3</i>수량 담기</li><li data-en="&lt;i&gt;4&lt;/i&gt;Confirm order"><i>4</i>발주 확정</li>
   </ol>
 
   <div class="grid-order">
     <div class="stack">
       <div class="panel">
-        <div class="label">모델</div>
+        <div class="label" data-en="Model">모델</div>
         <div class="models" id="models"><p class="msg">제품 목록을 불러오는 중이에요.</p></div>
 
         <div class="fields">
           <div class="field">
-            <label for="temp">동작온도</label>
+            <label for="temp" data-en="Operating temperature">동작온도</label>
             <div class="inrow"><input class="num" id="temp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
             <div class="hint" id="temp-hint"></div>
           </div>
           <div class="field">
-            <label for="qty">수량</label>
+            <label for="qty" data-en="Quantity">수량</label>
             <div class="inrow"><input class="num" id="qty" type="number" inputmode="numeric" value="1000"><span class="unit">EA</span></div>
             <div class="hint" id="qty-hint"></div>
           </div>
           <div class="field">
             <label for="len" id="len-label">와이어 길이</label>
             <div class="inrow"><input class="num" id="len" type="number" inputmode="numeric"><span class="unit">mm</span>
-              <label class="strip-label" for="strip">탈피</label><input class="num" id="strip" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
+              <label class="strip-label" for="strip" data-en="Strip">탈피</label><input class="num" id="strip" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택" data-en-ph="Optional"><span class="unit">mm</span></div>
             <div class="hint" id="len-hint"></div>
           </div>
           <div class="field" id="len2-field" hidden>
-            <label for="len2">와이어 길이 2</label>
+            <label for="len2" data-en="Wire length 2">와이어 길이 2</label>
             <div class="inrow"><input class="num" id="len2" type="number" inputmode="numeric"><span class="unit">mm</span>
-              <label class="strip-label" for="strip2">탈피</label><input class="num" id="strip2" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
-            <div class="hint">두 줄 길이가 같으면 같은 값을 적으세요.</div>
+              <label class="strip-label" for="strip2" data-en="Strip">탈피</label><input class="num" id="strip2" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택" data-en-ph="Optional"><span class="unit">mm</span></div>
+            <div class="hint" data-en="If both wires are the same length, enter the same value.">두 줄 길이가 같으면 같은 값을 적으세요.</div>
           </div>
           <div class="fields-row">
             <div class="field">
-              <span class="field-label" id="finish-label">마감 <span class="hint">(선택, 다시 누르면 해제)</span></span>
+              <span class="field-label" id="finish-label" data-en="Finish &lt;span class=&quot;hint&quot;&gt;(optional, click again to clear)&lt;/span&gt;">마감 <span class="hint">(선택, 다시 누르면 해제)</span></span>
               <div class="seg" id="finish" role="group" aria-labelledby="finish-label"></div>
             </div>
             <div class="field">
-              <label for="item-memo">품목 메모 <span class="hint">(선택)</span></label>
-              <input id="item-memo" type="text" maxlength="100" placeholder="예: 튜브 색상, 단자 사양">
+              <label for="item-memo" data-en="Item memo &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">품목 메모 <span class="hint">(선택)</span></label>
+              <input id="item-memo" type="text" maxlength="100" placeholder="예: 튜브 색상, 단자 사양" data-en-ph="e.g. tube color, terminal spec">
             </div>
           </div>
         </div>
 
         <div class="spec">
           <div>
-            <div class="label">사양 코드</div>
+            <div class="label" data-en="Spec code">사양 코드</div>
             <code id="spec-code">-</code>
             <div class="meta" id="spec-meta"></div>
           </div>
-          <button type="button" class="btn" id="add-btn">발주서에 담기</button>
+          <button type="button" class="btn" id="add-btn" data-en="Add to order">발주서에 담기</button>
         </div>
         <div class="err" id="spec-err" role="alert"></div>
       </div>
 
       <div class="panel" id="reorder-panel" hidden>
-        <div class="label">최근 주문한 사양</div>
-        <p class="note">누르면 같은 사양이 위 입력란에 채워집니다.</p>
+        <div class="label" data-en="Recently ordered specs">최근 주문한 사양</div>
+        <p class="note" data-en="Click one to fill the fields above with the same spec.">누르면 같은 사양이 위 입력란에 채워집니다.</p>
         <div class="chips" id="recent-specs"></div>
       </div>
     </div>
 
     <aside class="stack">
       <div class="panel" id="login-panel">
-        <h3>거래처 로그인</h3>
-        <p class="note">회사에서 받은 거래처 코드와 비밀번호를 넣으세요. 코드가 없으면 담당 영업에 요청해 주세요.</p>
+        <h3 data-en="Customer sign-in">거래처 로그인</h3>
+        <p class="note" data-en="Enter the customer code and password we gave you. If you don’t have one, please ask your sales representative.">회사에서 받은 거래처 코드와 비밀번호를 넣으세요. 코드가 없으면 담당 영업에 요청해 주세요.</p>
         <form id="login-form" class="stack" style="gap:10px;margin-top:12px" novalidate>
-          <div class="field"><label for="login-code">거래처 코드</label><input id="login-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
-          <div class="field"><label for="login-pw">비밀번호</label><input id="login-pw" type="password" maxlength="40" autocomplete="current-password"></div>
-          <button class="btn" type="submit" id="login-btn">로그인</button>
+          <div class="field"><label for="login-code" data-en="Customer code">거래처 코드</label><input id="login-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
+          <div class="field"><label for="login-pw" data-en="Password">비밀번호</label><input id="login-pw" type="password" maxlength="40" autocomplete="current-password"></div>
+          <button class="btn" type="submit" id="login-btn" data-en="Sign in">로그인</button>
           <p class="msg" id="login-msg" role="status"></p>
         </form>
       </div>
 
       <div class="panel" id="cart-panel">
-        <h3>발주서</h3>
+        <h3 data-en="Your order">발주서</h3>
         <ul class="cart-list" id="cart"></ul>
-        <div class="empty" id="cart-empty">아직 담긴 품목이 없습니다. 사양을 정하고 <b>발주서에 담기</b>를 누르세요.</div>
+        <div class="empty" id="cart-empty" data-en="No items yet. Choose a spec and click &lt;b&gt;Add to order&lt;/b&gt;.">아직 담긴 품목이 없습니다. 사양을 정하고 <b>발주서에 담기</b>를 누르세요.</div>
         <div id="cart-sum" hidden>
           <div class="totals">
-            <span>공급가액</span><span class="money" id="sum-net"></span>
-            <span>부가세 10%</span><span class="money" id="sum-vat"></span>
-            <span class="grand">합계</span><span class="money grand" id="sum-total"></span>
+            <span data-en="Subtotal">공급가액</span><span class="money" id="sum-net"></span>
+            <span data-en="VAT 10%">부가세 10%</span><span class="money" id="sum-vat"></span>
+            <span class="grand" data-en="Total">합계</span><span class="money grand" id="sum-total"></span>
           </div>
           <div class="eta" id="eta"></div>
-          <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px">주문하기</button>
+          <button type="button" class="btn" id="go-checkout" style="width:100%;margin-top:14px" data-en="Check out">주문하기</button>
         </div>
       </div>
     </aside>
   </div>
 
   <div class="panel" id="checkout" hidden style="margin-top:24px">
-    <h3>발주 정보</h3>
-    <p class="note">거래처에 등록된 정보가 채워져 있어요. 이번 발주만 다르게 적어도 됩니다.</p>
+    <h3 data-en="Order details">발주 정보</h3>
+    <p class="note" data-en="Your registered details are filled in. You can change them for this order only.">거래처에 등록된 정보가 채워져 있어요. 이번 발주만 다르게 적어도 됩니다.</p>
     <form id="checkout-form" class="checkout" style="margin-top:14px" novalidate>
-      <div class="field"><label for="c-company">거래처</label><input id="c-company" readonly></div>
-      <div class="field"><label for="c-name">담당자</label><input id="c-name" maxlength="20" autocomplete="name"></div>
-      <div class="field"><label for="c-phone">연락처</label><input id="c-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></div>
-      <div class="field"><label for="c-po">거래처 발주번호 <span class="hint">(선택)</span></label><input id="c-po" maxlength="40" placeholder="귀사 내부 PO 번호"></div>
-      <div class="field full"><label for="c-addr">납품 주소</label><input id="c-addr" maxlength="120" autocomplete="street-address"></div>
-      <div class="field"><label for="c-date">희망 출하일</label><input id="c-date" type="date"><span class="hint" id="date-hint"></span></div>
-      <div class="field"><label for="c-memo">요청 사항 <span class="hint">(선택)</span></label><input id="c-memo" maxlength="200" placeholder="포장, 분할 납품 등"></div>
-      <div class="field full"><label for="c-file">발주서 첨부 <span class="hint">(선택)</span></label><input id="c-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.doc,.docx,.hwp,.hwpx"><span class="hint">귀사 발주서가 있으면 올려 주세요. PDF, 사진, 엑셀, 워드, 한글 파일 10MB까지.</span></div>
+      <div class="field"><label for="c-company" data-en="Company">거래처</label><input id="c-company" readonly></div>
+      <div class="field"><label for="c-name" data-en="Contact name">담당자</label><input id="c-name" maxlength="20" autocomplete="name"></div>
+      <div class="field"><label for="c-phone" data-en="Phone">연락처</label><input id="c-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" data-en-ph="+1 555 000 0000"></div>
+      <div class="field"><label for="c-po" data-en="Your PO number &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">거래처 발주번호 <span class="hint">(선택)</span></label><input id="c-po" maxlength="40" placeholder="귀사 내부 PO 번호" data-en-ph="Your internal PO number"></div>
+      <div class="field full"><label for="c-addr" data-en="Delivery address">납품 주소</label><input id="c-addr" maxlength="120" autocomplete="street-address"></div>
+      <div class="field"><label for="c-date" data-en="Requested ship date">희망 출하일</label><input id="c-date" type="date"><span class="hint" id="date-hint"></span></div>
+      <div class="field"><label for="c-memo" data-en="Requests &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">요청 사항 <span class="hint">(선택)</span></label><input id="c-memo" maxlength="200" placeholder="포장, 분할 납품 등" data-en-ph="Packing, split delivery, etc."></div>
+      <div class="field full"><label for="c-file" data-en="Attach your PO &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">발주서 첨부 <span class="hint">(선택)</span></label><input id="c-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.doc,.docx,.hwp,.hwpx"><span class="hint" data-en="Upload your purchase order if you have one. PDF, image, Excel, Word or HWP, up to 10 MB.">귀사 발주서가 있으면 올려 주세요. PDF, 사진, 엑셀, 워드, 한글 파일 10MB까지.</span></div>
       <div class="full" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn" type="submit" id="submit-btn">생산 발주 확정</button>
-        <button class="btn ghost" type="button" id="cancel-checkout">취소</button>
+        <button class="btn" type="submit" id="submit-btn" data-en="Place production order">생산 발주 확정</button>
+        <button class="btn ghost" type="button" id="cancel-checkout" data-en="Cancel">취소</button>
         <span class="err" id="checkout-err" role="alert"></span>
       </div>
     </form>
@@ -147,21 +148,21 @@
 
   <div class="panel" id="done" hidden style="margin-top:24px">
     <div class="done-box">
-      <div class="label">발주 접수 완료</div>
+      <div class="label" data-en="Order received">발주 접수 완료</div>
       <code id="done-no"></code>
       <p style="margin:0" id="done-text"></p>
-      <div><button type="button" class="btn ghost" id="done-history">주문 조회로 가기</button></div>
+      <div><button type="button" class="btn ghost" id="done-history" data-en="Go to my orders">주문 조회로 가기</button></div>
     </div>
   </div>
 </section>
 
 <!-- 주문 조회 -->
 <section class="view" id="view-history" hidden>
-  <h2>주문 조회</h2>
-  <p class="lede">우리 거래처의 발주와 생산 진행 상태입니다. 같은 사양으로 다시 주문하려면 <b>재주문</b>을 누르세요.</p>
+  <h2 data-en="My orders">주문 조회</h2>
+  <p class="lede" data-en="Your orders and their production status. To order the same specs again, click &lt;b&gt;Reorder&lt;/b&gt;.">우리 거래처의 발주와 생산 진행 상태입니다. 같은 사양으로 다시 주문하려면 <b>재주문</b>을 누르세요.</p>
   <p class="msg" id="history-msg" role="status"></p>
   <div class="table-wrap" id="history-wrap" hidden><table>
-    <thead><tr><th>발주번호</th><th>접수일</th><th>품목</th><th>합계</th><th>출하일</th><th>상태</th><th></th></tr></thead>
+    <thead><tr><th data-en="Order no.">발주번호</th><th data-en="Date">접수일</th><th data-en="Items">품목</th><th data-en="Total">합계</th><th data-en="Ship date">출하일</th><th data-en="Status">상태</th><th></th></tr></thead>
     <tbody id="history-body"></tbody>
   </table></div>
 </section>
@@ -264,7 +265,7 @@
   <p class="msg" id="admin-msg" role="status"></p>
 </section>
 
-<footer class="site"><span id="footer-company">© 2026 SEKI POmall</span><button type="button" id="admin-entry">관리자</button></footer>
+<footer class="site"><span id="footer-company">© 2026 SEKI POmall</span><button type="button" id="admin-entry" data-en="Staff">관리자</button></footer>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -289,6 +290,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261016b"></script>
+<script src="app.js?v=20261016c"></script>
 </body>
 </html>

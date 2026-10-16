@@ -6,13 +6,50 @@
   'use strict';
 
   var $ = function (s) { return document.querySelector(s); };
-  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead' };
+  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', lang: 'pomall.lang' };
   function store(k, v) {
     try {
       if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null');
       if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v));
     } catch (e) {}
     return null;
+  }
+
+  // ----- 언어: 한국어 / English -----
+  // 주소 끝에 ?lang=en 을 붙이면 영어로 연다(해외 바이어에게 보내는 주소). 고른 언어는 이 기기에 기억한다.
+  // 처음 오는 사람은 브라우저 언어가 한국어가 아니면 영어로 보여 준다. 회사용 관리 화면은 한국어 그대로다.
+  var LANG = (function () {
+    var q = (location.search.match(/[?&]lang=(en|ko)\b/) || [])[1];
+    if (q) { store(KEY.lang, q); return q; }
+    var saved = store(KEY.lang);
+    return saved === 'en' || saved === 'ko' ? saved : /^ko\b/i.test(navigator.language || 'ko') ? 'ko' : 'en';
+  })();
+  function T(ko, en) { return LANG === 'en' ? en : ko; }
+  var STATUS_EN = { '접수 대기': 'Received', '생산 지시': 'Production ordered', '생산 중': 'In production', '입고 완료': 'Ready to ship', '출하': 'Shipped', '취소': 'Cancelled' };
+  // 서버(Apps Script, 회사 서버)가 보내는 한국어 안내를 영어로 바꾼다. 없는 문장은 화면의 영어 안내로 대신한다.
+  var EN_ERR = [
+    [/거래처 코드나 비밀번호가 맞지/, 'The customer code or password is incorrect.'],
+    [/사용 중지된 거래처/, 'This account is suspended. Please contact your sales representative.'],
+    [/다시 로그인/, 'Please sign in again.'],
+    [/담당자, 연락처, 납품 주소가 필요/, 'Contact name, phone and delivery address are required.'],
+    [/담긴 품목이 없/, 'Your order has no items.'],
+    [/^없는 모델이에요/, 'Unknown model.'],
+    [/^(\S+)는 단가가 정해지지/, '$1 has no price yet and cannot be ordered.'],
+    [/^(\S+) 와이어 길이 2가 범위/, '$1 wire length 2 is out of range.'],
+    [/^(\S+) 와이어 길이가 범위/, '$1 wire length is out of range.'],
+    [/^(\S+) 마감을 다시/, 'Please choose the $1 finish again.'],
+    [/^(\S+) 탈피 길이는/, '$1 strip length must be shorter than the wire, in 0.1 mm steps.'],
+    [/^(\S+) 동작온도가 범위/, '$1 operating temperature is out of range.'],
+    [/^수량은 (\d+)EA 이상 (\d+)EA 단위/, 'Quantity must be at least $1 EA, in steps of $2 EA.'],
+    [/발주서는 PDF/, 'The PO file must be a PDF, image, Excel, Word or HWP file.'],
+    [/10MB까지/, 'The PO file can be up to 10 MB.']
+  ];
+  function enErr(m) {
+    for (var k = 0; k < EN_ERR.length; k++) {
+      var r = m.match(EN_ERR[k][0]);
+      if (r) return EN_ERR[k][1].replace(/\$(\d)/g, function (x, n) { return r[+n] || ''; });
+    }
+    return '';
   }
 
   var STATUS = { '접수 대기': 'st-received', '생산 지시': 'st-confirmed', '생산 중': 'st-production', '입고 완료': 'st-stocked', '출하': 'st-shipped', '취소': 'st-canceled' };
@@ -132,9 +169,9 @@
 
   // ----- 계산 -----
   var pad = function (n) { return String(n).padStart(2, '0'); };
-  var won = function (n) { return Math.round(n).toLocaleString('ko-KR') + '원'; };
+  var won = function (n) { return LANG === 'en' ? '₩' + Math.round(n).toLocaleString('en-US') : Math.round(n).toLocaleString('ko-KR') + '원'; };
   var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
-  var kday = function (d) { return (d.getMonth() + 1) + '/' + d.getDate() + '(' + '일월화수목금토'[d.getDay()] + ')'; };
+  var kday = function (d) { return LANG === 'en' ? '(' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ')' : (d.getMonth() + 1) + '/' + d.getDate() + '(' + '일월화수목금토'[d.getDay()] + ')'; };
   function digits(v) { return String(v || '').replace(/\D/g, ''); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   // 이 브라우저 저장 방식에서도 시트와 같은 모양: PO-날짜-그날의 일련번호
@@ -169,7 +206,11 @@
 
   function toast(msg) { var t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, 2600); }
   function say(el, text, isErr) { el.textContent = text || ''; el.classList.toggle('err', !!isErr); }
-  function errText(err, fallback) { return err && err.message && !/fetch|network|json|token/i.test(err.message) ? err.message : fallback; }
+  function errText(err, fallback) {
+    var m = err && err.message && !/fetch|network|json|token/i.test(err.message) ? err.message : '';
+    if (m && LANG === 'en') m = enErr(m);
+    return m || fallback;
+  }
 
   // ----- 로그인 -----
   function auth() { return { code: session.code, pw: session.pw }; }
@@ -186,7 +227,7 @@
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
-      if (!quiet) toast(d.customer.name + '으로 로그인했어요');
+      if (!quiet) toast(T(d.customer.name + '으로 로그인했어요', 'Signed in as ' + d.customer.name));
     });
   }
   function logout() {
@@ -197,46 +238,46 @@
   $('#login-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var code = $('#login-code').value.trim().toUpperCase(), pw = $('#login-pw').value, msg = $('#login-msg');
-    if (!code || !pw) { say(msg, '거래처 코드와 비밀번호를 넣어 주세요.', true); return; }
-    if (!settings.open || !api.ready) { say(msg, '아직 로그인을 받지 않아요. 정식 오픈 후에 다시 와 주세요.', true); return; }
-    say(msg, '확인하는 중이에요…'); $('#login-btn').disabled = true;
+    if (!code || !pw) { say(msg, T('거래처 코드와 비밀번호를 넣어 주세요.', 'Enter your customer code and password.'), true); return; }
+    if (!settings.open || !api.ready) { say(msg, T('아직 로그인을 받지 않아요. 정식 오픈 후에 다시 와 주세요.', 'Sign-in is not open yet. Please come back after launch.'), true); return; }
+    say(msg, T('확인하는 중이에요…', 'Checking…')); $('#login-btn').disabled = true;
     login(code, pw).then(function () { say(msg, ''); $('#login-pw').value = ''; })
-      .catch(function (err) { say(msg, errText(err, '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.'), true); })
+      .catch(function (err) { say(msg, errText(err, T('로그인하지 못했어요. 잠시 후 다시 눌러 주세요.', 'Could not sign in. Please try again in a moment.')), true); })
       .then(function () { $('#login-btn').disabled = false; });
   });
-  $('#logout').addEventListener('click', function () { logout(); show('order'); toast('로그아웃했어요'); });
+  $('#logout').addEventListener('click', function () { logout(); show('order'); toast(T('로그아웃했어요', 'Signed out')); });
 
   // ----- 사양 입력 -----
   function renderModels() {
     $('#models').innerHTML = C.products.map(function (p) {
       var b = basePrice(p.id);
-      var price = !session ? '로그인 후 단가' : b == null ? '단가 문의' : '단가 ' + won(unitPrice(p));
+      var price = !session ? T('로그인 후 단가', 'Sign in for price') : b == null ? T('단가 문의', 'Price on request') : T('단가 ', 'Unit ') + won(unitPrice(p));
       return '<button type="button" class="model" data-id="' + esc(p.id) + '" aria-pressed="' + (p.id === sel.model) + '"><b>' + esc(p.id) + '</b>' +
-        '<small>' + esc(p.name) + ' · ' + p.temp[0] + '~' + p.temp[1] + '°C</small><span class="price">' + price + '</span></button>';
+        '<small>' + esc(LANG === 'en' && p.name_en ? p.name_en : p.name) + ' · ' + p.temp[0] + '~' + p.temp[1] + '°C</small><span class="price">' + price + '</span></button>';
     }).join('');
   }
   function renderChips() {
     var p = product(sel.model), L = C.length, Q = C.qty;
     $('#len2-field').hidden = !twoWires(p);
-    $('#len-label').textContent = twoWires(p) ? '와이어 길이 1' : '와이어 길이';
+    $('#len-label').textContent = twoWires(p) ? T('와이어 길이 1', 'Wire length 1') : T('와이어 길이', 'Wire length');
     if (twoWires(p) && !$('#len2').value) $('#len2').value = $('#len').value;
-    $('#len-hint').textContent = L.min + '~' + L.max + 'mm, ' + L.step + 'mm 단위';
-    $('#temp-hint').textContent = p.id + ': ' + p.temp[0] + '~' + p.temp[1] + '°C, ' + C.tempStep + '°C 단위';
-    $('#qty-hint').textContent = '최소 ' + Q.min.toLocaleString() + 'EA, ' + Q.step + 'EA 단위';
+    $('#len-hint').textContent = L.min + '~' + L.max + 'mm, ' + T(L.step + 'mm 단위', 'in ' + L.step + ' mm steps');
+    $('#temp-hint').textContent = p.id + ': ' + p.temp[0] + '~' + p.temp[1] + '°C, ' + T(C.tempStep + '°C 단위', 'in ' + C.tempStep + '°C steps');
+    $('#qty-hint').textContent = T('최소 ' + Q.min.toLocaleString() + 'EA, ' + Q.step + 'EA 단위', 'Min. ' + Q.min.toLocaleString() + ' EA, in ' + Q.step + ' EA steps');
   }
   function validate() {
     var p = product(sel.model), L = C.length, Q = C.qty;
     var len = +$('#len').value, len2 = twoWires(p) ? +$('#len2').value : 0, temp = +$('#temp').value, qty = +$('#qty').value, errs = [];
     var badLen = function (v) { return !v || v < L.min || v > L.max || v % L.step; };
-    if (badLen(len)) errs.push('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
-    if (twoWires(p) && badLen(len2)) errs.push('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.');
+    if (badLen(len)) errs.push(T('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.', 'Enter a wire length of ' + L.min + '–' + L.max + ' mm in ' + L.step + ' mm steps.'));
+    if (twoWires(p) && badLen(len2)) errs.push(T('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.', 'Enter wire length 2 of ' + L.min + '–' + L.max + ' mm in ' + L.step + ' mm steps.'));
     // 탈피는 선택 사항: 비워 두면 0, 적으면 0.1mm 단위로 와이어 길이보다 짧게
     var strip = +$('#strip').value || 0, strip2 = twoWires(p) ? +$('#strip2').value || 0 : 0;
     var badStrip = function (v, l) { return v && (v < 0 || v >= l || Math.abs(Math.round(v * 10) - v * 10) > 1e-9); };
-    if (badStrip(strip, len)) errs.push('탈피' + (twoWires(p) ? ' 1' : '') + '은 와이어 길이보다 짧게 0.1mm 단위로 입력하세요.');
-    if (badStrip(strip2, len2)) errs.push('탈피 2는 와이어 길이 2보다 짧게 0.1mm 단위로 입력하세요.');
-    if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.');
-    if (!qty || qty < Q.min || qty % Q.step) errs.push('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.');
+    if (badStrip(strip, len)) errs.push(T('탈피' + (twoWires(p) ? ' 1' : '') + '은 와이어 길이보다 짧게 0.1mm 단위로 입력하세요.', 'Strip' + (twoWires(p) ? ' 1' : '') + ' must be shorter than the wire length, in 0.1 mm steps.'));
+    if (badStrip(strip2, len2)) errs.push(T('탈피 2는 와이어 길이 2보다 짧게 0.1mm 단위로 입력하세요.', 'Strip 2 must be shorter than wire length 2, in 0.1 mm steps.'));
+    if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(T(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.', 'Enter a ' + p.id + ' operating temperature of ' + p.temp[0] + '–' + p.temp[1] + '°C in ' + C.tempStep + '°C steps.'));
+    if (!qty || qty < Q.min || qty % Q.step) errs.push(T('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.', 'Enter a quantity of at least ' + Q.min + ' EA in ' + Q.step + ' EA steps.'));
     return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, temp: temp, qty: qty, finish: sel.finish || '', errs: errs };
   }
   function renderSpec() {
@@ -244,10 +285,10 @@
     $('#spec-code').textContent = specCode(v.p.id, v.len || 0, v.temp || 0, twoWires(v.p) ? v.len2 || 0 : 0, v.finish);
     if (v.errs.length) { $('#spec-meta').textContent = ''; $('#spec-err').textContent = v.errs[0]; add.disabled = true; return; }
     $('#spec-err').textContent = '';
-    if (!session) { $('#spec-meta').textContent = '로그인하면 우리 회사 단가로 금액이 나옵니다.'; add.disabled = true; return; }
+    if (!session) { $('#spec-meta').textContent = T('로그인하면 우리 회사 단가로 금액이 나옵니다.', 'Sign in to see the amount at your prices.'); add.disabled = true; return; }
     var u = unitPrice(v.p);
-    if (u == null) { $('#spec-meta').textContent = v.p.id + '는 아직 단가가 정해지지 않았어요. 담당 영업에 문의해 주세요.'; add.disabled = true; return; }
-    $('#spec-meta').textContent = '단가 ' + won(u) + ' × ' + v.qty.toLocaleString() + 'EA = ' + won(u * v.qty);
+    if (u == null) { $('#spec-meta').textContent = T(v.p.id + '는 아직 단가가 정해지지 않았어요. 담당 영업에 문의해 주세요.', v.p.id + ' has no price for your account yet. Please contact your sales representative.'); add.disabled = true; return; }
+    $('#spec-meta').textContent = T('단가 ', 'Unit price ') + won(u) + ' × ' + v.qty.toLocaleString() + 'EA = ' + won(u * v.qty);
     add.disabled = false;
   }
   function selectModel(id) {
@@ -271,9 +312,9 @@
   function renderCart() {
     $('#cart').innerHTML = cart.map(function (i, k) {
       return '<li class="cart-item"><code>' + esc(i.code) + '</code><span class="money">' + won(i.unit * i.qty) + '</span>' +
-        '<div class="sub"><label for="cq-' + k + '">수량</label><input class="num" id="cq-' + k + '" data-k="' + k + '" type="number" step="' + C.qty.step + '" min="' + C.qty.min + '" value="' + i.qty + '">' +
+        '<div class="sub"><label for="cq-' + k + '">' + T('수량', 'Qty') + '</label><input class="num" id="cq-' + k + '" data-k="' + k + '" type="number" step="' + C.qty.step + '" min="' + C.qty.min + '" value="' + i.qty + '">' +
         '<span>× ' + won(i.unit) + '</span>' + (stripText(i) ? '<span>· ' + esc(stripText(i)) + '</span>' : '') + (i.memo ? '<span>· ' + esc(i.memo) + '</span>' : '') +
-        '<button type="button" class="btn ghost small" data-del="' + k + '">빼기</button></div></li>';
+        '<button type="button" class="btn ghost small" data-del="' + k + '">' + T('빼기', 'Remove') + '</button></div></li>';
     }).join('');
     $('#cart-empty').hidden = cart.length > 0;
     $('#cart-sum').hidden = !cart.length;
@@ -281,9 +322,10 @@
     if (!cart.length) { $('#checkout').hidden = true; return; }
     var t = totals(cart), d = addBizDays(leadDays(cart));
     $('#sum-net').textContent = won(t.net); $('#sum-vat').textContent = won(t.vat); $('#sum-total').textContent = won(t.total);
-    $('#eta').innerHTML = '오늘 확정하면 생산 소요 <b>' + leadDays(cart) + '영업일</b>, 예상 출하일 <b>' + ymd(d) + '</b> ' + kday(d) + '.<br>선주문 생산이라 재고 출고는 없습니다.';
+    $('#eta').innerHTML = T('오늘 확정하면 생산 소요 <b>' + leadDays(cart) + '영업일</b>, 예상 출하일 <b>' + ymd(d) + '</b> ' + kday(d) + '.<br>선주문 생산이라 재고 출고는 없습니다.',
+      'If you order today: production takes <b>' + leadDays(cart) + ' business days</b>, estimated ship date <b>' + ymd(d) + '</b> ' + kday(d) + '.<br>All items are built to order; nothing ships from stock.');
     var di = $('#c-date'); di.min = ymd(d); if (!di.value || di.value < ymd(d)) di.value = ymd(d);
-    $('#date-hint').textContent = '가장 빠른 출하일 ' + ymd(d);
+    $('#date-hint').textContent = T('가장 빠른 출하일 ', 'Earliest ship date ') + ymd(d);
   }
   function addToCart() {
     var v = validate(); if (v.errs.length || !session) return;
@@ -294,7 +336,7 @@
     else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
-    toast(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다');
+    toast(T(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다', 'Added ' + code + ' × ' + v.qty.toLocaleString() + ' EA'));
   }
 
   // ----- 발주 확정 -----
@@ -305,11 +347,11 @@
   function submitOrder(e) {
     e.preventDefault();
     var err = $('#checkout-err');
-    if (!session) { err.textContent = '로그인한 뒤에 발주할 수 있어요.'; return; }
+    if (!session) { err.textContent = T('로그인한 뒤에 발주할 수 있어요.', 'Please sign in to place an order.'); return; }
     var v = { name: $('#c-name').value.trim(), phone: $('#c-phone').value.trim(), po: $('#c-po').value.trim(), addr: $('#c-addr').value.trim() };
-    var miss = [['name', '담당자'], ['phone', '연락처'], ['addr', '납품 주소']].filter(function (x) { return !v[x[0]]; }).map(function (x) { return x[1]; });
-    if (miss.length) { err.textContent = miss.join(', ') + '을(를) 입력하세요.'; return; }
-    if (digits(v.phone).length < 8) { err.textContent = '연락처를 숫자 8자리 이상으로 적어 주세요.'; return; }
+    var miss = [['name', T('담당자', 'contact name')], ['phone', T('연락처', 'phone')], ['addr', T('납품 주소', 'delivery address')]].filter(function (x) { return !v[x[0]]; }).map(function (x) { return x[1]; });
+    if (miss.length) { err.textContent = T(miss.join(', ') + '을(를) 입력하세요.', 'Please enter ' + miss.join(', ') + '.'); return; }
+    if (digits(v.phone).length < 8) { err.textContent = T('연락처를 숫자 8자리 이상으로 적어 주세요.', 'Please enter a phone number with at least 8 digits.'); return; }
     if (!cart.length) return;
     var ship = addBizDays(leadDays(cart)), t = totals(cart);
     var order = {
@@ -319,9 +361,9 @@
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
-    if (f && !ATTACH_OK.test(f.name)) { err.textContent = '발주서는 PDF, 사진, 엑셀, 워드, 한글 파일만 첨부할 수 있어요.'; return; }
-    if (f && f.size > 10 * 1024 * 1024) { err.textContent = '발주서 파일은 10MB까지 첨부할 수 있어요.'; return; }
-    $('#submit-btn').disabled = true; err.textContent = f ? '발주서와 함께 보내는 중이에요…' : '발주를 보내는 중이에요…';
+    if (f && !ATTACH_OK.test(f.name)) { err.textContent = T('발주서는 PDF, 사진, 엑셀, 워드, 한글 파일만 첨부할 수 있어요.', 'The PO file must be a PDF, image, Excel, Word or HWP file.'); return; }
+    if (f && f.size > 10 * 1024 * 1024) { err.textContent = T('발주서 파일은 10MB까지 첨부할 수 있어요.', 'The PO file can be up to 10 MB.'); return; }
+    $('#submit-btn').disabled = true; err.textContent = f ? T('발주서와 함께 보내는 중이에요…', 'Sending your order with the PO file…') : T('발주를 보내는 중이에요…', 'Sending your order…');
     readFile(f).then(function (att) {
       if (att) order.attachment = att;
       return api.submit(auth(), order);
@@ -331,10 +373,11 @@
       cart = []; saveCart(); renderCart();
       $('#checkout').hidden = true; $('#done').hidden = false;
       $('#done-no').textContent = saved.no;
-      $('#done-text').textContent = session.customer.name + ' 발주가 접수되었습니다. 회사에서 생산을 확정하면 주문 조회의 상태가 바뀝니다. 합계 ' + won(saved.total || t.total) + ', 희망 출하일 ' + (saved.requestedDate || order.requestedDate) + '.';
+      $('#done-text').textContent = T(session.customer.name + ' 발주가 접수되었습니다. 회사에서 생산을 확정하면 주문 조회의 상태가 바뀝니다. 합계 ' + won(saved.total || t.total) + ', 희망 출하일 ' + (saved.requestedDate || order.requestedDate) + '.',
+        'We have received the order from ' + session.customer.name + '. The status in My orders changes when we confirm production. Total ' + won(saved.total || t.total) + ', requested ship date ' + (saved.requestedDate || order.requestedDate) + '.');
       $('#done').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }).catch(function (e2) {
-      err.textContent = errText(e2, '발주를 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+      err.textContent = errText(e2, T('발주를 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', 'Could not send the order. Check your connection and try again.'));
     }).then(function () { $('#submit-btn').disabled = false; });
   }
 
@@ -345,7 +388,7 @@
     return new Promise(function (ok, fail) {
       var r = new FileReader();
       r.onload = function () { ok({ name: f.name, data: String(r.result).split(',')[1] || '' }); };
-      r.onerror = function () { fail(new Error('발주서 파일을 읽지 못했어요. 다시 골라 주세요.')); };
+      r.onerror = function () { fail(new Error(T('발주서 파일을 읽지 못했어요. 다시 골라 주세요.', 'Could not read the PO file. Please choose it again.'))); };
       r.readAsDataURL(f);
     });
   }
@@ -355,8 +398,8 @@
     try { var a = new URL(u, location.href), b = new URL(settings.orderUrl || '', location.href); return a.origin === b.origin && /^\/files\/[0-9a-f]{32}\//.test(a.pathname); } catch (e) { return false; }
   }
   function fileLink(o) {
-    if (/^https:\/\/(drive|docs)\.google\.com\//.test(o.attachment || '') || serverFile(o.attachment || '')) return '<div class="order-items"><a href="' + esc(o.attachment) + '" target="_blank" rel="noopener">발주서 보기</a></div>';
-    return o.attachmentName ? '<div class="order-items">발주서 ' + esc(o.attachmentName) + '</div>' : '';
+    if (/^https:\/\/(drive|docs)\.google\.com\//.test(o.attachment || '') || serverFile(o.attachment || '')) return '<div class="order-items"><a href="' + esc(o.attachment) + '" target="_blank" rel="noopener">' + T('발주서 보기', 'View PO file') + '</a></div>';
+    return o.attachmentName ? '<div class="order-items">' + T('발주서 ', 'PO file ') + esc(o.attachmentName) + '</div>' : '';
   }
 
   // ----- 최근 사양 (이 기기) -----
@@ -375,45 +418,45 @@
   // ----- 주문 조회 -----
   // 예전 상태 이름으로 남은 발주는 새 이름으로 보여 준다
   var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
-  function pill(s) { s = OLD_STATUS[s] || s; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(s || '접수 대기') + '</span>'; }
+  function pill(s) { s = OLD_STATUS[s] || s || '접수 대기'; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(LANG === 'en' ? STATUS_EN[s] || s : s) + '</span>'; }
   // 마감(T, TD)을 이름과 함께 보여 준다. 마감 칸이 생기기 전 발주는 "기록 없음"
   function finishTag(i) {
     if (!finishes().length) return '';
     var f = finishes().filter(function (x) { return x.code === i.finish; })[0];
-    return '<div class="item-finish">마감: ' + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : '마감 없음') + '</div>';
+    return '<div class="item-finish">' + T('마감: ', 'Finish: ') + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : T('마감 없음', 'none')) + '</div>';
   }
   // 탈피 길이: 와이어가 두 줄이면 1·2를 나눠 적는다. 적지 않았으면 빈 글자
   function stripText(i) {
     var a = +i.strip || 0, b = +i.strip2 || 0;
     if (!a && !b) return '';
-    return '탈피 ' + (i.len2 ? '1: ' + (a ? a + 'mm' : '없음') + ', 2: ' + (b ? b + 'mm' : '없음') : a + 'mm');
+    return T('탈피 ', 'Strip ') + (i.len2 ? '1: ' + (a ? a + 'mm' : T('없음', 'none')) + ', 2: ' + (b ? b + 'mm' : T('없음', 'none')) : a + 'mm');
   }
   // 품목 메모는 사양 코드 아래에 작게 보여 준다
   function itemsHtml(o) {
     return '<ul class="order-items">' + o.items.map(function (i) {
-      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.memo ? '<div class="item-memo">메모: ' + esc(i.memo) + '</div>' : '') + '</li>';
+      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.memo ? '<div class="item-memo">' + T('메모: ', 'Memo: ') + esc(i.memo) + '</div>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   // 담당자가 예상 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다 (시트 칸 이름은 '확정 출하일' 그대로)
   function shipText(o) {
-    return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">예상 출하일</div>'
-      : esc(o.requestedDate) + '<div class="order-items">희망 · 예상일 미정</div>';
+    return o.shipDate ? '<b>' + esc(o.shipDate) + '</b><div class="order-items">' + T('예상 출하일', 'Estimated') + '</div>'
+      : esc(o.requestedDate) + '<div class="order-items">' + T('희망 · 예상일 미정', 'Requested · not yet scheduled') + '</div>';
   }
   function loadHistory() {
     var msg = $('#history-msg');
-    if (!session) { $('#history-wrap').hidden = true; say(msg, '주문하기 화면에서 거래처 로그인을 하면 발주 내역이 보입니다.'); return; }
-    say(msg, '불러오는 중이에요…');
+    if (!session) { $('#history-wrap').hidden = true; say(msg, T('주문하기 화면에서 거래처 로그인을 하면 발주 내역이 보입니다.', 'Sign in on the Order page to see your orders.')); return; }
+    say(msg, T('불러오는 중이에요…', 'Loading…'));
     api.mine(auth()).then(function (list) {
       history = list || [];
       $('#history-wrap').hidden = !history.length;
-      say(msg, history.length ? '' : '아직 접수한 발주가 없어요.');
+      say(msg, history.length ? '' : T('아직 접수한 발주가 없어요.', 'You have no orders yet.'));
       $('#history-body').innerHTML = history.map(function (o) {
-        return '<tr><td class="mono">' + esc(o.no) + (o.customerPo ? '<div class="order-items">귀사 PO ' + esc(o.customerPo) + '</div>' : '') + fileLink(o) + '</td>' +
+        return '<tr><td class="mono">' + esc(o.no) + (o.customerPo ? '<div class="order-items">' + T('귀사 PO ', 'Your PO ') + esc(o.customerPo) + '</div>' : '') + fileLink(o) + '</td>' +
           '<td class="mono">' + esc(kst(o.createdAt).slice(0, 10)) + '</td><td>' + itemsHtml(o) + '</td>' +
           '<td class="mono">' + won(o.total) + '</td><td class="mono">' + shipText(o) + '</td><td>' + pill(o.status) + '</td>' +
-          '<td><button type="button" class="btn ghost small" data-reorder="' + esc(o.no) + '">재주문</button></td></tr>';
+          '<td><button type="button" class="btn ghost small" data-reorder="' + esc(o.no) + '">' + T('재주문', 'Reorder') + '</button></td></tr>';
       }).join('');
-    }).catch(function (err) { say(msg, errText(err, '불러오지 못했어요. 잠시 후 다시 열어 주세요.'), true); });
+    }).catch(function (err) { say(msg, errText(err, T('불러오지 못했어요. 잠시 후 다시 열어 주세요.', 'Could not load your orders. Please try again in a moment.')), true); });
   }
   function reorder(no) {
     var o = history.filter(function (x) { return x.no === no; })[0]; if (!o) return;
@@ -424,7 +467,8 @@
       n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
-    toast(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''));
+    toast(T(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''),
+      'Added ' + n + ' item(s) from ' + o.no + ' at current prices' + (skipped ? ' (' + skipped + ' without a price skipped)' : '')));
   }
 
   // ----- 관리 -----
@@ -790,6 +834,31 @@
     if (e.target.dataset.ship) saveShip(e.target);
   });
 
+  // ----- 언어 바꾸기 -----
+  // 화면 글자는 index.html의 data-en(영어), data-en-ph(입력란 안내)에 적어 두고 여기서 바꿔 끼운다.
+  function applyLang() {
+    document.documentElement.lang = LANG;
+    document.title = T('SEKI POmall 발주', 'SEKI POmall Order');
+    document.querySelectorAll('[data-en]').forEach(function (el) {
+      if (el.dataset.ko == null) el.dataset.ko = el.innerHTML;
+      el.innerHTML = LANG === 'en' ? el.dataset.en : el.dataset.ko;
+    });
+    document.querySelectorAll('[data-en-ph]').forEach(function (el) {
+      if (el.dataset.koPh == null) el.dataset.koPh = el.placeholder;
+      el.placeholder = LANG === 'en' ? el.dataset.enPh : el.dataset.koPh;
+    });
+    var b = $('#lang-btn'); b.textContent = T('English', '한국어'); b.lang = T('en', 'ko');
+  }
+  $('#lang-btn').addEventListener('click', function () {
+    LANG = T('en', 'ko'); store(KEY.lang, LANG); applyLang();
+    // 주소의 ?lang= 도 맞춰 바꿔서, 새로고침하거나 주소를 복사해도 고른 언어로 열린다
+    try { var u = new URL(location.href); u.searchParams.set('lang', LANG); window.history.replaceState(null, '', u); } catch (e) {}
+    if (!C) return;
+    renderModels(); renderChips(); renderFinish(); renderSpec(); renderCart(); renderRecent();
+    if (!$('#view-history').hidden) loadHistory();
+  });
+  applyLang();
+
   // ----- 시작 -----
   Promise.all([
     fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; }),
@@ -810,10 +879,10 @@
       renderSession(); renderCart();
       // 저장된 로그인으로 단가를 새로 받아 온다. 비밀번호가 바뀌었거나 중지된 거래처면 로그아웃한다.
       login(session.code, session.pw, true).catch(function (err) {
-        if (/맞지|중지/.test((err && err.message) || '')) { logout(); toast('다시 로그인해 주세요'); }
+        if (/맞지|중지/.test((err && err.message) || '')) { logout(); toast(T('다시 로그인해 주세요', 'Please sign in again')); }
       });
     } else { session = null; renderSession(); renderCart(); }
   }).catch(function () {
-    $('#models').innerHTML = '<p class="msg err">제품 목록을 불러오지 못했어요. 새로고침해 주세요.</p>';
+    $('#models').innerHTML = '<p class="msg err">' + T('제품 목록을 불러오지 못했어요. 새로고침해 주세요.', 'Could not load the product list. Please refresh the page.') + '</p>';
   });
 })();
