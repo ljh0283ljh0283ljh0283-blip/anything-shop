@@ -10,7 +10,8 @@
 // 가격은 손님 브라우저가 보낸 값이 아니라 "운영 상품"·"판매자 상품" 탭으로 다시 계산합니다.
 
 var PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/products.json';
-var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태'];
+var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태', '판매자별 금액'];
+var OWN_SELLER = '무엇이든 상점';
 
 var SELLER_TAB = '판매자 신청';
 var SELLER_HEADER = ['신청 시각', '상점', '판매자 이름', '실명', '연락처', '이메일', '구분', '사업자등록번호', '팔고 싶은 것', '은행', '계좌번호', '예금주', '상태', '로그인 열쇠', '아이디', '비밀번호'];
@@ -68,12 +69,14 @@ function placeOrder(d) {
   list.forEach(function (p) { if (!p.sample) byId[p.id] = p; });   // 샘플 상품은 주문을 받지 않는다
   publicItems().forEach(function (p) { byId[p.id] = p; });
 
-  var total = 0, lines = [], sellers = [];
+  var total = 0, lines = [], sellers = [], bySeller = {};
   (d.items || []).forEach(function (it) {
     var p = byId[it.id];
     var qty = Math.max(1, Math.min(99, Math.floor(Number(it.qty) || 0)));
     if (!p) return;
     total += Number(p.price) * qty;
+    var who = p.seller || OWN_SELLER;
+    bySeller[who] = (bySeller[who] || 0) + Number(p.price) * qty;
     lines.push(p.name + ' × ' + qty + ' (' + Number(p.price).toLocaleString() + '원)');
     if (p.seller && sellers.indexOf(p.seller) < 0) sellers.push(p.seller);
   });
@@ -81,10 +84,11 @@ function placeOrder(d) {
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   if (sheet.getLastRow() === 0) sheet.appendRow(HEADER);
+  else if (!sheet.getRange(1, HEADER.length).getValue()) sheet.getRange(1, HEADER.length).setValue(HEADER[HEADER.length - 1]);
   var orderNo = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 90 + 10);
   // 수식으로 해석되지 않도록 손님이 적은 칸은 글자로 저장한다
   sheet.appendRow([orderNo, new Date(), text(name), "'" + phone, text(clip(d.place, 100)), text(clip(d.memo, 200)),
-    text(clip(d.payer, 20) || name), lines.join('\n'), sellers.join(', '), total, '입금 대기']);
+    text(clip(d.payer, 20) || name), lines.join('\n'), sellers.join(', '), total, '입금 대기', JSON.stringify(bySeller)]);
 
   // 판매자가 직접 등록한 계좌는 주문한 손님에게만 알려 준다
   var accounts = {};
@@ -93,6 +97,31 @@ function placeOrder(d) {
     if (sellers.indexOf(nick) >= 0 && r.row[S.acct]) accounts[nick] = { name: String(r.row[S.bank]), account: String(r.row[S.acct]), holder: String(r.row[S.holder]) };
   });
   return { ok: true, orderNo: orderNo, total: total, accounts: accounts };
+}
+
+// 판매 기록: 주문 한 건을 판매자별로 나눈 줄 [{ day, seller, amount, orderNo, status }]. 상태에 "취소"가 들어간 주문은 뺀다.
+// 예전 주문(판매자별 금액 칸이 없는 것)은 판매자가 하나면 그 판매자 몫으로, 여럿이면 나눌 수 없는 주문으로 센다.
+function salesRows() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var last = sheet.getLastRow();
+  if (last < 2) return [];
+  var rows = sheet.getRange(2, 1, last - 1, HEADER.length).getValues(), out = [];
+  rows.forEach(function (r) {
+    var status = String(r[10] || ''), at = r[1];
+    if (!r[0] || status.indexOf('취소') >= 0 || !(at instanceof Date)) return;
+    var by = null;
+    try { by = r[11] ? JSON.parse(r[11]) : null; } catch (e) { by = null; }
+    if (!by) {
+      var names = String(r[8] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      by = {};
+      by[names.length === 1 ? names[0] : names.length ? '(여러 판매자 · 나눔 정보 없음)' : OWN_SELLER] = Number(r[9]) || 0;
+    }
+    var day = Utilities.formatDate(at, 'Asia/Seoul', 'yyyy-MM-dd');
+    Object.keys(by).forEach(function (who) {
+      out.push({ day: day, seller: who, amount: Number(by[who]) || 0, orderNo: String(r[0]), status: status });
+    });
+  });
+  return out;
 }
 
 // ---------- 판매자 ----------
@@ -256,6 +285,7 @@ function admin(d) {
           email: String(r.row[S.email]), kind: String(r.row[S.kind]), status: String(r.row[S.status] || ACTIVE), at: stamp(r.row[S.at]) };
       }).reverse() };
   }
+  if (d.action === 'adminSales') return { ok: true, sales: salesRows() };
   if (d.action === 'adminSave') {
     var r = findItem(d.id);
     if (!r) return { ok: false, error: '없는 상품이에요.' };
