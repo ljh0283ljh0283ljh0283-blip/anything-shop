@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016c">
+<link rel="stylesheet" href="style.css?v=20261016d">
 </head>
 <body>
 
@@ -116,7 +116,7 @@
         <div id="cart-sum" hidden>
           <div class="totals">
             <span data-en="Subtotal">공급가액</span><span class="money" id="sum-net"></span>
-            <span data-en="VAT 10%">부가세 10%</span><span class="money" id="sum-vat"></span>
+            <span id="sum-vat-label">부가세 10%</span><span class="money" id="sum-vat"></span>
             <span class="grand" data-en="Total">합계</span><span class="money grand" id="sum-total"></span>
           </div>
           <div class="eta" id="eta"></div>
@@ -246,6 +246,7 @@
           <div class="field full"><label for="cu-addr">기본 납품 주소</label><input id="cu-addr" maxlength="120"></div>
           <div class="field"><label for="cu-pw">비밀번호</label><input id="cu-pw" maxlength="40" autocomplete="new-password"><span class="hint" id="cu-pw-hint">거래처에 알려줄 비밀번호 (4자 이상)</span></div>
           <div class="field"><label for="cu-discount">할인율 <span class="hint">(선택)</span></label><div class="inrow"><input class="num" id="cu-discount" type="number" min="0" max="99" step="0.1" inputmode="decimal" placeholder="0"><span class="unit">%</span></div><span class="hint">이 거래처의 모든 모델 단가에서 깎아 줄 비율이에요. 비우면 적은 단가 그대로예요.</span></div>
+          <div class="field"><label for="cu-vat">부가세</label><select id="cu-vat"><option value="0">10% (국내)</option><option value="1">없음 (수출, 0%)</option></select><span class="hint">해외 바이어처럼 영세율로 파는 거래처는 "없음"을 고르세요.</span></div>
           <div class="field"><label for="cu-active">상태</label><select id="cu-active"><option value="1">사용</option><option value="0">중지 (로그인 막기)</option></select></div>
           <div class="field full">
             <span class="label">모델 단가 (원 / EA)</span>
@@ -290,6 +291,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261016c"></script>
+<script src="app.js?v=20261016d"></script>
 </body>
 </html>
