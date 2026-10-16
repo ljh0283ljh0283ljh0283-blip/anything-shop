@@ -25,6 +25,8 @@ const cfg = Object.assign({
   siteDir: '../pomall',
   publicUrl: '',          // 예: https://pomall.seki.co.kr  (발주서 링크에 쓰임. 비우면 요청 주소로 만든다)
   allowOrigin: '*',       // 사이트를 다른 주소(GitHub Pages)에 두면 그 주소, 예: https://ljh0283ljh0283ljh0283-blip.github.io
+  backupDir: './backup',  // 매일 자동 백업할 폴더. 다른 디스크나 OneDrive 폴더로 바꾸면 더 안전하다. 비우면 백업 안 함
+  backupDays: 30,         // 데이터베이스 백업을 며칠치 남길지
   adminKey: '', salesKey: '', viewKey: ''
 }, fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {});
 // 열쇠는 환경 변수로도 줄 수 있다 (config.json에 적지 않으려면)
@@ -415,11 +417,33 @@ const server = http.createServer((req, res) => {
   serveFile(res, f, MIME[path.extname(f).toLowerCase()] || 'application/octet-stream', { 'Cache-Control': 'no-cache' });
 });
 
+// ----- 매일 자동 백업 -----
+// 하루 한 번 데이터베이스를 backupDir/pomall-YYYYMMDD.db 로 복사하고, 새 발주서 파일도 backupDir/files 로 복사한다.
+function backup() {
+  if (!cfg.backupDir) return;
+  const dir = here(cfg.backupDir);
+  const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+  const file = path.join(dir, 'pomall-' + day + '.db');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(file)) {
+      db.exec("VACUUM INTO '" + file.replace(/'/g, "''") + "'");
+      fs.cpSync(FILES_DIR, path.join(dir, 'files'), { recursive: true, force: false, errorOnExist: false });
+      const keep = Number(cfg.backupDays) || 30;
+      fs.readdirSync(dir).filter(n => /^pomall-\d{8}\.db$/.test(n)).sort().slice(0, -keep)
+        .forEach(n => fs.unlinkSync(path.join(dir, n)));
+      console.log('백업했어요: ' + file);
+    }
+  } catch (e) { console.error('백업하지 못했어요: ' + e.message); }
+}
+
 if (require.main === module) {
   if (!cfg.adminKey || cfg.adminKey.length < 8) {
     console.error('관리자 열쇠(adminKey)를 8자 이상으로 config.json에 적어 주세요. config.example.json을 보고 만들면 됩니다.');
     process.exit(1);
   }
   server.listen(cfg.port, () => console.log('SEKI POmall 서버가 켜졌어요: http://localhost:' + cfg.port + '  (자료 폴더: ' + DATA_DIR + ')'));
+  backup();
+  setInterval(backup, 3600e3);
 }
-module.exports = { server, db, handle, cfg, hash };
+module.exports = { server, db, handle, cfg, hash, backup };
