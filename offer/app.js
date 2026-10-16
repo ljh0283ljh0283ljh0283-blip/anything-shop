@@ -37,8 +37,7 @@
   fetch('settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
       if (j) settings = j;
-      // settings.json의 open이 false면 "오픈 준비 중" 안내를 띄우고 제안을 받지 않는다
-      $('#notice').hidden = settings.open !== false;
+      // settings.json의 open이 false면 제안을 받지 않는다
       loadBids();
       renderMine();
     }).catch(function () {});
@@ -196,7 +195,7 @@
     $('#offer-step').hidden = false;
     $('#receipt').hidden = true;
     renderDetail();
-    if (!isOpen()) oSay('지금은 오픈 준비 중이라 제안을 받지 않아요. 정식 오픈 후에 제안해 주세요.', true);
+    if (!isOpen()) oSay('지금은 제안을 받지 않아요.', true);
     else oSay('');
     if (!products[id].closed && !products[id].sample) offerForm.oprice.focus();
   }

@@ -274,9 +274,9 @@
       }).catch(function () {});
   }
 
-  // settings.json의 open이 false면 "오픈 준비 중" 안내를 띄우고 주문을 받지 않는다
+  // settings.json의 open이 false면 주문을 받지 않는다
   function isOpen() { return settings.open !== false && !!settings.orderUrl; }
-  function applyOpen() { $('#notice').hidden = settings.open !== false; }
+  function applyOpen() {}
 
   var orderForm = $('#order-form'), oMsg = $('#o-msg');
   function oSay(t, isErr) { oMsg.textContent = t; oMsg.classList.toggle('err', !!isErr); }
@@ -306,7 +306,7 @@
     $('#o-total').textContent = won(total);
     $('#order-step').hidden = false;
     $('#receipt').hidden = true;
-    if (!isOpen()) oSay('지금은 오픈 준비 중이라 주문을 받지 않아요. 정식 오픈 후에 주문해 주세요.', true);
+    if (!isOpen()) oSay('지금은 주문을 받지 않아요.', true);
     else oSay('');
     $('#o-submit').disabled = !isOpen();
     openPanel($('#order'), from);
