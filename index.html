@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016f">
+<link rel="stylesheet" href="style.css?v=20261016g">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -31,7 +31,7 @@
       <a href="#products">상품</a>
       <a href="#about">소개</a>
       <a href="offer/">어떻게든 팔거야</a>
-      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>내 상품 올리기</button>
+      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>판매자 코너</button>
       <button class="admin-btn" id="open-manage" type="button" aria-controls="admin" hidden>관리</button>
       <button class="cart-btn" id="open-cart" type="button" aria-controls="cart">장바구니 <span class="count" id="cart-count">0</span></button>
     </nav>
@@ -212,6 +212,10 @@
       <button class="primary" id="admin-go" type="button">관리자로 들어가기</button>
     </div>
     <section class="signup" id="seller-signup" hidden data-shop="무엇이든 상점" data-settings="settings.json" data-terms="terms/" aria-label="판매자 되기"></section>
+    <div class="admin-tabs" id="seller-tabs" hidden>
+      <button type="button" data-stab="items" aria-pressed="true">내 상품</button>
+      <button type="button" data-stab="sales" aria-pressed="false">판매 기록</button>
+    </div>
     <div class="admin-tabs" id="admin-tabs" hidden>
       <button type="button" data-tab="items" aria-pressed="true">판매자 상품</button>
       <button type="button" data-tab="sellers" aria-pressed="false">판매자</button>
@@ -245,7 +249,7 @@
           <p class="sales-note">기간 줄을 누르면 그 기간의 주문이 아래에 보여요.</p>
           <h4 class="sales-sub" id="sales-list-title">주문 목록</h4>
           <table class="sales-table">
-            <thead><tr><th>주문번호</th><th>날짜</th><th class="num">금액</th><th>상태</th></tr></thead>
+            <thead><tr><th>주문번호</th><th>날짜</th><th>상품</th><th class="num">금액</th><th>상태</th></tr></thead>
             <tbody id="sales-orders"></tbody>
           </table>
         </div>
@@ -303,7 +307,7 @@
   </div>
 </aside>
 
-<script src="app.js?v=20261016f"></script>
-<script src="seller.js?v=20261016f"></script>
+<script src="app.js?v=20261016g"></script>
+<script src="seller.js?v=20261016g"></script>
 </body>
 </html>

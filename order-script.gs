@@ -10,7 +10,7 @@
 // 가격은 손님 브라우저가 보낸 값이 아니라 "운영 상품"·"판매자 상품" 탭으로 다시 계산합니다.
 
 var PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/products.json';
-var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태', '판매자별 금액'];
+var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태', '판매자별 금액', '판매자별 상품'];
 // 판매자 칸이 비어 있는 상품(운영자가 직접 올린 상품)의 판매자: 판매 기록에 이 이름으로 잡힌다
 var OWN_SELLER = '빨간도령';
 
@@ -47,6 +47,7 @@ function doPost(e) {
     if (d.action === 'sellerMe') return reply(sellerMe(d.key));
     if (d.action === 'sellerPassword') return reply(sellerPassword(d));
     if (d.action === 'sellerEmail') return reply(sellerEmail(d));
+    if (d.action === 'sellerSales') return reply(sellerSales(d));
     if (d.action === 'sellerFindStart') return reply(sellerFindStart(d));
     if (d.action === 'sellerFindFinish') return reply(sellerFindFinish(d));
     if (String(d.action || '').indexOf('admin') === 0) return reply(admin(d));
@@ -70,7 +71,7 @@ function placeOrder(d) {
   list.forEach(function (p) { if (!p.sample) byId[p.id] = p; });   // 샘플 상품은 주문을 받지 않는다
   publicItems().forEach(function (p) { byId[p.id] = p; });
 
-  var total = 0, lines = [], sellers = [], bySeller = {};
+  var total = 0, lines = [], sellers = [], bySeller = {}, goodsBySeller = {};
   (d.items || []).forEach(function (it) {
     var p = byId[it.id];
     var qty = Math.max(1, Math.min(99, Math.floor(Number(it.qty) || 0)));
@@ -79,13 +80,14 @@ function placeOrder(d) {
     var who = p.seller || OWN_SELLER;
     bySeller[who] = (bySeller[who] || 0) + Number(p.price) * qty;
     lines.push(p.name + ' × ' + qty + ' (' + Number(p.price).toLocaleString() + '원)');
+    (goodsBySeller[who] = goodsBySeller[who] || []).push(p.name + ' × ' + qty);
     if (p.seller && sellers.indexOf(p.seller) < 0) sellers.push(p.seller);
   });
   if (!lines.length) return { ok: false, error: '주문할 상품이 없어요.' };
 
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   if (sheet.getLastRow() === 0) sheet.appendRow(HEADER);
-  else if (!sheet.getRange(1, HEADER.length).getValue()) sheet.getRange(1, HEADER.length).setValue(HEADER[HEADER.length - 1]);
+  else for (var h = 12; h <= HEADER.length; h++) { if (!sheet.getRange(1, h).getValue()) sheet.getRange(1, h).setValue(HEADER[h - 1]); }
   // 주문번호: 날짜(yyMMdd)-시분(HHmm, 한국 시간)-임의의 두 자리-그날 들어온 순서(1부터). 예: 261016-0928-59-3
   var now = new Date(), today = Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd');
   var seq = 1;
@@ -97,7 +99,7 @@ function placeOrder(d) {
   var orderNo = today + '-' + Utilities.formatDate(now, 'Asia/Seoul', 'HHmm') + '-' + Math.floor(Math.random() * 90 + 10) + '-' + seq;
   // 수식으로 해석되지 않도록 손님이 적은 칸은 글자로 저장한다
   sheet.appendRow([orderNo, now, text(name), "'" + phone, text(clip(d.place, 100)), text(clip(d.memo, 200)),
-    text(clip(d.payer, 20) || name), lines.join('\n'), sellers.join(', '), total, '입금 대기', JSON.stringify(bySeller)]);
+    text(clip(d.payer, 20) || name), lines.join('\n'), sellers.join(', '), total, '입금 대기', JSON.stringify(bySeller), JSON.stringify(goodsBySeller)]);
 
   // 판매자가 직접 등록한 계좌는 주문한 손님에게만 알려 준다
   var accounts = {};
@@ -125,9 +127,13 @@ function salesRows() {
       by = {};
       by[names.length === 1 ? names[0] : names.length ? '(여러 판매자 · 나눔 정보 없음)' : OWN_SELLER] = Number(r[9]) || 0;
     }
-    var day = Utilities.formatDate(at, 'Asia/Seoul', 'yyyy-MM-dd');
-    Object.keys(by).forEach(function (who) {
-      out.push({ day: day, seller: who, amount: Number(by[who]) || 0, orderNo: String(r[0]), status: status });
+    var goods = null;
+    try { goods = r[12] ? JSON.parse(r[12]) : null; } catch (e) { goods = null; }
+    var day = Utilities.formatDate(at, 'Asia/Seoul', 'yyyy-MM-dd'), keys = Object.keys(by);
+    keys.forEach(function (who) {
+      // 판매자별 상품 칸이 없는 예전 주문은 판매자가 하나일 때만 상품 칸을 그대로 쓴다
+      var items = goods && goods[who] ? goods[who].join(', ') : keys.length === 1 ? String(r[7] || '').replace(/ \([0-9,]+원\)/g, '').split('\n').join(', ') : '';
+      out.push({ day: day, seller: who, amount: Number(by[who]) || 0, orderNo: String(r[0]), status: status, items: items });
     });
   });
   return out;
@@ -190,6 +196,13 @@ function sellerEmail(d) {
   if (!isEmail(d.email)) return { ok: false, error: '이메일 주소를 확인해 주세요.' };
   sellerSheet().getRange(hit.index, S.email + 1).setValue(normEmail(d.email));
   return { ok: true };
+}
+
+// 로그인한 판매자에게 자기 판매 기록만 돌려준다(손님 이름·연락처는 넣지 않는다)
+function sellerSales(d) {
+  var me = sellerByKey(d.key);
+  if (!me) return { ok: false, error: '다시 로그인해 주세요.' };
+  return { ok: true, sales: salesRows().filter(function (r) { return r.seller === me.nick; }) };
 }
 
 // ---------- 아이디·비밀번호 찾기 (이메일 인증번호) ----------
