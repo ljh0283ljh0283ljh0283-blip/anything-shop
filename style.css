@@ -88,7 +88,7 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 @media (prefers-reduced-motion: reduce) { .panel, .product { transition: none; } .cart-btn.bump .count { animation: none; } }
 
 /* v3: 상품 관리 */
-.admin-btn { padding: 6px 14px; border-radius: 999px; border: 1px dashed var(--accent); background: transparent; color: var(--accent); font-size: .9rem; font-weight: 500; }
+.admin-btn { padding: 6px 14px; border-radius: 999px; border: 1px dashed var(--accent); background: transparent; color: var(--accent); font-size: .9rem; font-weight: 500; white-space: nowrap; }
 .status { color: var(--muted); margin: 0 0 16px; }
 .status:empty { display: none; }
 
