@@ -496,64 +496,94 @@
     adminList.appendChild(li);
   }
 
-  // 판매 기록: 판매자별로 일·월·연 단위로 묶어 주문 수와 금액을 보여 준다
-  var salesUnit = 'day';
+  // 판매 기록: 먼저 판매자별 합계를 보이고, 판매자를 누르면 그 판매자의 일별·월별·연별 판매 현황을 보인다
+  var salesUnit = 'month', salesWho = null, salesKey = null;
+  var SALES_UNIT = { day: { len: 10, name: '날짜' }, month: { len: 7, name: '월' }, year: { len: 4, name: '연도' } };
+  function salesLabel(k) { return salesUnit === 'month' ? k.replace('-', '년 ') + '월' : salesUnit === 'year' ? k + '년' : k; }
+  function tr(vals, attrs) {
+    var row = document.createElement('tr');
+    Object.keys(attrs || {}).forEach(function (k) { row.setAttribute(k, attrs[k]); });
+    vals.forEach(function (v) { var td = document.createElement('td'); td.textContent = v[0]; if (v[1]) td.className = v[1]; row.appendChild(td); });
+    return row;
+  }
   function renderSales() {
-    var rows = adminData.sales || [], pick = $('#sales-seller'), chosen = pick.value;
-    var names = {};
-    rows.forEach(function (r) { names[r.seller] = true; });
-    pick.innerHTML = '<option value="">모든 판매자</option>';
-    Object.keys(names).sort().forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; pick.appendChild(o); });
-    if (names[chosen]) pick.value = chosen; else chosen = '';
-    var cut = { day: 10, month: 7, year: 4 }[salesUnit];
-    var groups = {}, totals = {};
-    rows.forEach(function (r) {
-      if (chosen && r.seller !== chosen) return;
-      var k = r.day.slice(0, cut) + '\u0000' + r.seller;
-      var g = groups[k] || (groups[k] = { period: r.day.slice(0, cut), seller: r.seller, orders: {}, amount: 0 });
-      g.orders[r.orderNo] = true; g.amount += r.amount;
-      var t = totals[r.seller] || (totals[r.seller] = { orders: {}, amount: 0 });
-      t.orders[r.orderNo] = true; t.amount += r.amount;
-    });
-    function cells(tr, vals) {
-      vals.forEach(function (v, i) { var td = document.createElement('td'); td.textContent = v; if (i >= vals.length - 2) td.className = 'num'; tr.appendChild(td); });
-    }
-    var body = $('#sales-body'); body.innerHTML = '';
-    Object.keys(groups).map(function (k) { return groups[k]; })
-      .sort(function (a, b) { return a.period < b.period ? 1 : a.period > b.period ? -1 : a.seller < b.seller ? -1 : 1; })
-      .forEach(function (g) {
-        var label = salesUnit === 'day' ? g.period : salesUnit === 'month' ? g.period.replace('-', '년 ') + '월' : g.period + '년';
-        var tr = document.createElement('tr'); cells(tr, [label, g.seller, Object.keys(g.orders).length + '건', won(g.amount)]); body.appendChild(tr);
+    var rows = adminData.sales || [];
+    $('#sales-main').hidden = !!salesWho; $('#sales-detail').hidden = !salesWho;
+    if (!salesWho) {
+      // 가입한 판매자는 판매가 없어도 보인다
+      var by = {};
+      adminData.sellers.forEach(function (s) { by[s.nick] = { orders: {}, amount: 0, last: '' }; });
+      rows.forEach(function (r) {
+        var t = by[r.seller] || (by[r.seller] = { orders: {}, amount: 0, last: '' });
+        t.orders[r.orderNo] = true; t.amount += r.amount; if (r.day > t.last) t.last = r.day;
       });
-    var tot = $('#sales-total'); tot.innerHTML = '';
-    Object.keys(totals).sort(function (a, b) { return totals[b].amount - totals[a].amount; }).forEach(function (n) {
-      var tr = document.createElement('tr'); cells(tr, [n, Object.keys(totals[n].orders).length + '건', won(totals[n].amount)]); tot.appendChild(tr);
+      var body = $('#sales-sellers'); body.innerHTML = '';
+      var names = Object.keys(by).sort(function (a, b) { return by[b].amount - by[a].amount || (a < b ? -1 : 1); });
+      names.forEach(function (n) {
+        var t = by[n];
+        body.appendChild(tr([[n, 'pick'], [Object.keys(t.orders).length + '건', 'num'], [won(t.amount), 'num'], [t.last || '-', 'num']], { 'data-seller': n, tabindex: '0' }));
+      });
+      $('#admin-list-label').textContent = '판매 기록 · 판매자';
+      $('#admin-count').textContent = names.length;
+      $('#admin-empty').hidden = names.length > 0;
+      $('#admin-empty').textContent = '아직 판매 기록이 없어요.';
+      return;
+    }
+    $('#admin-empty').hidden = true;
+    $('#sales-title').textContent = salesWho + ' 판매 현황';
+    document.querySelectorAll('#sales-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.unit === salesUnit)); });
+    var U = SALES_UNIT[salesUnit];
+    $('#sales-col').textContent = U.name;
+    var mine = rows.filter(function (r) { return r.seller === salesWho; });
+    var groups = {}, all = { orders: {}, amount: 0 };
+    mine.forEach(function (r) {
+      var k = r.day.slice(0, U.len), g = groups[k] || (groups[k] = { orders: {}, amount: 0 });
+      g.orders[r.orderNo] = true; g.amount += r.amount; all.orders[r.orderNo] = true; all.amount += r.amount;
     });
-    $('#admin-count').textContent = Object.keys(totals).length;
-    $('#admin-empty').hidden = rows.length > 0;
-    $('#admin-empty').textContent = '아직 판매 기록이 없어요.';
+    var keys = Object.keys(groups).sort().reverse();
+    if (salesKey && !groups[salesKey]) salesKey = null;
+    var body2 = $('#sales-body'); body2.innerHTML = '';
+    keys.forEach(function (k) {
+      body2.appendChild(tr([[salesLabel(k), 'pick'], [Object.keys(groups[k].orders).length + '건', 'num'], [won(groups[k].amount), 'num']],
+        { 'data-key': k, tabindex: '0', 'aria-selected': String(salesKey === k) }));
+    });
+    if (keys.length) body2.appendChild(tr([['전체'], [Object.keys(all.orders).length + '건', 'num'], [won(all.amount), 'num']], { 'class': 'sum-row' }));
+    else body2.appendChild(tr([['아직 판매가 없어요.']]));
+    var list = mine.filter(function (r) { return !salesKey || r.day.slice(0, U.len) === salesKey; });
+    $('#sales-list-title').textContent = salesKey ? salesLabel(salesKey) + ' 주문 목록' : '주문 목록 (전체)';
+    var body3 = $('#sales-orders'); body3.innerHTML = '';
+    list.sort(function (a, b) { return a.orderNo < b.orderNo ? 1 : -1; }).forEach(function (r) {
+      body3.appendChild(tr([[r.orderNo], [r.day], [won(r.amount), 'num'], [r.status || '-']]));
+    });
   }
   function loadSales() {
+    salesWho = null; salesKey = null;
+    $('#sales-main').hidden = true; $('#sales-detail').hidden = true;
     $('#admin-empty').hidden = false; $('#admin-empty').textContent = '판매 기록을 읽는 중이에요…';
     return adminPost({ action: 'adminSales' }).then(function (res) {
       adminData.sales = res.sales || [];
       if (mode === 'admin' && adminTab === 'sales') renderAdminList();
     }).catch(function (err) { $('#admin-empty').textContent = writeError(err); });
   }
+  function salesPick(e) {
+    if (e.type === 'keydown' && e.key !== 'Enter') return;
+    var who = e.target.closest('tr[data-seller]'), key = e.target.closest('tr[data-key]');
+    if (who) { salesWho = who.dataset.seller; salesKey = null; renderSales(); $('#admin').querySelector('.panel-body').scrollTop = 0; }
+    if (key) { salesKey = salesKey === key.dataset.key ? null : key.dataset.key; renderSales(); }
+  }
+  ['click', 'keydown'].forEach(function (t) { $('#sales-box').addEventListener(t, salesPick); });
+  $('#sales-back').addEventListener('click', function () { salesWho = null; salesKey = null; renderSales(); });
   $('#sales-unit').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-unit]'); if (!b) return;
-    salesUnit = b.dataset.unit;
-    document.querySelectorAll('#sales-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    salesUnit = b.dataset.unit; salesKey = null;
     renderSales();
   });
-  $('#sales-seller').addEventListener('change', renderSales);
 
   function renderAdminList() {
     adminList.innerHTML = '';
     var salesTab = mode === 'admin' && adminTab === 'sales';
     $('#sales-box').hidden = !salesTab;
     if (salesTab) {
-      $('#admin-list-label').textContent = '판매 기록 · 판매자';
       if (adminData.sales) renderSales();
       return;
     }
