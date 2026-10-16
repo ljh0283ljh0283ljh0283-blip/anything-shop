@@ -416,7 +416,7 @@
     form.reset();
     if (mode === 'seller') form.seller.value = sellerNick;
     var adminOnlyEdit = mode === 'admin' && adminTab !== 'own';
-    form.hidden = !mode || adminOnlyEdit || (mode === 'seller' && sellerTab === 'sales');
+    form.hidden = !mode || adminOnlyEdit || (mode === 'seller' && sellerTab !== 'items');
     form.seller.readOnly = mode === 'seller' || (mode === 'admin' && adminTab === 'items');
     $('#f-sample-row').hidden = mode !== 'admin';
     $('#form-title').textContent = formTitle();
@@ -499,7 +499,7 @@
   // 판매 기록: 먼저 판매자별 합계를 보이고, 판매자를 누르면 그 판매자의 일별·월별·연별 판매 현황을 보인다
   var salesUnit = 'month', salesWho = null, salesKey = null;
   var SALES_UNIT = { day: { len: 10, name: '날짜' }, month: { len: 7, name: '월' }, year: { len: 4, name: '연도' } };
-  function salesLabel(k) { return salesUnit === 'month' ? k.replace('-', '년 ') + '월' : salesUnit === 'year' ? k + '년' : k; }
+  function salesLabel(k, u) { u = u || salesUnit; return u === 'month' ? k.replace('-', '년 ') + '월' : u === 'year' ? k + '년' : k; }
   function tr(vals, attrs) {
     var row = document.createElement('tr');
     Object.keys(attrs || {}).forEach(function (k) { row.setAttribute(k, attrs[k]); });
@@ -583,11 +583,66 @@
     renderSales();
   });
 
+  // 판매자 코너 "올린 상품": 판매가 없어도 올린 상품을 올린 날 기준으로 기간별로 본다
+  var upUnit = 'month', upKey = null;
+  function renderUploads() {
+    var rows = adminData.uploads || [];
+    $('#admin-list-label').textContent = '올린 상품';
+    $('#admin-count').textContent = rows.length;
+    $('#admin-empty').hidden = true;
+    document.querySelectorAll('#up-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.unit === upUnit)); });
+    var U = SALES_UNIT[upUnit], label = function (k) { return salesLabel(k, upUnit); };
+    $('#up-col').textContent = U.name;
+    var groups = {}, shown = 0;
+    rows.forEach(function (r) {
+      var k = (r.at || '-').slice(0, U.len), g = groups[k] || (groups[k] = { n: 0, on: 0 });
+      g.n++; if (r.status !== '내림') { g.on++; shown++; }
+    });
+    var keys = Object.keys(groups).sort().reverse();
+    if (upKey && !groups[upKey]) upKey = null;
+    var body = $('#up-body'); body.innerHTML = '';
+    keys.forEach(function (k) {
+      body.appendChild(tr([[label(k), 'pick'], [groups[k].n + '개', 'num'], [groups[k].on + '개', 'num']], { 'data-key': k, tabindex: '0', 'aria-selected': String(upKey === k) }));
+    });
+    if (keys.length) body.appendChild(tr([['전체'], [rows.length + '개', 'num'], [shown + '개', 'num']], { 'class': 'sum-row' }));
+    else body.appendChild(tr([['아직 올린 상품이 없어요.']]));
+    $('#up-list-title').textContent = upKey ? label(upKey) + '에 올린 상품' : '상품 목록 (전체)';
+    var list = $('#up-items'); list.innerHTML = '';
+    rows.filter(function (r) { return !upKey || (r.at || '-').slice(0, U.len) === upKey; })
+      .sort(function (a, b) { return a.at < b.at ? 1 : -1; })
+      .forEach(function (r) { list.appendChild(tr([[(r.at || '-').slice(0, 10)], [r.name], [won(r.price), 'num'], [r.status === '내림' ? '내림' : '게시 중']])); });
+  }
+  function loadUploads() {
+    upKey = null; $('#up-box').hidden = true;
+    $('#admin-empty').hidden = false; $('#admin-empty').textContent = '올린 상품을 읽는 중이에요…';
+    return sellerPost({ action: 'sellerUploads' }).then(function (res) {
+      adminData.uploads = res.items || [];
+      if (mode === 'seller' && sellerTab === 'uploads') renderAdminList();
+    }).catch(function (err) { $('#admin-empty').textContent = writeError(err); });
+  }
+  ['click', 'keydown'].forEach(function (t) {
+    $('#up-body').addEventListener(t, function (e) {
+      if (e.type === 'keydown' && e.key !== 'Enter') return;
+      var key = e.target.closest('tr[data-key]'); if (!key) return;
+      upKey = upKey === key.dataset.key ? null : key.dataset.key; renderUploads();
+    });
+  });
+  $('#up-unit').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-unit]'); if (!b) return;
+    upUnit = b.dataset.unit; upKey = null; renderUploads();
+  });
+
   function renderAdminList() {
     adminList.innerHTML = '';
     var salesTab = (mode === 'admin' && adminTab === 'sales') || (mode === 'seller' && sellerTab === 'sales');
+    var upTab = mode === 'seller' && sellerTab === 'uploads';
     $('#sales-box').hidden = !salesTab;
-    $('#pw-change').hidden = mode !== 'seller' || sellerTab === 'sales';
+    $('#up-box').hidden = !upTab || !adminData.uploads;
+    $('#pw-change').hidden = mode !== 'seller' || sellerTab !== 'items';
+    if (upTab) {
+      if (adminData.uploads) renderUploads();
+      return;
+    }
     if (salesTab) {
       if (adminData.sales) renderSales();
       return;
@@ -759,7 +814,7 @@
     function loginMsg(t, isErr) { var m = $('#gh-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
 
     function enterSeller(nick) {
-      mode = 'seller'; sellerNick = nick; sellerTab = 'items'; adminData.sales = null;
+      mode = 'seller'; sellerNick = nick; sellerTab = 'items'; adminData.sales = null; adminData.uploads = null;
       document.querySelectorAll('#seller-tabs button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.stab === 'items')); });
       loginMsg(''); say('');
       show('seller');
@@ -835,6 +890,7 @@
       say('');
       resetForm();
       if (sellerTab === 'sales') loadSales();
+      if (sellerTab === 'uploads') loadUploads();
     });
     $('#admin-tabs').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-tab]'); if (!b) return;

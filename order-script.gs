@@ -48,6 +48,7 @@ function doPost(e) {
     if (d.action === 'sellerPassword') return reply(sellerPassword(d));
     if (d.action === 'sellerEmail') return reply(sellerEmail(d));
     if (d.action === 'sellerSales') return reply(sellerSales(d));
+    if (d.action === 'sellerUploads') return reply(sellerUploads(d));
     if (d.action === 'sellerFindStart') return reply(sellerFindStart(d));
     if (d.action === 'sellerFindFinish') return reply(sellerFindFinish(d));
     if (String(d.action || '').indexOf('admin') === 0) return reply(admin(d));
@@ -203,6 +204,17 @@ function sellerSales(d) {
   var me = sellerByKey(d.key);
   if (!me) return { ok: false, error: '다시 로그인해 주세요.' };
   return { ok: true, sales: salesRows().filter(function (r) { return r.seller === me.nick; }) };
+}
+
+// 로그인한 판매자가 지금까지 올린 상품 전부(내린 상품 포함)와 올린 날
+function sellerUploads(d) {
+  var me = sellerByKey(d.key);
+  if (!me) return { ok: false, error: '다시 로그인해 주세요.' };
+  return { ok: true, items: itemRows().filter(function (r) { return String(r.row[I.seller]) === me.nick; }).map(function (r) {
+    var it = toItem(r.row);
+    it.at = stamp(r.row[I.at]); it.status = String(r.row[I.status] || SHOWN);
+    return it;
+  }) };
 }
 
 // ---------- 아이디·비밀번호 찾기 (이메일 인증번호) ----------

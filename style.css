@@ -227,11 +227,11 @@ footer a { color: var(--muted); }
 .field-err { color: var(--danger, #b3261e); font-size: .82rem; margin: -2px 0 8px; }
 .su-form .row { align-items: start; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-#sales-sellers tr, #sales-body tr[data-key] { cursor: pointer; }
-#sales-sellers tr:hover, #sales-body tr[data-key]:hover, .sales-table tr[aria-selected="true"] { background: var(--tag); }
+#sales-sellers tr, #sales-body tr[data-key], #up-body tr[data-key] { cursor: pointer; }
+#sales-sellers tr:hover, #sales-body tr[data-key]:hover, #up-body tr[data-key]:hover, .sales-table tr[aria-selected="true"] { background: var(--tag); }
 .sales-table td.pick { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .sales-table tr.sum-row td { font-weight: 600; }
-#sales-detail .admin-tabs { margin: 6px 0 4px; }
+#sales-detail .admin-tabs, #up-unit { margin: 6px 0 4px; }
 .sales-note { font-size: .8rem; color: var(--muted); margin: 4px 0 8px; }
 .sales-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-bottom: 12px; }
 .sales-table th, .sales-table td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); }
