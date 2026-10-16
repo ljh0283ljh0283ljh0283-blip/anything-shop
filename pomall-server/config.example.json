@@ -1,0 +1,11 @@
+{
+  "port": 8080,
+  "dataDir": "./data",
+  "productsFile": "../pomall/products.json",
+  "siteDir": "../pomall",
+  "publicUrl": "https://pomall.example.co.kr",
+  "allowOrigin": "*",
+  "adminKey": "여기에-관리자-열쇠",
+  "salesKey": "여기에-영업팀-열쇠",
+  "viewKey": "여기에-조회전용-열쇠"
+}
