@@ -1,8 +1,10 @@
-// 어떻게든 팔거야: 상품 목록, 가격 제안, 내 제안 확인, 판매자(받은 제안 수락/거절, 상품 관리)
+// 어떻게든 팔거야: 상품 목록, 가격 제안, 내 제안 확인, 판매자 코너(받은 제안, 내 상품, 올린 상품, 판매 기록),
+// 관리자(받은 제안 전체, 샘플·운영 상품 관리, 판매자별 판매 기록)
 (function () {
   var MINE_KEY = 'offer-shop-mine';
   var ADMIN_KEY = 'offer-shop-admin-key';
   var TOKEN_KEY = 'anything-shop-gh-token';   // 무엇이든 상점과 같은 GitHub 열쇠를 같이 쓴다
+  var SELLER_KEY = 'anything-shop-seller-key'; // 무엇이든 상점과 같은 판매자 로그인을 같이 쓴다
   var won = function (n) { return Number(n || 0).toLocaleString('ko-KR') + '원'; };
   var $ = function (s) { return document.querySelector(s); };
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
@@ -11,6 +13,7 @@
   var order = [];        // 화면에 보일 순서대로 id
   var bids = {};         // id -> {count, top, accepted} (구글 시트에서 받은 요약)
   var loaded = false;
+  var baseList = [], sheetList = [];   // products.json(샘플·운영 상품) + 시트의 판매자 상품
   var currentCat = 'all';
 
   // ---------- 설정과 제안 서버 ----------
@@ -30,7 +33,12 @@
   function loadBids() {
     if (!settings.offerUrl) return;
     apiGet({ action: 'summary' }).then(function (res) {
-      if (res && res.ok) { bids = res.items || {}; renderProducts(); if (detailId) renderDetail(); }
+      if (res && res.ok) {
+      bids = res.items || {};
+      if (Array.isArray(res.products)) { sheetList = res.products.map(function (p) { return Object.assign({}, p, { fromSheet: true }); }); setProducts(); }
+      else renderProducts();
+      if (detailId) renderDetail();
+    }
     }).catch(function () {});
   }
 
@@ -45,13 +53,14 @@
   // ---------- 상품 목록 ----------
   var grid = $('#grid'), status = $('#status'), tpl = $('#product-tpl');
 
-  function setProducts(list) {
+  function setBase(list) { baseList = list; setProducts(); }
+  function setProducts() {
     products = {}; order = [];
-    list.forEach(function (d) {
+    baseList.concat(sheetList).forEach(function (d) {
       if (!d || !d.id || typeof d.name !== 'string' || !d.name) return;
       products[d.id] = {
         name: d.name, seller: String(d.seller || ''), cat: String(d.cat || '기타'), desc: String(d.desc || ''),
-        unit: String(d.unit || ''), order: Number(d.order) || 0, closed: !!d.closed, sample: d.sample === true
+        unit: String(d.unit || ''), order: Number(d.order) || 0, closed: !!d.closed, sample: d.sample === true, fromSheet: !!d.fromSheet
       };
       order.push(d.id);
     });
@@ -275,7 +284,7 @@
       if (m.status === '수락') {
         // 판매자에게 직접 입금한다. 판매자 계좌는 settings.json의 sellers, 판매자가 없으면 bank(운영자 직접 판매)
         var seller = (products[m.pid] || {}).seller;
-        var b = (seller ? (settings.sellers || {})[seller] : settings.bank) || {}, bank = li.querySelector('.oc-bank');
+        var b = m.bank || (seller ? (settings.sellers || {})[seller] : settings.bank) || {}, bank = li.querySelector('.oc-bank');
         bank.hidden = false;
         bank.textContent = b.account ? '입금 계좌 ' + b.name + ' ' + b.account + ' (' + b.holder + ') · ' + won(m.total) : '판매자가 연락드려 계좌를 알려 드려요.';
       }
@@ -333,16 +342,19 @@
   });
 
   // ---------- 판매자 화면 ----------
+  var adminTab = 'offers';
   function showTab(name) {
-    ['offers', 'products'].forEach(function (t) {
+    adminTab = name;
+    ['offers', 'products', 'sales'].forEach(function (t) {
       $('#tab-' + t).setAttribute('aria-selected', String(t === name));
       $('#pane-' + t).hidden = t !== name;
     });
-    if (name === 'offers') startOffers(); else startProducts();
+    if (name === 'offers') startOffers(); else if (name === 'products') startProducts(); else startAdminSales();
   }
   $('#tab-offers').addEventListener('click', function () { showTab('offers'); });
   $('#tab-products').addEventListener('click', function () { showTab('products'); });
-  function openAdmin(from) { openPanel($('#admin'), from); showTab($('#tab-products').getAttribute('aria-selected') === 'true' ? 'products' : 'offers'); }
+  $('#tab-sales').addEventListener('click', function () { showTab('sales'); });
+  function openAdmin(from) { openPanel($('#admin'), from); showTab(adminTab); }
   $('#admin-entry').addEventListener('click', function () { openAdmin(this); });
   $('#open-admin').addEventListener('click', function () { openAdmin(this); });
   if (store(ADMIN_KEY) || store(TOKEN_KEY)) $('#open-admin').hidden = false;
@@ -364,7 +376,7 @@
       offers = res.offers || [];
       $('#key-login').hidden = true; $('#offers-wrap').hidden = false; $('#open-admin').hidden = false;
       keySay('');
-      renderOffers();
+      renderOffers($('#offer-groups'), offers, offerFilter);
     }).catch(function (err) {
       $('#key-login').hidden = false; $('#offers-wrap').hidden = true;
       keySay((err && err.message) || '제안을 불러오지 못했어요.', true);
@@ -372,7 +384,7 @@
   }
   $('#key-save').addEventListener('click', function () {
     var k = $('#admin-key').value.trim();
-    if (!k) { keySay('판매자 열쇠를 적어 주세요.', true); return; }
+    if (!k) { keySay('관리자 열쇠를 적어 주세요.', true); return; }
     store(ADMIN_KEY, k); $('#admin-key').value = '';
     startOffers();
   });
@@ -382,12 +394,12 @@
     var b = e.target.closest('button[data-f]'); if (!b) return;
     offerFilter = b.dataset.f;
     document.querySelectorAll('#offer-filter button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-    renderOffers();
+    renderOffers($('#offer-groups'), offers, offerFilter);
   });
 
   // 상품별로 묶고, 한 상품 안에서는 높은 단가부터 보여 준다
-  function renderOffers() {
-    var box = $('#offer-groups'), groups = {}, keys = [];
+  function renderOffers(box, offers, offerFilter) {
+    var groups = {}, keys = [];
     box.innerHTML = '';
     offers.forEach(function (o) {
       if (offerFilter !== 'all' && o.status !== offerFilter) return;
@@ -442,7 +454,7 @@
     apiPost({ action: 'decide', key: store(ADMIN_KEY), no: no, status: b.dataset.decide }).then(function (res) {
       if (!res || !res.ok) throw new Error(res && res.error);
       offers.forEach(function (o) { if (o.no === no) o.status = res.status; });
-      renderOffers();
+      renderOffers($('#offer-groups'), offers, offerFilter);
       loadBids();
       keySay(res.status === '수락' ? '팔기로 했어요. 손님은 내 제안에서 입금 계좌를 볼 수 있어요. 연락처로도 알려 주세요.' : '');
     }).catch(function (err) {
@@ -484,7 +496,7 @@
       list = fn(list);
       var text = JSON.stringify({ products: list }, null, 1) + '\n';
       return ghApi('PUT', { message: message, content: btoa(unescape(encodeURIComponent(text))), sha: ghSha, branch: GH.branch })
-        .then(function (j) { ghSha = j.content && j.content.sha; setProducts(list); });
+        .then(function (j) { ghSha = j.content && j.content.sha; setBase(list); });
     });
   }
   function writeError(err) {
@@ -504,7 +516,7 @@
     var m = $('#gh-msg');
     if (!store(TOKEN_KEY)) { showLoggedIn(false); return; }
     m.textContent = '확인하는 중이에요…'; m.classList.remove('err');
-    ghLoad().then(function (list) { setProducts(list); m.textContent = ''; showLoggedIn(true); })
+    ghLoad().then(function (list) { setBase(list); m.textContent = ''; showLoggedIn(true); })
       .catch(function (err) { showLoggedIn(false); m.textContent = writeError(err); m.classList.add('err'); });
   }
   $('#gh-save').addEventListener('click', function () {
@@ -567,10 +579,12 @@
       .then(function () { saveBtn.disabled = false; });
   });
 
+  // 관리자 상품 관리는 products.json(샘플·운영 상품)만 다룬다. 판매자 상품은 판매자 코너에서 판매자가 관리한다.
   function renderAdminList() {
-    $('#admin-count').textContent = order.length;
+    var ids = order.filter(function (id) { return !products[id].fromSheet; });
+    $('#admin-count').textContent = ids.length;
     adminList.innerHTML = '';
-    order.forEach(function (id) {
+    ids.forEach(function (id) {
       var p = products[id], b = bids[id];
       var li = document.createElement('li');
       li.dataset.id = id;
@@ -602,8 +616,286 @@
       .catch(function (err) { del.disabled = false; say(writeError(err), true); });
   });
 
+  // ---------- 기간별 기록표 (일별·월별·연별) ----------
+  // cfg: { rows, date(r) → 'yyyy-MM-dd…', cols: [{ head, of(list) }], heads: [...], line(r) → [[글, 칸 class]], sort(a, b), noun }
+  var UNITS = { day: { len: 10, name: '날짜' }, month: { len: 7, name: '월' }, year: { len: 4, name: '연도' } };
+  function unitLabel(k, u) { return u === 'month' ? k.replace('-', '년 ') + '월' : u === 'year' ? k + '년' : k; }
+  function tr(vals, attrs) {
+    var row = document.createElement('tr');
+    Object.keys(attrs || {}).forEach(function (k) { row.setAttribute(k, attrs[k]); });
+    vals.forEach(function (v) { var td = document.createElement('td'); td.textContent = v[0]; if (v[1]) td.className = v[1]; row.appendChild(td); });
+    return row;
+  }
+  function makePeriod(box, cfg) {
+    var unit = 'month', key = null;
+    box.innerHTML = '<div class="admin-tabs p-unit" role="group" aria-label="기간">' +
+      '<button type="button" data-unit="day">일별</button><button type="button" data-unit="month">월별</button><button type="button" data-unit="year">연별</button></div>' +
+      '<table class="sales-table"><thead><tr></tr></thead><tbody class="p-body"></tbody></table>' +
+      '<p class="sales-note"></p><h4 class="sales-sub p-title"></h4>' +
+      '<table class="sales-table"><thead><tr></tr></thead><tbody class="p-list"></tbody></table>';
+    var heads = box.querySelectorAll('thead tr');
+    cfg.heads.forEach(function (h) { var th = document.createElement('th'); th.textContent = h[0]; if (h[1]) th.className = h[1]; heads[1].appendChild(th); });
+    box.querySelector('.sales-note').textContent = '기간 줄을 누르면 그 기간의 ' + cfg.noun + ' 목록이 아래에 보여요.';
+    function render() {
+      var U = UNITS[unit], rows = cfg.rows || [];
+      box.querySelectorAll('.p-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.unit === unit)); });
+      heads[0].innerHTML = '';
+      [[U.name]].concat(cfg.cols.map(function (c) { return [c.head, 'num']; })).forEach(function (h) {
+        var th = document.createElement('th'); th.textContent = h[0]; if (h[1]) th.className = h[1]; heads[0].appendChild(th);
+      });
+      var groups = {};
+      rows.forEach(function (r) { var k = String(cfg.date(r) || '-').slice(0, U.len); (groups[k] || (groups[k] = [])).push(r); });
+      var keys = Object.keys(groups).sort().reverse();
+      if (key && !groups[key]) key = null;
+      var body = box.querySelector('.p-body'); body.innerHTML = '';
+      keys.forEach(function (k) {
+        body.appendChild(tr([[unitLabel(k, unit), 'pick']].concat(cfg.cols.map(function (c) { return [c.of(groups[k]), 'num']; })),
+          { 'data-key': k, tabindex: '0', 'aria-selected': String(key === k) }));
+      });
+      if (keys.length) body.appendChild(tr([['전체']].concat(cfg.cols.map(function (c) { return [c.of(rows), 'num']; })), { 'class': 'sum-row' }));
+      else body.appendChild(tr([['아직 ' + cfg.noun + ' 기록이 없어요.']]));
+      box.querySelector('.p-title').textContent = key ? unitLabel(key, unit) + ' ' + cfg.noun + ' 목록' : cfg.noun + ' 목록 (전체)';
+      var list = box.querySelector('.p-list'); list.innerHTML = '';
+      rows.filter(function (r) { return !key || String(cfg.date(r) || '-').slice(0, U.len) === key; }).sort(cfg.sort)
+        .forEach(function (r) { list.appendChild(tr(cfg.line(r))); });
+    }
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-unit]');
+      if (b) { unit = b.dataset.unit; key = null; render(); return; }
+      var row = e.target.closest('tr[data-key]');
+      if (row) { key = key === row.dataset.key ? null : row.dataset.key; render(); }
+    });
+    box.addEventListener('keydown', function (e) {
+      var row = e.target.closest('tr[data-key]');
+      if (row && e.key === 'Enter') { key = key === row.dataset.key ? null : row.dataset.key; render(); }
+    });
+    return { set: function (rows) { cfg.rows = rows; key = null; render(); }, reset: function () { unit = 'month'; key = null; } };
+  }
+  function countOrders(list) { var o = {}; list.forEach(function (r) { o[r.orderNo] = 1; }); return Object.keys(o).length + '건'; }
+  function sumAmount(list) { return won(list.reduce(function (n, r) { return n + (Number(r.amount) || 0); }, 0)); }
+  function salesPeriod(box) {
+    return makePeriod(box, {
+      noun: '판매', date: function (r) { return r.day; },
+      cols: [{ head: '주문', of: countOrders }, { head: '금액', of: sumAmount }],
+      heads: [['제안번호'], ['날짜'], ['상품'], ['금액', 'num']],
+      line: function (r) { return [[r.orderNo], [r.day], [r.items || '-'], [won(r.amount), 'num']]; },
+      sort: function (a, b) { return a.orderNo < b.orderNo ? 1 : -1; }
+    });
+  }
+  function apiError(err, fallback) { return err && err.message && !/fetch|network|JSON/i.test(err.message) ? err.message : fallback; }
+
+  // ----- 관리자 판매 기록: 판매자별 합계 → 판매자를 누르면 기간별 현황 -----
+  var adminSales = [], adminWho = null, adminPeriod = salesPeriod($('#a-sales-period'));
+  function startAdminSales() {
+    var m = $('#a-sales-msg');
+    $('#a-sales-main').hidden = true; $('#a-sales-detail').hidden = true;
+    if (!store(ADMIN_KEY)) { m.textContent = '받은 제안 칸에서 관리자 열쇠로 먼저 로그인해 주세요.'; m.classList.add('err'); return; }
+    m.textContent = '판매 기록을 읽는 중이에요…'; m.classList.remove('err');
+    apiPost({ action: 'adminSales', key: store(ADMIN_KEY) }).then(function (res) {
+      if (!res || !res.ok || !Array.isArray(res.sales)) throw new Error(res && res.error);
+      adminSales = res.sales; adminWho = null; m.textContent = '';
+      renderAdminSales();
+    }).catch(function (err) { m.textContent = apiError(err, '판매 기록을 읽지 못했어요.'); m.classList.add('err'); });
+  }
+  function renderAdminSales() {
+    $('#a-sales-main').hidden = !!adminWho; $('#a-sales-detail').hidden = !adminWho;
+    if (adminWho) {
+      $('#a-sales-title').textContent = adminWho + ' 판매 현황';
+      adminPeriod.set(adminSales.filter(function (r) { return r.seller === adminWho; }));
+      return;
+    }
+    var by = {};
+    adminSales.forEach(function (r) { (by[r.seller] || (by[r.seller] = [])).push(r); });
+    var names = Object.keys(by).sort(function (a, b) { return by[b].reduce(function (n, r) { return n + r.amount; }, 0) - by[a].reduce(function (n, r) { return n + r.amount; }, 0); });
+    var body = $('#a-sales-sellers'); body.innerHTML = '';
+    names.forEach(function (n) {
+      var last = by[n].reduce(function (d, r) { return r.day > d ? r.day : d; }, '');
+      body.appendChild(tr([[n, 'pick'], [countOrders(by[n]), 'num'], [sumAmount(by[n]), 'num'], [last || '-', 'num']], { 'data-seller': n, tabindex: '0' }));
+    });
+    if (!names.length) body.appendChild(tr([['아직 판매 기록이 없어요.']]));
+    $('#a-sales-count').textContent = names.length;
+  }
+  ['click', 'keydown'].forEach(function (t) {
+    $('#a-sales-sellers').addEventListener(t, function (e) {
+      if (e.type === 'keydown' && e.key !== 'Enter') return;
+      var row = e.target.closest('tr[data-seller]'); if (!row) return;
+      adminWho = row.dataset.seller; adminPeriod.reset(); renderAdminSales();
+    });
+  });
+  $('#a-sales-back').addEventListener('click', function () { adminWho = null; renderAdminSales(); });
+
+  // ---------- 판매자 코너 (무엇이든 상점 판매자 계정) ----------
+  var sNick = '', sTab = 'offers', sOffers = [], sFilter = '검토 중', sItems = [], sEditing = null, mainUrl = '';
+  var sForm = $('#s-form');
+  fetch('../settings.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) { mainUrl = (j && j.orderUrl) || ''; }).catch(function () {});
+  function sSay(t, isErr) { var m = $('#s-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
+  function fSay(t, isErr) { var m = $('#s-form-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
+  function sellerPost(body) {
+    body.key = store(SELLER_KEY);
+    return apiPost(body).then(function (res) {
+      if (!res || !res.ok) {
+        var e = new Error((res && res.error) || '처리하지 못했어요.');
+        if (res && res.error === '다시 로그인해 주세요.') { store(SELLER_KEY, null); refreshEntries(); sShow('login'); }
+        throw e;
+      }
+      return res;
+    });
+  }
+  function refreshEntries() {
+    var on = !!store(SELLER_KEY);
+    $('#open-seller').hidden = !on; $('#seller-out').hidden = !on; $('#seller-entry').hidden = on;
+  }
+  refreshEntries();
+  function sShow(view) {
+    $('#s-login').hidden = view !== 'login';
+    $('#s-corner').hidden = view !== 'corner';
+    $('#s-title').textContent = view === 'corner' ? '판매자 코너' : '판매자 로그인';
+  }
+  function openSeller(from) {
+    openPanel($('#seller'), from);
+    if (!store(SELLER_KEY)) { sShow('login'); sSay(''); return; }
+    if (sNick) { sShow('corner'); sOpenTab(sTab); return; }
+    sShow(''); sSay('확인하는 중이에요…');
+    sellerPost({ action: 'sellerMe' }).then(function (res) { sNick = res.nick; sSay(''); sShow('corner'); sOpenTab('offers'); })
+      .catch(function (err) { sSay(apiError(err, '판매자 정보를 확인하지 못했어요. 잠시 뒤 다시 열어 주세요.'), true); });
+  }
+  $('#open-seller').addEventListener('click', function () { openSeller(this); });
+  $('#seller-entry').addEventListener('click', function () { openSeller(this); });
+  function sLogout() { store(SELLER_KEY, null); sNick = ''; refreshEntries(); }
+  $('#seller-out').addEventListener('click', function () { sLogout(); });
+  $('#s-logout').addEventListener('click', function () { sLogout(); sShow('login'); sSay('로그아웃했어요.'); });
+  $('#s-go').addEventListener('click', function () {
+    var id = $('#s-id').value.trim(), pw = $('#s-pw').value;
+    if (!id || !pw) { sSay('아이디와 비밀번호를 적어 주세요.', true); return; }
+    if (!mainUrl) { sSay('아직 로그인할 수 없어요. 잠시 뒤 다시 눌러 주세요.', true); return; }
+    var btn = $('#s-go'); btn.disabled = true; sSay('로그인하는 중이에요…');
+    fetch(mainUrl, { method: 'POST', body: JSON.stringify({ action: 'sellerLogin', loginId: id, password: pw }) }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.ok || !res.key) throw new Error((res && res.error) || '로그인하지 못했어요.');
+        store(SELLER_KEY, res.key); sNick = res.nick; $('#s-pw').value = '';
+        refreshEntries(); sSay(''); sShow('corner'); sOpenTab('offers');
+      }).catch(function (err) { sSay(apiError(err, '로그인하지 못했어요. 인터넷 연결을 확인해 주세요.'), true); })
+      .then(function () { btn.disabled = false; });
+  });
+  $('#s-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#s-go').click(); });
+
+  var sUpPeriod = makePeriod($('#s-up-period'), {
+    noun: '올린 상품', date: function (r) { return r.at; },
+    cols: [{ head: '올린 상품', of: function (l) { return l.length + '개'; } },
+      { head: '게시 중', of: function (l) { return l.filter(function (r) { return r.status !== '내림'; }).length + '개'; } }],
+    heads: [['올린 날'], ['상품'], ['상태']],
+    line: function (r) { return [[(r.at || '-').slice(0, 10)], [r.name], [r.status === '내림' ? '내림' : r.closed ? '제안 마감' : '게시 중']]; },
+    sort: function (a, b) { return a.at < b.at ? 1 : -1; }
+  });
+  var sSalesPeriod = salesPeriod($('#s-sales-period'));
+
+  function sOpenTab(name) {
+    sTab = name;
+    document.querySelectorAll('#s-tabs button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.stab === name)); });
+    ['offers', 'items', 'uploads', 'sales'].forEach(function (t) { $('#s-pane-' + t).hidden = t !== name; });
+    sSay('불러오는 중이에요…');
+    var job;
+    if (name === 'offers') job = sellerPost({ action: 'sellerOffers' }).then(function (res) { sOffers = res.offers || []; renderOffers($('#s-offer-groups'), sOffers, sFilter); });
+    else if (name === 'sales') job = sellerPost({ action: 'sellerSales' }).then(function (res) {
+      var list = res.sales || [];
+      $('#s-sales-count').textContent = countOrders(list).replace('건', '');
+      sSalesPeriod.set(list);
+    });
+    else job = sellerPost({ action: 'sellerItems' }).then(function (res) {
+      sItems = res.items || [];
+      $('#s-up-count').textContent = sItems.length;
+      if (name === 'uploads') sUpPeriod.set(sItems); else renderSellerItems();
+    });
+    job.then(function () { sSay(''); }).catch(function (err) { sSay(apiError(err, '불러오지 못했어요. 잠시 뒤 다시 눌러 주세요.'), true); });
+  }
+  $('#s-tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-stab]'); if (b) { fSay(''); sOpenTab(b.dataset.stab); }
+  });
+
+  $('#s-offer-filter').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-f]'); if (!b) return;
+    sFilter = b.dataset.f;
+    document.querySelectorAll('#s-offer-filter button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    renderOffers($('#s-offer-groups'), sOffers, sFilter);
+  });
+  $('#s-offer-groups').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-decide]'); if (!b) return;
+    var li = b.closest('.offer-card'), no = li.dataset.no;
+    li.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+    sellerPost({ action: 'sellerDecide', no: no, status: b.dataset.decide }).then(function (res) {
+      sOffers.forEach(function (o) { if (o.no === no) o.status = res.status; });
+      renderOffers($('#s-offer-groups'), sOffers, sFilter);
+      loadBids();
+      sSay(res.status === '수락' ? '팔기로 했어요. 손님은 내 제안에서 입금 계좌를 볼 수 있어요. 연락처로도 알려 주세요.' : '');
+    }).catch(function (err) {
+      li.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+      sSay(apiError(err, '저장하지 못했어요. 다시 눌러 주세요.'), true);
+    });
+  });
+
+  function renderSellerItems() {
+    var list = $('#s-list'), shown = sItems.filter(function (x) { return x.status !== '내림'; });
+    list.innerHTML = '';
+    $('#s-count').textContent = shown.length;
+    $('#s-empty').hidden = shown.length > 0;
+    shown.forEach(function (p) {
+      var b = bids[p.id], li = document.createElement('li');
+      li.dataset.id = p.id;
+      if (p.id === sEditing) li.className = 'editing';
+      li.innerHTML = '<span class="a-name"></span><span class="a-actions"><button type="button" data-edit>수정</button><button type="button" class="del" data-del>내리기</button></span><span class="a-meta"></span>';
+      li.querySelector('.a-name').textContent = p.name + (p.closed ? ' (마감)' : '');
+      li.querySelector('.a-meta').textContent = p.cat + (p.unit ? ' · ' + p.unit : '') + (b && b.count ? ' · 제안 ' + b.count + '건, 최고 ' + won(b.top) : ' · 제안 없음');
+      list.appendChild(li);
+    });
+  }
+  function sReset() {
+    sEditing = null; sForm.reset();
+    $('#s-form-title').textContent = '새 상품 올리기'; $('#s-save').textContent = '상품 올리기'; $('#s-cancel').hidden = true;
+    renderSellerItems();
+  }
+  $('#s-cancel').addEventListener('click', function () { sReset(); fSay(''); });
+  $('#s-list').addEventListener('click', function (e) {
+    var li = e.target.closest('li'); if (!li) return;
+    var p = sItems.filter(function (x) { return x.id === li.dataset.id; })[0]; if (!p) return;
+    if (e.target.closest('[data-edit]')) {
+      sEditing = p.id;
+      sForm.name.value = p.name; sForm.cat.value = p.cat; sForm.unit.value = p.unit; sForm.desc.value = p.desc; sForm.closed.checked = p.closed;
+      $('#s-form-title').textContent = '내 상품 고치기'; $('#s-save').textContent = '수정 저장'; $('#s-cancel').hidden = false;
+      fSay(''); renderSellerItems(); sForm.name.focus();
+      return;
+    }
+    var del = e.target.closest('[data-del]'); if (!del) return;
+    if (!del.classList.contains('confirm')) {
+      del.classList.add('confirm'); del.textContent = '정말 내리기';
+      setTimeout(function () { if (del.isConnected) { del.classList.remove('confirm'); del.textContent = '내리기'; } }, 3000);
+      return;
+    }
+    del.disabled = true;
+    sellerPost({ action: 'sellerRemove', id: p.id }).then(function () {
+      p.status = '내림'; if (sEditing === p.id) sReset(); else renderSellerItems();
+      fSay('"' + p.name + '"을(를) 내렸어요. 올린 상품 기록에는 남아요.'); loadBids();
+    }).catch(function (err) { del.disabled = false; fSay(apiError(err, '내리지 못했어요.'), true); });
+  });
+  sForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var item = { name: sForm.name.value.trim(), cat: sForm.cat.value.trim(), unit: sForm.unit.value.trim(), desc: sForm.desc.value.trim(), closed: sForm.closed.checked };
+    if (!item.name) { fSay('상품 이름을 적어 주세요.', true); sForm.name.focus(); return; }
+    if (!item.cat) { fSay('분류를 적어 주세요.', true); sForm.cat.focus(); return; }
+    var btn = $('#s-save'); btn.disabled = true; fSay('저장하는 중이에요…');
+    var id = sEditing;
+    sellerPost({ action: 'sellerSave', id: id || '', item: item }).then(function () {
+      fSay(id ? '"' + item.name + '" 수정을 저장했어요.' : '"' + item.name + '"을(를) 올렸어요. 상점에 바로 보여요.');
+      sEditing = null; sForm.reset();
+      $('#s-form-title').textContent = '새 상품 올리기'; $('#s-save').textContent = '상품 올리기'; $('#s-cancel').hidden = true;
+      loadBids();
+      return sellerPost({ action: 'sellerItems' }).then(function (res) { sItems = res.items || []; renderSellerItems(); });
+    }).catch(function (err) { fSay(apiError(err, '저장하지 못했어요. 다시 눌러 주세요.'), true); })
+      .then(function () { btn.disabled = false; });
+  });
+
   // ---------- 시작 ----------
   fetch('products.json', { cache: 'no-store' }).then(function (r) { return r.json(); })
-    .then(function (j) { setProducts(j.products || []); })
+    .then(function (j) { setBase(j.products || []); })
     .catch(function () { status.textContent = '상품 목록을 불러오지 못했어요.'; });
 })();

@@ -20,8 +20,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="../style.css?v=20261016a">
-<link rel="stylesheet" href="offer.css?v=20261014">
+<link rel="stylesheet" href="../style.css?v=20261016j">
+<link rel="stylesheet" href="offer.css?v=20261016">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -33,7 +33,8 @@
       <a href="#products">상품</a>
       <a href="#how">이용 방법</a>
       <a href="../">무엇이든 상점</a>
-      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>판매자</button>
+      <button class="admin-btn" id="open-seller" type="button" aria-controls="seller" hidden>판매자 코너</button>
+      <button class="admin-btn" id="open-admin" type="button" aria-controls="admin" hidden>관리</button>
       <button class="cart-btn" id="open-mine" type="button" aria-controls="mine">내 제안 <span class="count" id="mine-count">0</span></button>
     </nav>
   </header>
@@ -65,7 +66,7 @@
 
   <footer>
     <p class="broker">무엇이든 상점은 통신판매중개자로서 통신판매의 당사자가 아닙니다. 상품 정보와 거래에 대한 책임은 각 판매자에게 있습니다.</p>
-    <div class="foot-row"><span>© 2026 어떻게든 팔거야 · <a href="../">무엇이든 상점</a> · <a href="../terms/">이용약관</a> · <a href="../#seller">판매자 되기</a></span> <button class="admin-entry" id="admin-entry" type="button">관리자</button></div>
+    <div class="foot-row"><span>© 2026 어떻게든 팔거야 · <a href="../">무엇이든 상점</a> · <a href="../terms/">이용약관</a> · <a href="../#seller">판매자 되기</a></span> <span class="foot-btns"><button class="admin-entry" id="seller-entry" type="button">판매자 로그인</button><button class="admin-entry" id="seller-out" type="button" hidden>판매자 로그아웃</button><button class="admin-entry" id="admin-entry" type="button">관리자</button></span></div>
   </footer>
 </div>
 
@@ -168,20 +169,21 @@
   </div>
 </aside>
 
-<!-- 판매자: 받은 제안 + 상품 관리 -->
-<aside class="panel admin" id="admin" aria-label="판매자" aria-hidden="true">
+<!-- 관리자: 받은 제안 + 상품 관리 + 판매 기록 -->
+<aside class="panel admin" id="admin" aria-label="관리" aria-hidden="true">
   <div class="panel-head">
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tab-offers" aria-selected="true" aria-controls="pane-offers">받은 제안</button>
       <button type="button" role="tab" id="tab-products" aria-selected="false" aria-controls="pane-products">상품 관리</button>
+      <button type="button" role="tab" id="tab-sales" aria-selected="false" aria-controls="pane-sales">판매 기록</button>
     </div>
     <button class="close" type="button" data-close aria-label="닫기">×</button>
   </div>
   <div class="panel-body">
     <div id="pane-offers" role="tabpanel" aria-labelledby="tab-offers">
       <div class="gh-login" id="key-login" hidden>
-        <p>받은 제안을 보려면 판매자 열쇠로 로그인해 주세요. 열쇠는 구글 시트 Apps Script의 스크립트 속성 ADMIN_KEY에 넣은 글자예요.</p>
-        <label for="admin-key">판매자 열쇠</label>
+        <p>관리자 열쇠로 로그인해 주세요. 열쇠는 "어떻게든 팔거야" 구글 시트 Apps Script의 스크립트 속성 ADMIN_KEY에 넣은 글자예요.</p>
+        <label for="admin-key">관리자 열쇠</label>
         <input id="admin-key" type="password" autocomplete="off">
         <button class="primary" id="key-save" type="button">로그인</button>
       </div>
@@ -194,7 +196,7 @@
           <button type="button" data-f="all" aria-pressed="false">전체</button>
         </div>
         <div id="offer-groups"></div>
-        <button class="ghost logout" id="key-logout" type="button">판매자 열쇠 로그아웃</button>
+        <button class="ghost logout" id="key-logout" type="button">관리자 열쇠 로그아웃</button>
       </div>
     </div>
 
@@ -235,14 +237,106 @@
         </div>
       </form>
       <div id="admin-list-wrap" hidden>
-        <h3 class="admin-list-title">등록된 상품 <span id="admin-count">0</span>개</h3>
+        <h3 class="admin-list-title">샘플·운영 상품 <span id="admin-count">0</span>개</h3>
         <ul class="admin-list" id="admin-list"></ul>
         <button class="ghost logout" id="gh-logout" type="button">GitHub 로그아웃</button>
+      </div>
+    </div>
+
+    <div id="pane-sales" role="tabpanel" aria-labelledby="tab-sales" hidden>
+      <p class="form-msg" id="a-sales-msg" role="status"></p>
+      <div class="sales" id="a-sales-main" hidden>
+        <h3 class="admin-list-title">판매 기록 · 판매자 <span id="a-sales-count">0</span>명</h3>
+        <p class="sales-note">판매는 판매자가 수락한 제안이에요. 판매자를 누르면 일별·월별·연별 판매 현황이 보여요.</p>
+        <table class="sales-table">
+          <thead><tr><th>판매자</th><th class="num">주문</th><th class="num">금액</th><th class="num">마지막 판매</th></tr></thead>
+          <tbody id="a-sales-sellers"></tbody>
+        </table>
+      </div>
+      <div class="sales" id="a-sales-detail" hidden>
+        <button type="button" class="link-btn" id="a-sales-back">← 판매자 목록</button>
+        <h4 class="sales-sub" id="a-sales-title"></h4>
+        <div id="a-sales-period"></div>
       </div>
     </div>
   </div>
 </aside>
 
-<script src="app.js?v=20261016a"></script>
+<!-- 판매자 코너: 무엇이든 상점과 같은 판매자 계정으로 로그인 -->
+<aside class="panel admin" id="seller" aria-label="판매자 코너" aria-hidden="true">
+  <div class="panel-head">
+    <h2 id="s-title">판매자 로그인</h2>
+    <button class="close" type="button" data-close aria-label="닫기">×</button>
+  </div>
+  <div class="panel-body">
+    <div class="gh-login" id="s-login" hidden>
+      <p>무엇이든 상점과 같은 판매자 아이디·비밀번호로 로그인해요.</p>
+      <label for="s-id">아이디</label>
+      <input id="s-id" maxlength="20" autocomplete="username">
+      <label for="s-pw">비밀번호</label>
+      <input id="s-pw" type="password" autocomplete="current-password">
+      <button class="primary" id="s-go" type="button">로그인</button>
+      <p>아직 판매자가 아니면 <a href="../#seller">판매자 되기</a>에서 가입해 주세요. 아이디·비밀번호를 잊었으면 무엇이든 상점의 판매자 로그인 화면에서 "아이디·비밀번호 찾기"를 눌러 주세요.</p>
+    </div>
+    <p class="form-msg" id="s-msg" role="status"></p>
+    <div id="s-corner" hidden>
+      <div class="admin-tabs" id="s-tabs">
+        <button type="button" data-stab="offers" aria-pressed="true">받은 제안</button>
+        <button type="button" data-stab="items" aria-pressed="false">내 상품</button>
+        <button type="button" data-stab="uploads" aria-pressed="false">올린 상품</button>
+        <button type="button" data-stab="sales" aria-pressed="false">판매 기록</button>
+      </div>
+      <div id="s-pane-offers">
+        <div class="cats filters" id="s-offer-filter" role="group" aria-label="제안 상태">
+          <button type="button" data-f="검토 중" aria-pressed="true">검토 중</button>
+          <button type="button" data-f="수락" aria-pressed="false">수락</button>
+          <button type="button" data-f="거절" aria-pressed="false">거절</button>
+          <button type="button" data-f="all" aria-pressed="false">전체</button>
+        </div>
+        <div id="s-offer-groups"></div>
+      </div>
+      <div id="s-pane-items" hidden>
+        <h3 class="admin-list-title">내 상품 <span id="s-count">0</span>개</h3>
+        <p class="admin-empty" id="s-empty" hidden>아직 올린 상품이 없어요. 아래에서 첫 상품을 올려 보세요.</p>
+        <ul class="admin-list" id="s-list"></ul>
+        <form id="s-form" class="form" novalidate>
+          <h3 id="s-form-title">새 상품 올리기</h3>
+          <label for="s-name">상품 이름</label>
+          <input id="s-name" name="name" required maxlength="40" placeholder="예: 미소 한 번">
+          <div class="row">
+            <div>
+              <label for="s-cat">분류</label>
+              <input id="s-cat" name="cat" required maxlength="12" placeholder="마음, 시간, 물건…">
+            </div>
+            <div>
+              <label for="s-unit">단위</label>
+              <input id="s-unit" name="unit" maxlength="20" placeholder="예: 1회, 30분">
+            </div>
+          </div>
+          <label for="s-desc">설명</label>
+          <textarea id="s-desc" name="desc" rows="4" maxlength="400" placeholder="가격 대신 상품의 가치를 알 수 있게 자세히 적어 주세요"></textarea>
+          <label class="check"><input id="s-closed" name="closed" type="checkbox"> 제안 마감 (더 이상 가격 제안을 받지 않아요)</label>
+          <p class="form-msg" id="s-form-msg" role="status"></p>
+          <div class="form-actions">
+            <button class="primary" id="s-save" type="submit">상품 올리기</button>
+            <button class="ghost" id="s-cancel" type="button" hidden>수정 취소</button>
+          </div>
+        </form>
+      </div>
+      <div id="s-pane-uploads" hidden>
+        <h3 class="admin-list-title">올린 상품 <span id="s-up-count">0</span>개</h3>
+        <div id="s-up-period"></div>
+      </div>
+      <div id="s-pane-sales" hidden>
+        <h3 class="admin-list-title">판매 기록 · 판매 <span id="s-sales-count">0</span>건</h3>
+        <p class="sales-note">판매는 내가 수락한 제안이에요.</p>
+        <div id="s-sales-period"></div>
+      </div>
+      <button class="ghost logout" id="s-logout" type="button">로그아웃</button>
+    </div>
+  </div>
+</aside>
+
+<script src="app.js?v=20261016b"></script>
 </body>
 </html>
