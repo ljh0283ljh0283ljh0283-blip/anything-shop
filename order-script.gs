@@ -86,9 +86,17 @@ function placeOrder(d) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   if (sheet.getLastRow() === 0) sheet.appendRow(HEADER);
   else if (!sheet.getRange(1, HEADER.length).getValue()) sheet.getRange(1, HEADER.length).setValue(HEADER[HEADER.length - 1]);
-  var orderNo = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyMMdd-HHmmss') + '-' + Math.floor(Math.random() * 90 + 10);
+  // 주문번호: 날짜(yyMMdd)-시분(HHmm, 한국 시간)-임의의 두 자리-그날 들어온 순서(1부터). 예: 261016-0928-59-3
+  var now = new Date(), today = Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd');
+  var seq = 1;
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      if (String(r[0]).indexOf(today + '-') === 0) seq++;
+    });
+  }
+  var orderNo = today + '-' + Utilities.formatDate(now, 'Asia/Seoul', 'HHmm') + '-' + Math.floor(Math.random() * 90 + 10) + '-' + seq;
   // 수식으로 해석되지 않도록 손님이 적은 칸은 글자로 저장한다
-  sheet.appendRow([orderNo, new Date(), text(name), "'" + phone, text(clip(d.place, 100)), text(clip(d.memo, 200)),
+  sheet.appendRow([orderNo, now, text(name), "'" + phone, text(clip(d.place, 100)), text(clip(d.memo, 200)),
     text(clip(d.payer, 20) || name), lines.join('\n'), sellers.join(', '), total, '입금 대기', JSON.stringify(bySeller)]);
 
   // 판매자가 직접 등록한 계좌는 주문한 손님에게만 알려 준다
