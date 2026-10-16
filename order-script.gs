@@ -11,7 +11,8 @@
 
 var PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/products.json';
 var HEADER = ['주문번호', '주문 시각', '이름', '연락처', '받는 곳', '남긴 말', '입금자', '상품', '판매자', '금액', '상태', '판매자별 금액'];
-var OWN_SELLER = '무엇이든 상점';
+// 판매자 칸이 비어 있는 상품(운영자가 직접 올린 상품)의 판매자: 판매 기록에 이 이름으로 잡힌다
+var OWN_SELLER = '빨간도령';
 
 var SELLER_TAB = '판매자 신청';
 var SELLER_HEADER = ['신청 시각', '상점', '판매자 이름', '실명', '연락처', '이메일', '구분', '사업자등록번호', '팔고 싶은 것', '은행', '계좌번호', '예금주', '상태', '로그인 열쇠', '아이디', '비밀번호'];

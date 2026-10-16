@@ -19,7 +19,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016d">
+<link rel="stylesheet" href="style.css?v=20261016e">
 <style>body{margin:0}[hidden]{display:none!important}h1,h2,h3,p{word-break:keep-all}</style>
 </head>
 <body>
@@ -223,25 +223,32 @@
       <p class="admin-empty" id="admin-empty" hidden></p>
       <ul class="admin-list" id="admin-list"></ul>
       <div class="sales" id="sales-box" hidden>
-        <div class="sales-ctrl">
+        <div id="sales-main">
+          <p class="sales-note">판매자를 누르면 일별·월별·연별 판매 현황이 보여요. 취소된 주문은 빼고, 입금 대기 주문까지 셌어요.</p>
+          <table class="sales-table">
+            <thead><tr><th>판매자</th><th class="num">주문</th><th class="num">금액</th><th class="num">마지막 판매</th></tr></thead>
+            <tbody id="sales-sellers"></tbody>
+          </table>
+        </div>
+        <div id="sales-detail" hidden>
+          <button type="button" class="link-btn" id="sales-back">← 판매자 목록</button>
+          <h4 class="sales-sub" id="sales-title"></h4>
           <div class="admin-tabs" id="sales-unit" role="group" aria-label="기간">
-            <button type="button" data-unit="day" aria-pressed="true">일별</button>
-            <button type="button" data-unit="month" aria-pressed="false">월별</button>
+            <button type="button" data-unit="day" aria-pressed="false">일별</button>
+            <button type="button" data-unit="month" aria-pressed="true">월별</button>
             <button type="button" data-unit="year" aria-pressed="false">연별</button>
           </div>
-          <label class="sr-only" for="sales-seller">판매자</label>
-          <select id="sales-seller"><option value="">모든 판매자</option></select>
+          <table class="sales-table">
+            <thead><tr><th id="sales-col">월</th><th class="num">주문</th><th class="num">금액</th></tr></thead>
+            <tbody id="sales-body"></tbody>
+          </table>
+          <p class="sales-note">기간 줄을 누르면 그 기간의 주문이 아래에 보여요.</p>
+          <h4 class="sales-sub" id="sales-list-title">주문 목록</h4>
+          <table class="sales-table">
+            <thead><tr><th>주문번호</th><th>날짜</th><th class="num">금액</th><th>상태</th></tr></thead>
+            <tbody id="sales-orders"></tbody>
+          </table>
         </div>
-        <p class="sales-note">취소된 주문은 빼고, 입금 대기 주문까지 모두 셌어요.</p>
-        <table class="sales-table">
-          <thead><tr><th>기간</th><th>판매자</th><th class="num">주문</th><th class="num">금액</th></tr></thead>
-          <tbody id="sales-body"></tbody>
-        </table>
-        <h4 class="sales-sub">판매자별 합계</h4>
-        <table class="sales-table">
-          <thead><tr><th>판매자</th><th class="num">주문</th><th class="num">금액</th></tr></thead>
-          <tbody id="sales-total"></tbody>
-        </table>
       </div>
     </div>
     <form id="product-form" class="form" novalidate hidden>
@@ -296,7 +303,7 @@
   </div>
 </aside>
 
-<script src="app.js?v=20261016d"></script>
-<script src="seller.js?v=20261016d"></script>
+<script src="app.js?v=20261016e"></script>
+<script src="seller.js?v=20261016e"></script>
 </body>
 </html>
