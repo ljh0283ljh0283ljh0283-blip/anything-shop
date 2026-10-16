@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016a">
+<link rel="stylesheet" href="style.css?v=20261016b">
 </head>
 <body>
 
@@ -45,6 +45,16 @@
 
         <div class="fields">
           <div class="field">
+            <label for="temp">동작온도</label>
+            <div class="inrow"><input class="num" id="temp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
+            <div class="hint" id="temp-hint"></div>
+          </div>
+          <div class="field">
+            <label for="qty">수량</label>
+            <div class="inrow"><input class="num" id="qty" type="number" inputmode="numeric" value="1000"><span class="unit">EA</span></div>
+            <div class="hint" id="qty-hint"></div>
+          </div>
+          <div class="field">
             <label for="len" id="len-label">와이어 길이</label>
             <div class="inrow"><input class="num" id="len" type="number" inputmode="numeric"><span class="unit">mm</span>
               <label class="strip-label" for="strip">탈피</label><input class="num" id="strip" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
@@ -55,16 +65,6 @@
             <div class="inrow"><input class="num" id="len2" type="number" inputmode="numeric"><span class="unit">mm</span>
               <label class="strip-label" for="strip2">탈피</label><input class="num" id="strip2" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택"><span class="unit">mm</span></div>
             <div class="hint">두 줄 길이가 같으면 같은 값을 적으세요.</div>
-          </div>
-          <div class="field">
-            <label for="temp">동작온도</label>
-            <div class="inrow"><input class="num" id="temp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
-            <div class="hint" id="temp-hint"></div>
-          </div>
-          <div class="field">
-            <label for="qty">수량</label>
-            <div class="inrow"><input class="num" id="qty" type="number" inputmode="numeric" value="1000"><span class="unit">EA</span></div>
-            <div class="hint" id="qty-hint"></div>
           </div>
           <div class="fields-row">
             <div class="field">
@@ -289,6 +289,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261016a"></script>
+<script src="app.js?v=20261016b"></script>
 </body>
 </html>
