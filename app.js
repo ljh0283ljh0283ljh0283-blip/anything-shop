@@ -371,7 +371,7 @@
   // 관리자 탭: items(판매자 상품 전체), sellers(판매자), own(샘플·운영 상품 = 시트 "운영 상품" 탭)
   var form = $('#product-form'), msg = $('#form-msg'), editingId = null;
   var adminList = $('#admin-list');
-  var mode = '', adminTab = 'items', adminData = { items: [], sellers: [] }, sellerNick = '';
+  var mode = '', adminTab = 'items', sellerTab = 'items', adminData = { items: [], sellers: [] }, sellerNick = '';
 
   function say(text, isErr) { msg.textContent = text; msg.classList.toggle('err', !!isErr); }
 
@@ -416,7 +416,7 @@
     form.reset();
     if (mode === 'seller') form.seller.value = sellerNick;
     var adminOnlyEdit = mode === 'admin' && adminTab !== 'own';
-    form.hidden = !mode || adminOnlyEdit;
+    form.hidden = !mode || adminOnlyEdit || (mode === 'seller' && sellerTab === 'sales');
     form.seller.readOnly = mode === 'seller' || (mode === 'admin' && adminTab === 'items');
     $('#f-sample-row').hidden = mode !== 'admin';
     $('#form-title').textContent = formTitle();
@@ -508,6 +508,8 @@
   }
   function renderSales() {
     var rows = adminData.sales || [];
+    if (mode === 'seller') salesWho = sellerNick;
+    $('#sales-back').hidden = mode === 'seller';
     $('#sales-main').hidden = !!salesWho; $('#sales-detail').hidden = !salesWho;
     if (!salesWho) {
       // 가입한 판매자는 판매가 없어도 보인다
@@ -531,6 +533,7 @@
     }
     $('#admin-empty').hidden = true;
     $('#sales-title').textContent = salesWho + ' 판매 현황';
+    if (mode === 'seller') { $('#admin-list-label').textContent = '판매 기록 · 주문'; $('#admin-count').textContent = Object.keys(rows.reduce(function (o, r) { o[r.orderNo] = 1; return o; }, {})).length; }
     document.querySelectorAll('#sales-unit button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.unit === salesUnit)); });
     var U = SALES_UNIT[salesUnit];
     $('#sales-col').textContent = U.name;
@@ -553,16 +556,17 @@
     $('#sales-list-title').textContent = salesKey ? salesLabel(salesKey) + ' 주문 목록' : '주문 목록 (전체)';
     var body3 = $('#sales-orders'); body3.innerHTML = '';
     list.sort(function (a, b) { return a.orderNo < b.orderNo ? 1 : -1; }).forEach(function (r) {
-      body3.appendChild(tr([[r.orderNo], [r.day], [won(r.amount), 'num'], [r.status || '-']]));
+      body3.appendChild(tr([[r.orderNo], [r.day], [r.items || '-'], [won(r.amount), 'num'], [r.status || '-']]));
     });
   }
   function loadSales() {
     salesWho = null; salesKey = null;
     $('#sales-main').hidden = true; $('#sales-detail').hidden = true;
     $('#admin-empty').hidden = false; $('#admin-empty').textContent = '판매 기록을 읽는 중이에요…';
-    return adminPost({ action: 'adminSales' }).then(function (res) {
+    var req = mode === 'seller' ? sellerPost({ action: 'sellerSales' }) : adminPost({ action: 'adminSales' });
+    return req.then(function (res) {
       adminData.sales = res.sales || [];
-      if (mode === 'admin' && adminTab === 'sales') renderAdminList();
+      if ((mode === 'admin' && adminTab === 'sales') || (mode === 'seller' && sellerTab === 'sales')) renderAdminList();
     }).catch(function (err) { $('#admin-empty').textContent = writeError(err); });
   }
   function salesPick(e) {
@@ -581,8 +585,9 @@
 
   function renderAdminList() {
     adminList.innerHTML = '';
-    var salesTab = mode === 'admin' && adminTab === 'sales';
+    var salesTab = (mode === 'admin' && adminTab === 'sales') || (mode === 'seller' && sellerTab === 'sales');
     $('#sales-box').hidden = !salesTab;
+    $('#pw-change').hidden = mode !== 'seller' || sellerTab === 'sales';
     if (salesTab) {
       if (adminData.sales) renderSales();
       return;
@@ -739,22 +744,23 @@
 
   function setupPanels() {
     var panel = $('#admin'), signup = $('#seller-signup');
-    var views = ['#login-seller', '#find-box', '#login-admin', '#seller-signup', '#admin-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'];
+    var views = ['#login-seller', '#find-box', '#login-admin', '#seller-signup', '#seller-tabs', '#admin-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'];
     function show(view) {
       var on = {
         login: ['#login-seller'], find: ['#find-box'], adminLogin: ['#login-admin'], signup: ['#seller-signup'],
-        seller: ['#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'], admin: ['#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout']
+        seller: ['#seller-tabs', '#admin-list-wrap', '#product-form', '#pw-change', '#gh-logout'], admin: ['#admin-tabs', '#admin-list-wrap', '#product-form', '#gh-logout']
       }[view];
       views.forEach(function (v) { $(v).hidden = on.indexOf(v) < 0; });
       $('#panel-title').textContent = { login: '판매자 로그인', find: '아이디·비밀번호 찾기', adminLogin: '사이트 관리자', signup: '판매자 되기',
-        seller: '내 상품', admin: '사이트 관리자' }[view];
+        seller: '판매자 코너', admin: '사이트 관리자' }[view];
       refreshEntries();
       if (view === 'seller' || view === 'admin') resetForm();
     }
     function loginMsg(t, isErr) { var m = $('#gh-msg'); m.textContent = t; m.classList.toggle('err', !!isErr); }
 
     function enterSeller(nick) {
-      mode = 'seller'; sellerNick = nick;
+      mode = 'seller'; sellerNick = nick; sellerTab = 'items'; adminData.sales = null;
+      document.querySelectorAll('#seller-tabs button').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.stab === 'items')); });
       loginMsg(''); say('');
       show('seller');
       return loadSellerItems().then(renderAdminList);
@@ -822,6 +828,14 @@
       enterAdmin();
     });
     $('#admin-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#admin-go').click(); });
+    $('#seller-tabs').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-stab]'); if (!b) return;
+      sellerTab = b.dataset.stab;
+      document.querySelectorAll('#seller-tabs button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      say('');
+      resetForm();
+      if (sellerTab === 'sales') loadSales();
+    });
     $('#admin-tabs').addEventListener('click', function (e) {
       var b = e.target.closest('button[data-tab]'); if (!b) return;
       adminTab = b.dataset.tab;
@@ -896,7 +910,7 @@
   function refreshEntries() {
     var seller = !!sellerKey(), admin = !!adminKey();
     $('#open-admin').hidden = !seller;
-    $('#open-admin').textContent = '내 상품 올리기';
+    $('#open-admin').textContent = '판매자 코너';
     $('#open-manage').hidden = !admin;
     $('#signup-entry').hidden = seller;
     $('#seller-entry').hidden = seller;
