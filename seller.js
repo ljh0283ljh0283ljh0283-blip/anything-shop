@@ -18,7 +18,7 @@
       '<ul class="su-points"><li>판매 수수료 없음</li><li>손님이 판매자 계좌로 직접 입금</li></ul>' +
     '</div>' +
     '<form class="form su-form" id="su-form" novalidate>' +
-      '<label for="su-id">아이디</label><input id="su-id" name="loginId" maxlength="20" required autocomplete="username" autocapitalize="off" placeholder="영어·숫자 4~20자">' +
+      '<label for="su-id">아이디</label><input id="su-id" name="loginId" maxlength="20" required autocomplete="username" autocapitalize="off" placeholder="한글·영어·숫자, 띄어쓰기 가능 2~20자">' +
       '<label for="su-pw">비밀번호</label><input id="su-pw" name="password" type="password" maxlength="64" required autocomplete="new-password" placeholder="영어와 숫자를 섞어 6자 이상">' +
       '<label for="su-pw2">비밀번호 확인</label><input id="su-pw2" name="password2" type="password" maxlength="64" required autocomplete="new-password">' +
       '<div class="row">' +
@@ -74,12 +74,12 @@
     var f = form;
     form.querySelectorAll('.field-err').forEach(function (n) { n.remove(); });
     var data = {
-      type: 'seller', shop: shop, loginId: f.loginId.value.trim().toLowerCase(), password: f.password.value,
+      type: 'seller', shop: shop, loginId: f.loginId.value.trim().replace(/\s+/g, ' ').toLowerCase(), password: f.password.value,
       nick: f.nick.value.trim(), realName: f.name.value.trim(), tel: f.phone.value.trim(), email: f.email.value.trim(),
       kind: f.kind.value, biz: f.kind.value === '사업자' ? f.biz.value.trim() : '',
       what: f.what.value.trim(), bank: f.bank.value.trim(), acct: f.acct.value.trim(), holder: f.holder.value.trim()
     };
-    if (!/^[a-z0-9_]{4,20}$/.test(data.loginId)) { bad(f.loginId, '아이디는 영어와 숫자로 4~20자로 적어 주세요. 한글과 띄어쓰기는 쓸 수 없어요.'); return; }
+    if (!/^[가-힣a-z0-9_ ]{2,20}$/.test(data.loginId)) { bad(f.loginId, '아이디는 한글, 영어, 숫자, 띄어쓰기로 2~20자로 적어 주세요. 기호는 쓸 수 없어요.'); return; }
     if (data.password.length < 6 || !/[a-zA-Z]/.test(data.password) || !/[0-9]/.test(data.password)) { bad(f.password, '비밀번호는 영어와 숫자를 섞어 6자 이상으로 적어 주세요.'); return; }
     if (data.password !== f.password2.value) { bad(f.password2, '비밀번호 확인이 맞지 않아요.'); return; }
     if (!data.nick) { bad(f.nick, '상점에 보일 판매자 이름을 적어 주세요.'); return; }

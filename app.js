@@ -691,7 +691,7 @@
     });
 
     $('#l-go').addEventListener('click', function () {
-      var id = $('#l-id').value.trim().toLowerCase(), pw = $('#l-pw').value;
+      var id = $('#l-id').value.trim().replace(/\s+/g, ' ').toLowerCase(), pw = $('#l-pw').value;
       if (!id || !pw) { loginMsg('아이디와 비밀번호를 적어 주세요.', true); return; }
       loginMsg('확인하는 중이에요…');
       api({ action: 'sellerLogin', loginId: id, password: pw }).then(function (res) {
@@ -747,7 +747,7 @@
       }).catch(function (err) { loginMsg(writeError(err), true); }).then(function () { btn.disabled = false; });
     });
     $('#fd-go').addEventListener('click', function () {
-      var code = $('#fd-code').value.trim(), id = $('#fd-id').value.trim().toLowerCase(), pw = $('#fd-pw').value;
+      var code = $('#fd-code').value.trim(), id = $('#fd-id').value.trim().replace(/\s+/g, ' ').toLowerCase(), pw = $('#fd-pw').value;
       if (!/^\d{6}$/.test(code)) { loginMsg('메일로 받은 6자리 인증번호를 적어 주세요.', true); return; }
       if (!id) { loginMsg('메일에 적힌 아이디를 적어 주세요.', true); return; }
       if (pw.length < 6 || !/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) { loginMsg('새 비밀번호는 영어와 숫자를 섞어 6자 이상으로 적어 주세요.', true); return; }

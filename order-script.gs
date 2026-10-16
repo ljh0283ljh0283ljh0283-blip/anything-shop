@@ -98,14 +98,14 @@ function placeOrder(d) {
 // ---------- 판매자 ----------
 function sellerSignup(d) {
   var nick = clip(d.nick, 20), realName = clip(d.realName, 20), tel = clip(d.tel, 20);
-  var loginId = clip(d.loginId, 20).toLowerCase(), password = String(d.password || '');
-  if (!/^[a-z0-9_]{4,20}$/.test(loginId)) return { ok: false, error: '아이디는 영어 소문자와 숫자로 4~20자로 적어 주세요.' };
+  var loginId = normId(d.loginId), password = String(d.password || '');
+  if (!/^[가-힣a-z0-9_ ]{2,20}$/.test(loginId)) return { ok: false, error: '아이디는 한글, 영어, 숫자, 띄어쓰기로 2~20자로 적어 주세요.' };
   if (password.length < 6 || password.length > 64) return { ok: false, error: '비밀번호는 6자 이상으로 적어 주세요.' };
   if (!nick || !realName || !tel) return { ok: false, error: '이름과 연락처가 필요해요.' };
   if (!isEmail(d.email)) return { ok: false, error: '아이디·비밀번호를 찾을 때 쓸 이메일을 적어 주세요.' };
   if (!clip(d.bank, 15) || !clip(d.acct, 30) || !clip(d.holder, 20)) return { ok: false, error: '입금받을 계좌가 필요해요.' };
   var rows = sellerRows();
-  if (rows.some(function (r) { return String(r.row[S.loginId]).toLowerCase() === loginId; })) return { ok: false, error: '이미 쓰고 있는 아이디예요. 다른 아이디를 적어 주세요.' };
+  if (rows.some(function (r) { return normId(r.row[S.loginId]) === loginId; })) return { ok: false, error: '이미 쓰고 있는 아이디예요. 다른 아이디를 적어 주세요.' };
   var nickTaken = rows.some(function (r) { return String(r.row[S.nick]).toLowerCase() === nick.toLowerCase(); });
   if (nickTaken || nick === '무엇이든 상점') return { ok: false, error: '이미 쓰고 있는 판매자 이름이에요. 다른 이름을 적어 주세요.' };
 
@@ -118,9 +118,9 @@ function sellerSignup(d) {
 
 // 아이디·비밀번호가 맞으면 새 로그인 열쇠를 만들어 준다(전에 쓰던 열쇠는 더 이상 쓸 수 없다)
 function sellerLogin(d) {
-  var loginId = clip(d.loginId, 20).toLowerCase(), password = String(d.password || '');
+  var loginId = normId(d.loginId), password = String(d.password || '');
   var hit = null;
-  sellerRows().forEach(function (r) { if (String(r.row[S.loginId]).toLowerCase() === loginId) hit = r; });
+  sellerRows().forEach(function (r) { if (normId(r.row[S.loginId]) === loginId) hit = r; });
   if (!hit || !checkPassword(password, String(hit.row[S.pw]))) return { ok: false, error: '아이디나 비밀번호가 맞지 않아요.' };
   if (hit.row[S.status] === STOPPED) return { ok: false, error: '이용이 정지된 판매자예요. 운영자에게 문의해 주세요.' };
   var key = newKey();
@@ -189,10 +189,10 @@ function sellerFindFinish(d) {
     saved.tries++; cache.put(ck, JSON.stringify(saved), 600);
     return { ok: false, error: '인증번호가 맞지 않아요.' };
   }
-  var loginId = clip(d.loginId, 20).toLowerCase(), pw = String(d.newPassword || ''), hit = null;
+  var loginId = normId(d.loginId), pw = String(d.newPassword || ''), hit = null;
   if (pw.length < 6 || pw.length > 64) return { ok: false, error: '새 비밀번호는 6자 이상으로 적어 주세요.' };
   sellerRows().forEach(function (r) {
-    if (normEmail(r.row[S.email]) === email && String(r.row[S.loginId]).toLowerCase() === loginId && r.row[S.status] !== STOPPED) hit = r;
+    if (normEmail(r.row[S.email]) === email && normId(r.row[S.loginId]) === loginId && r.row[S.status] !== STOPPED) hit = r;
   });
   if (!hit) return { ok: false, error: '메일에 적힌 아이디를 적어 주세요.' };
   cache.remove(ck);
@@ -428,6 +428,8 @@ function checkPassword(pw, stored) {
 function digest(v) { return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, v, Utilities.Charset.UTF_8)); }
 function stamp(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd HH:mm') : String(v || ''); }
 
+// 아이디: 앞뒤 빈칸을 빼고, 빈칸 여러 개는 하나로, 영어는 소문자로
+function normId(v) { return String(v || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 20); }
 function normEmail(v) { return String(v || '').trim().toLowerCase().slice(0, 60); }
 function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail(v)); }
 function clip(v, n) { return String(v || '').trim().slice(0, n); }
