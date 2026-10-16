@@ -18,10 +18,8 @@
       '<ul class="su-points"><li>판매 수수료 없음</li><li>손님이 판매자 계좌로 직접 입금</li></ul>' +
     '</div>' +
     '<form class="form su-form" id="su-form" novalidate>' +
-      '<div class="row">' +
-        '<div><label for="su-id">아이디</label><input id="su-id" name="loginId" maxlength="20" required autocomplete="username" autocapitalize="off" placeholder="영어 소문자, 숫자 4~20자"></div>' +
-        '<div><label for="su-pw">비밀번호</label><input id="su-pw" name="password" type="password" maxlength="64" required autocomplete="new-password" placeholder="6자 이상"></div>' +
-      '</div>' +
+      '<label for="su-id">아이디</label><input id="su-id" name="loginId" maxlength="20" required autocomplete="username" autocapitalize="off" placeholder="영어·숫자 4~20자">' +
+      '<label for="su-pw">비밀번호</label><input id="su-pw" name="password" type="password" maxlength="64" required autocomplete="new-password" placeholder="영어와 숫자를 섞어 6자 이상">' +
       '<label for="su-pw2">비밀번호 확인</label><input id="su-pw2" name="password2" type="password" maxlength="64" required autocomplete="new-password">' +
       '<div class="row">' +
         '<div><label for="su-nick">상점에 보일 판매자 이름</label><input id="su-nick" name="nick" maxlength="20" required placeholder="예: 다육이네"></div>' +
@@ -29,7 +27,7 @@
       '</div>' +
       '<div class="row">' +
         '<div><label for="su-phone">연락처</label><input id="su-phone" name="phone" maxlength="20" required inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></div>' +
-        '<div><label for="su-email">이메일 (아이디·비밀번호 찾기에 써요)</label><input id="su-email" name="email" type="email" maxlength="60" required autocomplete="email"></div>' +
+        '<div><label for="su-email">이메일</label><input id="su-email" name="email" type="email" maxlength="60" required autocomplete="email" placeholder="아이디·비밀번호 찾기에 써요"></div>' +
       '</div>' +
       '<fieldset class="su-kind"><legend>판매자 구분</legend>' +
         '<label class="check"><input type="radio" name="kind" value="개인" checked> 개인</label>' +
@@ -58,6 +56,14 @@
 
   var form = document.getElementById('su-form'), msg = document.getElementById('su-msg');
   function say(t, isErr) { msg.textContent = t; msg.classList.toggle('err', !!isErr); }
+  // 틀린 칸 바로 아래에 알려 주고 그 칸으로 옮겨 간다
+  function bad(field, t) {
+    say(t, true);
+    var box = field.closest('.su-bank') || field, note = document.createElement('p');
+    note.className = 'field-err'; note.textContent = t;
+    box.insertAdjacentElement('afterend', note);
+    field.scrollIntoView({ block: 'center' }); field.focus();
+  }
 
   form.addEventListener('change', function (e) {
     if (e.target.name === 'kind') document.getElementById('su-biz-row').hidden = e.target.value !== '사업자';
@@ -66,22 +72,23 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var f = form;
+    form.querySelectorAll('.field-err').forEach(function (n) { n.remove(); });
     var data = {
       type: 'seller', shop: shop, loginId: f.loginId.value.trim().toLowerCase(), password: f.password.value,
       nick: f.nick.value.trim(), realName: f.name.value.trim(), tel: f.phone.value.trim(), email: f.email.value.trim(),
       kind: f.kind.value, biz: f.kind.value === '사업자' ? f.biz.value.trim() : '',
       what: f.what.value.trim(), bank: f.bank.value.trim(), acct: f.acct.value.trim(), holder: f.holder.value.trim()
     };
-    if (!/^[a-z0-9_]{4,20}$/.test(data.loginId)) { say('아이디는 영어 소문자와 숫자로 4~20자로 적어 주세요.', true); f.loginId.focus(); return; }
-    if (data.password.length < 6) { say('비밀번호는 6자 이상으로 적어 주세요.', true); f.password.focus(); return; }
-    if (data.password !== f.password2.value) { say('비밀번호 확인이 맞지 않아요.', true); f.password2.focus(); return; }
-    if (!data.nick) { say('상점에 보일 판매자 이름을 적어 주세요.', true); f.nick.focus(); return; }
-    if (!data.realName) { say('실명을 적어 주세요.', true); f.name.focus(); return; }
-    if (!/^[0-9+\-\s()]{8,20}$/.test(data.tel)) { say('연락처를 숫자로 적어 주세요. 예: 010-1234-5678', true); f.phone.focus(); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { say('아이디·비밀번호를 찾을 때 쓸 이메일을 적어 주세요.', true); f.email.focus(); return; }
-    if (data.kind === '사업자' && !/^[0-9\-]{10,12}$/.test(data.biz)) { say('사업자등록번호를 적어 주세요.', true); f.biz.focus(); return; }
-    if (!data.what) { say('팔고 싶은 것을 적어 주세요.', true); f.what.focus(); return; }
-    if (!data.bank || !data.acct || !data.holder) { say('입금받을 계좌의 은행, 계좌번호, 예금주를 모두 적어 주세요.', true); (data.bank ? data.acct ? f.holder : f.acct : f.bank).focus(); return; }
+    if (!/^[a-z0-9_]{4,20}$/.test(data.loginId)) { bad(f.loginId, '아이디는 영어와 숫자로 4~20자로 적어 주세요. 한글과 띄어쓰기는 쓸 수 없어요.'); return; }
+    if (data.password.length < 6 || !/[a-zA-Z]/.test(data.password) || !/[0-9]/.test(data.password)) { bad(f.password, '비밀번호는 영어와 숫자를 섞어 6자 이상으로 적어 주세요.'); return; }
+    if (data.password !== f.password2.value) { bad(f.password2, '비밀번호 확인이 맞지 않아요.'); return; }
+    if (!data.nick) { bad(f.nick, '상점에 보일 판매자 이름을 적어 주세요.'); return; }
+    if (!data.realName) { bad(f.name, '실명을 적어 주세요.'); return; }
+    if (!/^[0-9+\-\s()]{8,20}$/.test(data.tel)) { bad(f.phone, '연락처를 숫자로 적어 주세요. 예: 010-1234-5678'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { bad(f.email, '아이디·비밀번호를 찾을 때 쓸 이메일을 적어 주세요.'); return; }
+    if (data.kind === '사업자' && !/^[0-9\-]{10,12}$/.test(data.biz)) { bad(f.biz, '사업자등록번호를 적어 주세요.'); return; }
+    if (!data.what) { bad(f.what, '팔고 싶은 것을 적어 주세요.'); return; }
+    if (!data.bank || !data.acct || !data.holder) { bad(data.bank ? data.acct ? f.holder : f.acct : f.bank, '입금받을 계좌의 은행, 계좌번호, 예금주를 모두 적어 주세요.'); return; }
     if (!f.agreeTerms.checked || !f.agreePrivacy.checked) { say('이용약관과 개인정보 수집·이용에 동의해 주세요.', true); return; }
     if (!url) { say('지금은 가입을 받을 수 없어요. 잠시 뒤 다시 시도해 주세요.', true); return; }
 

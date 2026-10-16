@@ -224,3 +224,5 @@ footer a { color: var(--muted); }
 .pw-change summary { cursor: pointer; font-size: .95rem; font-weight: 500; }
 .pw-change .form { margin-top: 8px; }
 .gh-login .su-privacy { margin-top: 12px; }
+.field-err { color: var(--danger, #b3261e); font-size: .82rem; margin: -2px 0 8px; }
+.su-form .row { align-items: start; }

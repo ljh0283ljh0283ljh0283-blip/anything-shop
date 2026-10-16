@@ -750,7 +750,7 @@
       var code = $('#fd-code').value.trim(), id = $('#fd-id').value.trim().toLowerCase(), pw = $('#fd-pw').value;
       if (!/^\d{6}$/.test(code)) { loginMsg('메일로 받은 6자리 인증번호를 적어 주세요.', true); return; }
       if (!id) { loginMsg('메일에 적힌 아이디를 적어 주세요.', true); return; }
-      if (pw.length < 6) { loginMsg('새 비밀번호는 6자 이상으로 적어 주세요.', true); return; }
+      if (pw.length < 6 || !/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) { loginMsg('새 비밀번호는 영어와 숫자를 섞어 6자 이상으로 적어 주세요.', true); return; }
       if (pw !== $('#fd-pw2').value) { loginMsg('새 비밀번호 확인이 맞지 않아요.', true); return; }
       loginMsg('확인하는 중이에요…');
       api({ action: 'sellerFindFinish', email: $('#fd-email').value.trim(), code: code, loginId: id, newPassword: pw }).then(function (res) {
@@ -771,7 +771,7 @@
       var oldPw = $('#pw-old').value, newPw = $('#pw-new').value, m = $('#pw-msg');
       function note(t, isErr) { m.textContent = t; m.classList.toggle('err', !!isErr); }
       if (!oldPw) { note('지금 비밀번호를 적어 주세요.', true); return; }
-      if (newPw.length < 6) { note('새 비밀번호는 6자 이상으로 적어 주세요.', true); return; }
+      if (newPw.length < 6 || !/[a-zA-Z]/.test(newPw) || !/[0-9]/.test(newPw)) { note('새 비밀번호는 영어와 숫자를 섞어 6자 이상으로 적어 주세요.', true); return; }
       if (newPw !== $('#pw-new2').value) { note('새 비밀번호 확인이 맞지 않아요.', true); return; }
       note('바꾸는 중이에요…');
       sellerPost({ action: 'sellerPassword', oldPassword: oldPw, newPassword: newPw }).then(function () {
