@@ -130,7 +130,7 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 .admin-list li.editing { background: var(--tag); margin-inline: -8px; padding-inline: 8px; border-radius: 6px; }
 .admin-list .a-name { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .admin-list .a-meta { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.admin-list .a-actions { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 4px; }
+.admin-list .a-actions { grid-row: 1 / span 2; grid-column: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 190px; }
 .admin-list .a-actions button { font-size: .8rem; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--fg); }
 .admin-list .a-actions .del { color: var(--danger); }
 .admin-list .a-actions .del.confirm { background: var(--danger); color: var(--surface); border-color: var(--danger); }

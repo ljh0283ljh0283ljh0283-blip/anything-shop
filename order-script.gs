@@ -286,6 +286,17 @@ function admin(d) {
     sellerSheet().getRange(hit.index, S.status + 1).setValue(d.status);
     return { ok: true };
   }
+  // 판매자 삭제: 판매자 신청 줄과 그 판매자가 올린 상품을 모두 지운다(되돌릴 수 없다). 지난 주문 기록은 남는다.
+  if (d.action === 'adminSellerDelete') {
+    var gone = null;
+    sellerRows().forEach(function (r) { if (String(r.row[S.nick]) === String(d.nick)) gone = r; });
+    if (!gone) return { ok: false, error: '없는 판매자예요.' };
+    var rowsToGo = itemRows().filter(function (r) { return String(r.row[I.seller]) === String(d.nick); })
+      .map(function (r) { return r.index; }).sort(function (a, b) { return b - a; });
+    rowsToGo.forEach(function (i) { itemSheet().deleteRow(i); });
+    sellerSheet().deleteRow(gone.index);
+    return { ok: true, items: rowsToGo.length };
+  }
   // 비밀번호를 잊은 판매자: 임시 비밀번호를 만들어 돌려준다. 기존 로그인은 모두 풀린다.
   if (d.action === 'adminSellerReset') {
     var who = null;
