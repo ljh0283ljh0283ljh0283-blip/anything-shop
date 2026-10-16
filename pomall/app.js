@@ -350,8 +350,12 @@
     });
   }
   // 시트에 남은 구글 드라이브 링크만 연다
+  // 구글 드라이브 링크, 또는 회사 서버(pomall-server)가 저장한 /files/ 링크만 연다
+  function serverFile(u) {
+    try { var a = new URL(u, location.href), b = new URL(settings.orderUrl || '', location.href); return a.origin === b.origin && /^\/files\/[0-9a-f]{32}\//.test(a.pathname); } catch (e) { return false; }
+  }
   function fileLink(o) {
-    if (/^https:\/\/(drive|docs)\.google\.com\//.test(o.attachment || '')) return '<div class="order-items"><a href="' + esc(o.attachment) + '" target="_blank" rel="noopener">발주서 보기</a></div>';
+    if (/^https:\/\/(drive|docs)\.google\.com\//.test(o.attachment || '') || serverFile(o.attachment || '')) return '<div class="order-items"><a href="' + esc(o.attachment) + '" target="_blank" rel="noopener">발주서 보기</a></div>';
     return o.attachmentName ? '<div class="order-items">발주서 ' + esc(o.attachmentName) + '</div>' : '';
   }
 

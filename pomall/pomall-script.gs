@@ -49,6 +49,7 @@ function doPost(e) {
       case 'customers': return reply(staff(d.key, ['admin', 'sales'], function () { return { ok: true, customers: customerList() }; }));
       case 'saveCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return saveCustomer(d.customer || {}); }));
       case 'deleteCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return deleteCustomer(d.code); }));
+      case 'export': return reply(staff(d.key, ['admin'], exportAll));
     }
     return reply({ ok: false, error: '알 수 없는 요청이에요.' });
   } catch (err) {
@@ -348,6 +349,23 @@ function orders(withLog) {
       temp: Number(r[COL['온도(°C)']]), qty: Number(r[COL['수량']]), unit: Number(r[COL['단가']]), memo: String(r[COL['품목 메모']]) });
   });
   return keys.reverse().map(function (k) { return map[k]; });
+}
+
+// 회사 서버(pomall-server)로 옮길 때 쓰는 내보내기. 관리자 열쇠로만 된다.
+// 발주 줄, 거래처(암호화된 비밀번호 포함), 상태 기록, 생산 소요일, 마지막 거래처 번호를 그대로 돌려준다.
+function exportAll() {
+  var iso = function (v) { return v instanceof Date ? v.toISOString() : String(v || ''); };
+  var orderRows = rows().filter(function (r) { return String(r[COL['발주번호']]); }).map(function (r) {
+    var o = {}; HEADER.forEach(function (h, i) { o[h] = r[i] instanceof Date ? (h === '접수 시각' || h === '바뀐 시각' ? iso(r[i]) : day(r[i])) : r[i]; }); return o;
+  });
+  var custs = numberCustomers().map(function (c) {
+    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices };
+  });
+  var s = logSheet(), n = s.getLastRow();
+  var log = n < 2 ? [] : s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().map(function (r) {
+    return { at: iso(r[0]), no: String(r[1]), company: String(r[2]), from: String(r[3]), to: String(r[4]), by: String(r[5]), role: String(r[6]), reason: String(r[7]) };
+  });
+  return { ok: true, exportedAt: new Date().toISOString(), orders: orderRows, customers: custs, log: log, lead: lead(), custSeq: custSeq(custs) };
 }
 
 // ----- 가격 계산 (pomall/app.js와 같은 규칙) -----

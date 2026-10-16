@@ -1,0 +1,4 @@
+data/
+config.json
+export*.json
+node_modules/

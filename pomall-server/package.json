@@ -1,0 +1,12 @@
+{
+  "name": "seki-pomall-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SEKI POmall 회사 서버 (구글 Apps Script 대신 쓰는 발주 서버)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "import": "node --disable-warning=ExperimentalWarning import.js"
+  },
+  "engines": { "node": ">=22.13" }
+}
