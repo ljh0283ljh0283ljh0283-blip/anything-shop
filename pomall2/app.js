@@ -6,7 +6,7 @@
   'use strict';
 
   var $ = function (s) { return document.querySelector(s); };
-  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', localHelp: 'pomall.help', lang: 'pomall.lang' };
+  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', localHelp: 'pomall.help', localReset: 'pomall.reset', lang: 'pomall.lang' };
   function store(k, v) {
     try {
       if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null');
@@ -42,7 +42,13 @@
     [/^(\S+) 동작온도가 범위/, '$1 operating temperature is out of range.'],
     [/^수량은 (\d+)EA 이상 (\d+)EA 단위/, 'Quantity must be at least $1 EA, in steps of $2 EA.'],
     [/발주서는 PDF/, 'The PO file must be a PDF, image, Excel, Word or HWP file.'],
-    [/10MB까지/, 'The PO file can be up to 10 MB.']
+    [/10MB까지/, 'The PO file can be up to 10 MB.'],
+    [/인증번호를 먼저/, 'Please request a verification number first.'],
+    [/인증번호 시간이 지났/, 'The verification number has expired. Please request a new one.'],
+    [/여러 번 틀렸/, 'Too many wrong tries. Please request a new verification number.'],
+    [/인증번호가 맞지/, 'The verification number is incorrect.'],
+    [/이 메일에 등록된 거래처 코드가 아니/, 'That customer code is not registered to this email.'],
+    [/비밀번호는 4자 이상/, 'The password must be at least 4 characters.']
   ];
   function enErr(m) {
     for (var k = 0; k < EN_ERR.length; k++) {
@@ -71,6 +77,7 @@
   //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
   //   config() → {lead}      saveLead(key, {days, bigQty, bigDays, by})      shipDate(key, {no, date, by})
   //   customers(key) → [거래처]      saveCustomer(key, 거래처 + oldCode)      deleteCustomer(key, code)
+  //   resetStart({email, lang}) → 등록된 메일로 거래처 코드와 인증번호 발송      resetFinish({email, code, otp, pw})
   //   requestHelp({company, contact, phone, what, memo})      helpList(key) → [요청]      helpDone(key, {id, by})
   var STORAGES = {
     // 구글 시트 + Apps Script 웹 앱 (pomall-script.gs)
@@ -94,6 +101,8 @@
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
         saveCustomer: function (key, c) { return call({ action: 'saveCustomer', key: key, customer: c }); },
         deleteCustomer: function (key, code) { return call({ action: 'deleteCustomer', key: key, code: code }); },
+        resetStart: function (r) { return call({ action: 'resetStart', email: r.email, lang: r.lang }); },
+        resetFinish: function (r) { return call({ action: 'resetFinish', email: r.email, code: r.code, otp: r.otp, pw: r.pw }); },
         requestHelp: function (r) { return call(Object.assign({ action: 'help' }, r)); },
         helpList: function (key) { return call({ action: 'helpList', key: key }).then(function (d) { return d.requests; }); },
         helpDone: function (key, c) { return call({ action: 'helpDone', key: key, id: c.id, by: c.by }); }
@@ -109,7 +118,7 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
@@ -149,7 +158,7 @@
           var renamed = !!(c.oldCode && c.oldCode !== c.code);
           if (renamed && list.some(function (x) { return x.code === c.code; })) return Promise.reject(new Error('이미 있는 거래처 코드예요.'));
           if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
-          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount });
+          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, discount: c.discount });
           if (c.pw) row.pw = c.pw;
           if (!ex) { row.no = list.reduce(function (m, x) { return Math.max(m, x.no || 0); }, 0) + 1; list.push(row); }
           store(KEY.localCustomers, list);
@@ -158,6 +167,27 @@
         },
         deleteCustomer: function (key, code) {
           store(KEY.localCustomers, custs().filter(function (x) { return x.code !== code; })); return Promise.resolve({ ok: true });
+        },
+        // 이 브라우저 저장 방식은 메일을 보낼 수 없어서, 보낼 내용을 preview로 돌려주고 화면에 보여 준다
+        resetStart: function (r) {
+          var email = String(r.email || '').trim().toLowerCase();
+          var mine = custs().filter(function (c) { return c.active && String(c.email || '').toLowerCase() === email; });
+          if (!mine.length) return Promise.resolve({ ok: true });
+          var otp = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+          store(KEY.localReset, { email: email, otp: otp, exp: Date.now() + 10 * 60000, tries: 0 });
+          return Promise.resolve({ ok: true, preview: { codes: mine.map(function (c) { return c.code; }), otp: otp } });
+        },
+        resetFinish: function (r) {
+          var email = String(r.email || '').trim().toLowerCase(), rec = store(KEY.localReset);
+          if (!rec || rec.email !== email) return Promise.reject(new Error('인증번호를 먼저 받아 주세요.'));
+          if (Date.now() > rec.exp) return Promise.reject(new Error('인증번호 시간이 지났어요. 다시 받아 주세요.'));
+          if (rec.tries >= 5) return Promise.reject(new Error('여러 번 틀렸어요. 인증번호를 다시 받아 주세요.'));
+          if (String(r.otp) !== rec.otp) { rec.tries++; store(KEY.localReset, rec); return Promise.reject(new Error('인증번호가 맞지 않아요.')); }
+          var list = custs(), c = list.filter(function (x) { return x.code === r.code && x.active && String(x.email || '').toLowerCase() === email; })[0];
+          if (!c) return Promise.reject(new Error('이 메일에 등록된 거래처 코드가 아니에요.'));
+          if (String(r.pw || '').length < 4) return Promise.reject(new Error('비밀번호는 4자 이상이에요.'));
+          c.pw = r.pw; store(KEY.localCustomers, list); store(KEY.localReset, null);
+          return Promise.resolve({ ok: true });
         },
         requestHelp: function (r) {
           var list = store(KEY.localHelp) || [];
@@ -638,7 +668,7 @@
     var c = customers.filter(function (x) { return x.code === infoCode; })[0];
     if (!c) { closeCustInfo(); return; }
     $('#ci-title').textContent = (c.no ? c.no + '번 ' : '') + c.name + ' (' + c.code + ')';
-    var meta = [['담당자', c.contact], ['연락처', c.phone], ['기본 납품 주소', c.address], ['할인율', c.discount ? c.discount + '%' : '없음'], ['상태', c.active ? '사용' : '중지']];
+    var meta = [['담당자', c.contact], ['연락처', c.phone], ['메일', c.email], ['기본 납품 주소', c.address], ['할인율', c.discount ? c.discount + '%' : '없음'], ['상태', c.active ? '사용' : '중지']];
     $('#ci-meta').innerHTML = meta.map(function (m) { return '<div><span>' + m[0] + '</span>' + esc(m[1] || '-') + '</div>'; }).join('');
     document.querySelectorAll('[data-period]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.period === infoPeriod); });
     var P = PERIOD[infoPeriod];
@@ -710,9 +740,9 @@
   function downloadCustomers() {
     if (!customers.length) { toast('내려받을 거래처가 없어요'); return; }
     var cell = csvCell, asText = csvText;
-    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
+    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '메일', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
     var lines = [head.map(cell).join(',')].concat(customers.map(function (c) {
-      return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.address)]
+      return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.email || ''), cell(c.address)]
         .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.active ? '사용' : '중지']).join(',');
     }));
     saveCsv('POmall_customers', lines);
@@ -741,7 +771,7 @@
     $('#cu-code').value = c ? c.code : '';
     $('#cu-code-hint').textContent = c ? '바꾸면 비밀번호도 새로 정해야 해요. 지난 발주도 새 코드로 옮겨져요.' : '거래처가 로그인할 때 씁니다.';
     $('#cu-delete').hidden = !c;
-    $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-addr').value = c ? c.address : '';
+    $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-email').value = c ? c.email || '' : ''; $('#cu-addr').value = c ? c.address : '';
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
@@ -753,9 +783,10 @@
     e.preventDefault();
     var msg = $('#cu-msg'), prices = {};
     var c = { code: $('#cu-code').value.trim().toUpperCase(), name: $('#cu-name').value.trim(), contact: $('#cu-contact').value.trim(),
-      phone: $('#cu-phone').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
+      phone: $('#cu-phone').value.trim(), email: $('#cu-email').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
     if (!/^[A-Z0-9_-]{2,20}$/.test(c.code)) { say(msg, '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.', true); return; }
     if (!c.name) { say(msg, '거래처명을 적어 주세요.', true); return; }
+    if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) { say(msg, '메일 주소를 확인해 주세요.', true); return $('#cu-email').focus(); }
     var renamed = !!(editing && editing !== c.code);
     if ((!editing || renamed) && customers.some(function (x) { return x.code === c.code; })) { say(msg, '이미 있는 거래처 코드예요. 목록에서 수정을 눌러 주세요.', true); return; }
     if (!editing && c.pw.length < 4) { say(msg, '새 거래처는 비밀번호를 4자 이상 정해 주세요.', true); return; }
@@ -795,7 +826,45 @@
 
   // ----- 코드·비밀번호 찾기 -----
   // 거래처: 로그인 화면에서 요청을 남긴다. 비밀번호는 암호로 바꿔 저장해서 아무도 알 수 없으므로, 회사가 전화로 확인한 뒤 새로 정해 알려 준다.
-  function showHelp(on) { $('#login-panel').hidden = on; $('#help-panel').hidden = !on; say($('#help-msg'), ''); (on ? $('#h-company') : $('#login-code')).focus(); }
+  function showHelp(on) {
+    $('#login-panel').hidden = on; $('#help-panel').hidden = !on;
+    ['#help-msg', '#r-msg', '#r-msg2'].forEach(function (id) { say($(id), ''); });
+    $('#reset-finish').hidden = true; $('#r-preview').hidden = true;
+    (on ? $('#r-email') : $('#login-code')).focus();
+  }
+  // 1단계: 등록된 메일로 거래처 코드와 인증번호를 받는다. 메일이 등록돼 있는지는 알려 주지 않는다(남의 메일을 알아내지 못하게).
+  $('#reset-start').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('#r-msg'), email = $('#r-email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say(msg, T('메일 주소를 확인해 주세요.', 'Please check the email address.'), true); return; }
+    if (!settings.open || !api.ready || !api.resetStart) { say(msg, T('아직 찾기를 받지 않아요. 담당 영업에 연락해 주세요.', 'This is not open yet. Please contact your sales representative.'), true); return; }
+    say(msg, T('보내는 중이에요…', 'Sending…')); $('#r-send').disabled = true;
+    api.resetStart({ email: email, lang: LANG }).then(function (d) {
+      say(msg, T('등록된 메일이면 거래처 코드와 인증번호를 보냈어요. 10분 안에 아래에 넣어 주세요.', 'If this email is registered, we have sent your customer code and a verification number. Enter them below within 10 minutes.'));
+      $('#reset-finish').hidden = false;
+      var pv = d && d.preview, box = $('#r-preview');
+      box.hidden = !pv;
+      if (pv) box.innerHTML = T('시험판이라 메일 대신 여기 보여 드려요.', 'Draft version: shown here instead of by email.') + '<br>' + T('거래처 코드', 'Customer code') + ' <b>' + esc(pv.codes.join(', ')) + '</b> · ' + T('인증번호', 'Verification number') + ' <b>' + esc(pv.otp) + '</b>';
+      $('#r-code').focus();
+    }).catch(function (err) { say(msg, errText(err, T('보내지 못했어요. 잠시 후 다시 눌러 주세요.', 'Could not send. Please try again in a moment.')), true); })
+      .then(function () { $('#r-send').disabled = false; });
+  });
+  // 2단계: 인증번호가 맞으면 새 비밀번호로 바꾸고 바로 로그인한다
+  $('#reset-finish').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('#r-msg2'), r = { email: $('#r-email').value.trim(), code: $('#r-code').value.trim().toUpperCase(), otp: $('#r-otp').value.trim(), pw: $('#r-pw').value };
+    if (!r.code) { say(msg, T('메일에 있는 거래처 코드를 넣어 주세요.', 'Enter the customer code from the email.'), true); return; }
+    if (!/^\d{6}$/.test(r.otp)) { say(msg, T('인증번호 6자리를 넣어 주세요.', 'Enter the 6-digit verification number.'), true); return; }
+    if (r.pw.length < 4) { say(msg, T('새 비밀번호를 4자 이상으로 정해 주세요.', 'Choose a new password of at least 4 characters.'), true); return; }
+    if (r.pw !== $('#r-pw2').value) { say(msg, T('새 비밀번호 두 칸이 서로 달라요.', 'The two new passwords do not match.'), true); return; }
+    say(msg, T('바꾸는 중이에요…', 'Updating…')); $('#r-save').disabled = true;
+    api.resetFinish(r).then(function () {
+      $('#reset-start').reset(); $('#reset-finish').reset(); showHelp(false);
+      return login(r.code, r.pw);
+    }).then(function () { toast(T('비밀번호를 바꾸고 로그인했어요', 'Password changed and signed in')); })
+      .catch(function (err) { say(msg, errText(err, T('바꾸지 못했어요. 다시 눌러 주세요.', 'Could not change it. Please try again.')), true); })
+      .then(function () { $('#r-save').disabled = false; });
+  });
   $('#help-open').addEventListener('click', function () { showHelp(true); });
   $('#help-close').addEventListener('click', function () { showHelp(false); });
   $('#help-form').addEventListener('submit', function (e) {

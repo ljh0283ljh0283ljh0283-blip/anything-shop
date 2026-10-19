@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261019b">
+<link rel="stylesheet" href="style.css?v=20261019c">
 </head>
 <body>
 
@@ -46,19 +46,37 @@
     </form>
     <button type="button" class="link-btn" id="help-open" data-en="Forgot your code or password?">거래처 코드나 비밀번호를 잊으셨나요?</button>
   </div>
-  <!-- 코드·비밀번호 찾기 요청: 회사가 전화로 확인한 뒤 새 비밀번호를 알려 준다 -->
+  <!-- 코드·비밀번호 찾기: 등록된 메일로 받은 인증번호로 거래처가 바로 찾는다. 메일이 없으면 회사에 요청 -->
   <div class="panel" id="help-panel" hidden>
     <h3 data-en="Find my code or password">코드·비밀번호 찾기</h3>
-    <p class="note" data-en="For security we never show passwords on screen. Leave your details and your sales representative will call to confirm, then tell you your customer code and a new password.">보안을 위해 비밀번호는 화면에 보여 드리지 않아요. 아래를 남기시면 담당 영업이 연락처로 확인 전화를 드린 뒤 거래처 코드와 새 비밀번호를 알려 드려요.</p>
-    <form id="help-form" class="stack" style="gap:10px;margin-top:12px" novalidate>
-      <div class="field"><label for="h-company" data-en="Company name">회사명</label><input id="h-company" maxlength="40" autocomplete="organization"></div>
-      <div class="field"><label for="h-contact" data-en="Your name">담당자</label><input id="h-contact" maxlength="20" autocomplete="name"></div>
-      <div class="field"><label for="h-phone" data-en="Phone">연락처</label><input id="h-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" data-en-ph="+1 555 000 0000"></div>
-      <div class="field"><label for="h-what" data-en="What did you forget?">무엇을 잊으셨나요?</label><select id="h-what"><option value="pw" data-en="Password">비밀번호</option><option value="code" data-en="Customer code">거래처 코드</option><option value="both" data-en="Both">둘 다</option></select></div>
-      <div class="field"><label for="h-memo" data-en="Message &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">남길 말 <span class="hint">(선택)</span></label><input id="h-memo" maxlength="200" placeholder="예: 통화 가능한 시간" data-en-ph="e.g. best time to call"></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit" id="help-send" data-en="Send request">찾기 요청 보내기</button><button class="btn ghost" type="button" id="help-close" data-en="Back to sign-in">로그인으로 돌아가기</button></div>
-      <p class="msg" id="help-msg" role="status"></p>
+    <p class="note" data-en="Enter the email registered with us. We will email your customer code and a 6-digit verification number, then you can set a new password right here.">회사에 등록된 메일 주소를 넣으세요. 거래처 코드와 인증번호 6자리를 메일로 보내 드려요. 인증번호를 넣으면 이 화면에서 바로 새 비밀번호를 정할 수 있어요.</p>
+    <form id="reset-start" class="stack" style="gap:10px;margin-top:12px" novalidate>
+      <div class="field"><label for="r-email" data-en="Registered email">등록된 메일</label><input id="r-email" type="email" maxlength="80" autocomplete="email" placeholder="name@company.com"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn" type="submit" id="r-send" data-en="Email me the code">인증번호 받기</button><button class="btn ghost" type="button" id="help-close" data-en="Back to sign-in">로그인으로 돌아가기</button></div>
+      <p class="msg" id="r-msg" role="status"></p>
+      <div class="mail-preview" id="r-preview" hidden></div>
     </form>
+    <form id="reset-finish" class="stack" style="gap:10px;margin-top:16px" novalidate hidden>
+      <div class="field"><label for="r-code" data-en="Customer code (in the email)">거래처 코드 (메일에 있어요)</label><input id="r-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
+      <div class="field"><label for="r-otp" data-en="Verification number">인증번호 6자리</label><input id="r-otp" maxlength="6" inputmode="numeric" autocomplete="one-time-code"></div>
+      <div class="field"><label for="r-pw" data-en="New password">새 비밀번호</label><input id="r-pw" type="password" maxlength="40" autocomplete="new-password" placeholder="4자 이상" data-en-ph="At least 4 characters"></div>
+      <div class="field"><label for="r-pw2" data-en="New password again">새 비밀번호 한 번 더</label><input id="r-pw2" type="password" maxlength="40" autocomplete="new-password"></div>
+      <button class="btn" type="submit" id="r-save" data-en="Change password and sign in">비밀번호 바꾸고 로그인</button>
+      <p class="msg" id="r-msg2" role="status"></p>
+    </form>
+    <details class="help-ask">
+      <summary data-en="No registered email, or no email arrived?">등록된 메일이 없거나 메일이 오지 않나요?</summary>
+      <p class="note" data-en="Leave your details and your sales representative will call to confirm, then tell you your customer code and a new password.">아래를 남기시면 담당 영업이 연락처로 확인 전화를 드린 뒤 거래처 코드와 새 비밀번호를 알려 드려요.</p>
+      <form id="help-form" class="stack" style="gap:10px;margin-top:10px" novalidate>
+        <div class="field"><label for="h-company" data-en="Company name">회사명</label><input id="h-company" maxlength="40" autocomplete="organization"></div>
+        <div class="field"><label for="h-contact" data-en="Your name">담당자</label><input id="h-contact" maxlength="20" autocomplete="name"></div>
+        <div class="field"><label for="h-phone" data-en="Phone">연락처</label><input id="h-phone" maxlength="20" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000" data-en-ph="+1 555 000 0000"></div>
+        <div class="field"><label for="h-what" data-en="What did you forget?">무엇을 잊으셨나요?</label><select id="h-what"><option value="pw" data-en="Password">비밀번호</option><option value="code" data-en="Customer code">거래처 코드</option><option value="both" data-en="Both">둘 다</option></select></div>
+        <div class="field"><label for="h-memo" data-en="Message &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">남길 말 <span class="hint">(선택)</span></label><input id="h-memo" maxlength="200" placeholder="예: 통화 가능한 시간" data-en-ph="e.g. best time to call"></div>
+        <button class="btn ghost" type="submit" id="help-send" data-en="Ask our sales team">담당 영업에 요청하기</button>
+        <p class="msg" id="help-msg" role="status"></p>
+      </form>
+    </details>
   </div>
 </section>
 
@@ -275,6 +293,7 @@
           <div class="field"><label for="cu-name">거래처명</label><input id="cu-name" maxlength="40"></div>
           <div class="field"><label for="cu-contact">담당자</label><input id="cu-contact" maxlength="20"></div>
           <div class="field"><label for="cu-phone">연락처</label><input id="cu-phone" maxlength="20" inputmode="tel"></div>
+          <div class="field"><label for="cu-email">메일 <span class="hint">(선택)</span></label><input id="cu-email" type="email" maxlength="80" placeholder="name@company.com"><span class="hint">코드·비밀번호를 잊었을 때 거래처가 이 메일로 바로 찾아요.</span></div>
           <div class="field full"><label for="cu-addr">기본 납품 주소</label><input id="cu-addr" maxlength="120"></div>
           <div class="field"><label for="cu-pw">비밀번호</label><div class="inrow"><input id="cu-pw" maxlength="40" autocomplete="new-password"><button type="button" class="btn ghost small" id="cu-temp-pw">임시 비밀번호 만들기</button></div><span class="hint" id="cu-pw-hint">거래처에 알려줄 비밀번호 (4자 이상)</span></div>
           <div class="field"><label for="cu-discount">할인율 <span class="hint">(선택)</span></label><div class="inrow"><input class="num" id="cu-discount" type="number" min="0" max="99" step="0.1" inputmode="decimal" placeholder="0"><span class="unit">%</span></div><span class="hint">이 거래처의 모든 모델 단가에서 깎아 줄 비율이에요. 비우면 적은 단가 그대로예요.</span></div>
@@ -322,6 +341,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261019b"></script>
+<script src="app.js?v=20261019c"></script>
 </body>
 </html>
