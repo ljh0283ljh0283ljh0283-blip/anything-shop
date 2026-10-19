@@ -20,7 +20,8 @@
         50,
         150
       ],
-      "name_en": "Standard, pin"
+      "name_en": "Standard, pin",
+      "wires": 0
     },
     {
       "id": "ST-12",
@@ -30,7 +31,8 @@
         50,
         150
       ],
-      "name_en": "Compact"
+      "name_en": "Compact",
+      "wires": 0
     },
     {
       "id": "ST-30",
