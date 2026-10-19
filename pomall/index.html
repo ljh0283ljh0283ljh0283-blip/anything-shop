@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261019f">
+<link rel="stylesheet" href="style.css?v=20261019g">
 </head>
 <body>
 
@@ -122,12 +122,17 @@
               <label class="strip-label" for="strip2" data-en="Strip">탈피</label><input class="num" id="strip2" type="number" inputmode="decimal" step="0.5" min="0" placeholder="선택" data-en-ph="Optional"><span class="unit">mm</span></div>
             <div class="hint" data-en="If both wires are the same length, enter the same value.">두 줄 길이가 같으면 같은 값을 적으세요.</div>
           </div>
-          <div class="fields-row">
+          <div class="fields-row" id="finish-row">
             <div class="field">
               <span class="field-label" id="finish-label" data-en="Finish &lt;span class=&quot;hint&quot;&gt;(optional, click again to clear)&lt;/span&gt;">마감 <span class="hint">(선택, 다시 누르면 해제)</span></span>
               <div class="seg" id="finish" role="group" aria-labelledby="finish-label"></div>
             </div>
-            <div class="field">
+            <div class="field" id="pin-field" hidden>
+              <label for="pin" data-en="Pin length">핀 길이</label>
+              <div class="inrow"><input class="num" id="pin" type="number" inputmode="decimal" step="0.1" min="0"><span class="unit">mm</span></div>
+              <div class="hint" id="pin-hint"></div>
+            </div>
+            <div class="field memo-field">
               <label for="item-memo" data-en="Item memo &lt;span class=&quot;hint&quot;&gt;(optional)&lt;/span&gt;">품목 메모 <span class="hint">(선택)</span></label>
               <input id="item-memo" type="text" maxlength="100" placeholder="예: 튜브 색상, 단자 사양" data-en-ph="e.g. tube color, terminal spec">
             </div>
@@ -346,6 +351,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261019f"></script>
+<script src="app.js?v=20261019g"></script>
 </body>
 </html>

@@ -67,6 +67,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, no TEXT, company TEXT, from_status TEXT, to_status TEXT, by TEXT, role TEXT, reason TEXT);
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);  -- LEAD(생산 소요일), CUST_SEQ(마지막 거래처 번호)
 `);
+// 나중에 생긴 칸은 예전 자료에도 붙인다
+if (!db.prepare('PRAGMA table_info(orders)').all().some(c => c.name === 'pin')) db.exec('ALTER TABLE orders ADD COLUMN pin REAL');
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
 function setSetting(k, v) { q('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, String(v)); }
@@ -239,10 +241,13 @@ function placeOrder(d, base) {
     if (finish && !(C.finishes || []).some(f => f.code === finish)) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
     const strip = p.wires === 0 ? 0 : Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
     if (!okStrip(strip, len) || !okStrip(strip2, len2)) return { ok: false, error: p.id + ' 탈피 길이는 와이어 길이보다 짧게 0.1mm 단위로 적어 주세요.' };
+    // 핀 모델(products.json의 pinLength: true)은 핀 길이(0.1mm 단위)가 필요하다
+    const PN = C.pin || { min: 0.1, max: 1000 }, pin = p.pinLength ? Number(it.pin) || 0 : 0;
+    if (p.pinLength && !(pin >= PN.min && pin <= PN.max && Math.abs(Math.round(pin * 10) - pin * 10) < 1e-9)) return { ok: false, error: p.id + ' 핀 길이는 ' + PN.min + '~' + PN.max + 'mm 사이 0.1mm 단위로 적어 주세요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
     const unit = unitPrice(cust.prices[p.id], cust.discount);
-    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len, len2, strip, strip2, finish, temp, qty, unit, amount: unit * qty, memo: clip(it.memo, 100) });
+    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len, len2, strip, strip2, pin, finish, temp, qty, unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   const net = lines.reduce((s, l) => s + l.amount, 0);
   const total = Math.round(net * (1 + C.price.vat));
@@ -256,10 +261,10 @@ function placeOrder(d, base) {
   const now = new Date().toISOString();
   tx(() => {
     const ins = q(`INSERT INTO orders (no, line, created_at, code, company, contact, phone, customer_po, address, memo, requested_date, eta,
-      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     lines.forEach((l, k) => ins.run(no, k + 1, now, cust.code, cust.name, contact, phone, clip(o.customerPo, 40), address, clip(o.memo, 200),
-      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0));
+      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0, l.pin || 0));
   });
   return { ok: true, order: { no, total, eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -278,7 +283,7 @@ function orders(where, args, withLog) {
       customerPo: r.customer_po || '', address: r.address, memo: r.memo || '', requestedDate: r.requested_date || '', eta: r.eta || '',
       total: r.total || 0, shipDate: r.ship_date || '', attachment: r.attachment || '', status: statusOf(r.status), items: [], log: log[r.no] || []
     });
-    map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0,
+    map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0, pin: r.pin || 0,
       temp: r.temp, qty: r.qty, unit: r.unit, memo: r.item_memo || '' });
   });
   return [...map.values()].reverse();
