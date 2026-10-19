@@ -1,4 +1,7 @@
 // SEKI POmall 발주: 거래처 로그인, 거래처별 단가, 발주를 구글 시트에 두는 Apps Script
+// 거래처 '메일' 칸으로 코드·비밀번호를 메일 인증번호로 찾고, 메일이 없으면 '찾기 요청' 탭에 요청을 남깁니다.
+// 메일을 보내므로 이 버전을 배포할 때 구글이 "메일 보내기" 권한을 다시 묻습니다. 허용해 주세요.
+//
 // 시트 탭 세 개를 씁니다. 없으면 처음 쓸 때 만들어집니다.
 //   발주    발주 한 건의 품목마다 한 줄 (같은 발주번호). 생산 현장에서 줄 단위로 보기 쉽게 하려는 것입니다.
 //   상태 기록  상태를 바꿀 때마다 한 줄: 누가, 언제, 무엇에서 무엇으로, 왜(취소나 되돌리기).
@@ -17,13 +20,14 @@
 // 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
 
 var DEFAULT_PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/pomall/products.json';
-var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 기록';
+var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 기록', HELP_SHEET = '찾기 요청';
+var HELP_HEADER = ['ID', '요청 시각', '회사명', '담당자', '연락처', '잊은 것', '남길 말', '처리 시각', '처리자'];
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
+var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 // 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
 var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -50,6 +54,11 @@ function doPost(e) {
       case 'saveCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return saveCustomer(d.customer || {}); }));
       case 'deleteCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return deleteCustomer(d.code); }));
       case 'export': return reply(staff(d.key, ['admin'], exportAll));
+      case 'resetStart': return reply(resetStart(d));
+      case 'resetFinish': return reply(resetFinish(d));
+      case 'help': return reply(addHelp(d));
+      case 'helpList': return reply(staff(d.key, ['admin', 'sales'], function () { return { ok: true, requests: helpList() }; }));
+      case 'helpDone': return reply(staff(d.key, ['admin', 'sales'], function () { return helpDone(d); }));
     }
     return reply({ ok: false, error: '알 수 없는 요청이에요.' });
   } catch (err) {
@@ -91,7 +100,7 @@ function customerList() {
   return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(publicCustomer);
 }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
 }
 // oldCode가 있으면 그 거래처를 고친다. 코드를 바꾸면 비밀번호가 코드와 묶여 있어 새 비밀번호가 필요하고, 지난 발주의 거래처 코드도 함께 바꾼다.
 function saveCustomer(c) {
@@ -107,6 +116,8 @@ function saveCustomer(c) {
   if (renamed && pw.length < 4) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).' };
   if (!ex && pw.length < 4) return { ok: false, error: '새 거래처는 비밀번호를 4자 이상 정해 주세요.' };
   if (pw && pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  var email = clip(c.email, 80);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
   var discount = Number(c.discount) || 0;
   if (discount < 0 || discount >= 100) return { ok: false, error: '할인율은 0 이상 100 미만이에요.' };
 
@@ -115,7 +126,7 @@ function saveCustomer(c) {
   var set = function (h, v) { var i = head.indexOf(h); if (i >= 0) row[i] = v; };
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
-  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date());
+  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email);
   if (pw) set('비밀번호', hash(code, pw));
   var no = ex ? ex.no : custSeq(customers()) + 1;
   if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
@@ -148,7 +159,7 @@ function customers() {
     var prices = {};
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
     return { index: k + 2, no: Number(at(r, '번호')) || 0, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
-      phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), hash: String(at(r, '비밀번호')),
+      phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), email: String(at(r, '메일')).trim(), hash: String(at(r, '비밀번호')),
       active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices };
   }).filter(function (c) { return c.code; });
 }
@@ -359,13 +370,88 @@ function exportAll() {
     var o = {}; HEADER.forEach(function (h, i) { o[h] = r[i] instanceof Date ? (h === '접수 시각' || h === '바뀐 시각' ? iso(r[i]) : day(r[i])) : r[i]; }); return o;
   });
   var custs = numberCustomers().map(function (c) {
-    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices };
+    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices };
   });
   var s = logSheet(), n = s.getLastRow();
   var log = n < 2 ? [] : s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().map(function (r) {
     return { at: iso(r[0]), no: String(r[1]), company: String(r[2]), from: String(r[3]), to: String(r[4]), by: String(r[5]), role: String(r[6]), reason: String(r[7]) };
   });
   return { ok: true, exportedAt: new Date().toISOString(), orders: orderRows, customers: custs, log: log, lead: lead(), custSeq: custSeq(custs) };
+}
+
+// ----- 코드·비밀번호 찾기 -----
+// 1단계: 등록된 메일이면 거래처 코드와 인증번호 6자리를 메일로 보낸다. 메일이 등록돼 있는지는 대답하지 않는다.
+// 같은 메일로는 10분에 3번까지만 보낸다. 인증번호는 10분 동안, 5번 틀리면 못 쓴다.
+function resetStart(d) {
+  var email = clip(d.email, 80).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
+  var cache = CacheService.getScriptCache(), countKey = 'resetCount:' + email, n = Number(cache.get(countKey)) || 0;
+  if (n >= 3) return { ok: true };
+  cache.put(countKey, String(n + 1), 600);
+  var mine = customers().filter(function (c) { return c.active && c.email.toLowerCase() === email; });
+  if (!mine.length) return { ok: true };
+  var otp = String(100000 + parseInt(Utilities.getUuid().replace(/\D/g, '').slice(0, 9), 10) % 900000);
+  cache.put('reset:' + email, JSON.stringify({ otp: otp, tries: 0 }), 600);
+  var codes = mine.map(function (c) { return c.code; }).join(', ');
+  var en = d.lang === 'en';
+  MailApp.sendEmail({
+    to: email,
+    subject: en ? '[SEKI POmall] Your customer code and verification number' : '[SEKI POmall] 거래처 코드와 인증번호',
+    body: en
+      ? 'Customer code: ' + codes + '\nVerification number: ' + otp + '\n\nEnter them on the SEKI POmall sign-in page within 10 minutes to set a new password.\nIf you did not ask for this, you can ignore this email.'
+      : '거래처 코드: ' + codes + '\n인증번호: ' + otp + '\n\nSEKI POmall 로그인 화면에 10분 안에 넣고 새 비밀번호를 정하세요.\n요청하지 않으셨다면 이 메일은 무시하셔도 돼요.'
+  });
+  return { ok: true };
+}
+// 2단계: 인증번호가 맞으면 그 거래처의 비밀번호를 바꾼다
+function resetFinish(d) {
+  var email = clip(d.email, 80).toLowerCase(), cache = CacheService.getScriptCache(), key = 'reset:' + email;
+  var rec = JSON.parse(cache.get(key) || 'null');
+  if (!rec) return { ok: false, error: '인증번호 시간이 지났어요. 다시 받아 주세요.' };
+  if (rec.tries >= 5) return { ok: false, error: '여러 번 틀렸어요. 인증번호를 다시 받아 주세요.' };
+  if (String(d.otp) !== rec.otp) { rec.tries++; cache.put(key, JSON.stringify(rec), 600); return { ok: false, error: '인증번호가 맞지 않아요.' }; }
+  var code = clip(d.code, 20).toUpperCase(), pw = String(d.pw || '');
+  var c = customers().filter(function (x) { return x.code === code && x.active && x.email.toLowerCase() === email; })[0];
+  if (!c) return { ok: false, error: '이 메일에 등록된 거래처 코드가 아니에요.' };
+  if (pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  var s = customerSheet(), head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
+  s.getRange(c.index, head.indexOf('비밀번호') + 1).setValue(hash(code, pw));
+  s.getRange(c.index, head.indexOf('바뀐 시각') + 1).setValue(new Date());
+  cache.remove(key);
+  return { ok: true };
+}
+// 메일이 없는 거래처: 회사에 찾기 요청을 남긴다(한 시간에 30건까지)
+function helpSheet() {
+  var s = tab(HELP_SHEET);
+  if (s.getLastRow() === 0) { s.appendRow(HELP_HEADER); s.setFrozenRows(1); }
+  return s;
+}
+function addHelp(d) {
+  var company = clip(d.company, 40), contact = clip(d.contact, 20), phone = clip(d.phone, 20);
+  if (!company || !contact || digits(phone).length < 8) return { ok: false, error: '회사명, 담당자, 연락처를 모두 적어 주세요.' };
+  var cache = CacheService.getScriptCache(), n = Number(cache.get('helpCount')) || 0;
+  if (n >= 30) return { ok: false, error: '요청이 많아 잠시 받을 수 없어요. 담당 영업에 직접 연락해 주세요.' };
+  cache.put('helpCount', String(n + 1), 3600);
+  var what = { pw: 'pw', code: 'code', both: 'both' }[d.what] || 'pw';
+  helpSheet().appendRow([Utilities.getUuid(), new Date(), text(company), text(contact), "'" + phone, what, text(clip(d.memo, 200)), '', '']);
+  return { ok: true };
+}
+function helpList() {
+  var s = helpSheet(), n = s.getLastRow();
+  if (n < 2) return [];
+  var iso = function (v) { return v instanceof Date ? v.toISOString() : String(v || ''); };
+  return s.getRange(2, 1, n - 1, HELP_HEADER.length).getValues().map(function (r) {
+    return { id: String(r[0]), at: iso(r[1]), company: String(r[2]), contact: String(r[3]), phone: String(r[4]).replace(/^'/, ''), what: String(r[5]), memo: String(r[6]), done: iso(r[7]), doneBy: String(r[8]) };
+  }).reverse();
+}
+function helpDone(d) {
+  var s = helpSheet(), n = s.getLastRow();
+  if (n < 2) return { ok: false, error: '없는 요청이에요.' };
+  var ids = s.getRange(2, 1, n - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(d.id)) { s.getRange(i + 2, 8, 1, 2).setValues([[new Date(), text(clip(d.by, 20))]]); return { ok: true }; }
+  }
+  return { ok: false, error: '없는 요청이에요.' };
 }
 
 // ----- 가격 계산 (pomall/app.js와 같은 규칙) -----
