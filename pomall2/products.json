@@ -132,6 +132,18 @@
       "name_en": "High-temperature"
     },
     {
+      "id": "HB-2C",
+      "family": "HB",
+      "name": "고온형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temperature",
+      "wires": 0,
+      "noFinish": true
+    },
+    {
       "id": "HB-21",
       "family": "HB",
       "name": "고온 개량형",
