@@ -465,8 +465,9 @@ function catalog() {
 }
 function findProduct(C, id) { for (var i = 0; i < C.products.length; i++) if (C.products[i].id === id) return C.products[i]; return null; }
 // 와이어가 두 줄이면 길이를 둘 다 적고, 마감은 맨 끝에 붙인다: ST-22W-L070-L100-T100-TD
+function pad3(n) { n = String(n); return n.length < 3 ? ('00' + n).slice(-3) : n; }
 function specCode(model, len, temp, len2, finish) {
-  return model + (len ? '-L' + ('00' + len).slice(-3) : '') + (len2 ? '-L' + ('00' + len2).slice(-3) : '') + '-T' + ('00' + temp).slice(-3) + (finish ? '-' + finish : '');
+  return model + (len ? '-L' + pad3(len) : '') + (len2 ? '-L' + pad3(len2) : '') + '-T' + pad3(temp) + (finish ? '-' + finish : '');
 }
 function okStrip(v, len) { return v === 0 || (v > 0 && v < len && Math.abs(Math.round(v * 10) - v * 10) < 1e-9); }
 function okLen(C, v) { return v >= C.length.min && v <= C.length.max && v % C.length.step === 0; }
