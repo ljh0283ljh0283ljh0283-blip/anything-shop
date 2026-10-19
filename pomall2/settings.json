@@ -1,6 +1,6 @@
 {
- "open": true,
- "storage": "local",
- "orderUrl": "",
- "company": "SEKI POmall"
+  "open": true,
+  "storage": "sheet",
+  "orderUrl": "https://script.google.com/macros/s/AKfycbw4YSYclOKYCkSxU7kAi8NNLsyhQoHyHksk1F7iWF5pqHWy2GRXphTuve_y4JGEQrGI/exec",
+  "company": "SEKI POmall"
 }
