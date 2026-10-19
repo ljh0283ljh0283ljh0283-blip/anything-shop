@@ -129,7 +129,8 @@
         70,
         240
       ],
-      "name_en": "High-temperature"
+      "name_en": "High-temperature",
+      "wires": 0
     },
     {
       "id": "HB-2C",
@@ -151,7 +152,8 @@
         70,
         240
       ],
-      "name_en": "High-temp, improved"
+      "name_en": "High-temp, improved",
+      "wires": 0
     }
   ],
   "length": {
