@@ -181,3 +181,6 @@ label.ship input{font-size:13px;padding:4px 6px;min-width:140px}
 /* 수정안: 첫 화면 거래처 로그인 */
 .login-view{max-width:440px;margin:24px auto 0;text-align:center}
 .login-view .panel{margin-top:20px;text-align:left}
+.link-btn{font:inherit;font-size:13px;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0;margin-top:14px}
+.help-box{margin-top:12px;border-color:var(--accent)}
+tr.done{opacity:.55}

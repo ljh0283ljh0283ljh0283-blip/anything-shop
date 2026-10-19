@@ -6,7 +6,7 @@
   'use strict';
 
   var $ = function (s) { return document.querySelector(s); };
-  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', lang: 'pomall.lang' };
+  var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', localHelp: 'pomall.help', lang: 'pomall.lang' };
   function store(k, v) {
     try {
       if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null');
@@ -71,6 +71,7 @@
   //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
   //   config() → {lead}      saveLead(key, {days, bigQty, bigDays, by})      shipDate(key, {no, date, by})
   //   customers(key) → [거래처]      saveCustomer(key, 거래처 + oldCode)      deleteCustomer(key, code)
+  //   requestHelp({company, contact, phone, what, memo})      helpList(key) → [요청]      helpDone(key, {id, by})
   var STORAGES = {
     // 구글 시트 + Apps Script 웹 앱 (pomall-script.gs)
     sheet: function (cfg) {
@@ -92,7 +93,10 @@
         setStatus: function (key, c) { return call({ action: 'status', key: key, no: c.no, status: c.status, by: c.by, reason: c.reason }); },
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
         saveCustomer: function (key, c) { return call({ action: 'saveCustomer', key: key, customer: c }); },
-        deleteCustomer: function (key, code) { return call({ action: 'deleteCustomer', key: key, code: code }); }
+        deleteCustomer: function (key, code) { return call({ action: 'deleteCustomer', key: key, code: code }); },
+        requestHelp: function (r) { return call(Object.assign({ action: 'help' }, r)); },
+        helpList: function (key) { return call({ action: 'helpList', key: key }).then(function (d) { return d.requests; }); },
+        helpDone: function (key, c) { return call({ action: 'helpDone', key: key, id: c.id, by: c.by }); }
       };
     },
     // 이 브라우저에만 저장 (화면 확인용). 다른 사람에게는 보이지 않는다.
@@ -154,6 +158,16 @@
         },
         deleteCustomer: function (key, code) {
           store(KEY.localCustomers, custs().filter(function (x) { return x.code !== code; })); return Promise.resolve({ ok: true });
+        },
+        requestHelp: function (r) {
+          var list = store(KEY.localHelp) || [];
+          list.unshift({ id: String(Date.now()), at: new Date().toISOString(), company: r.company, contact: r.contact, phone: r.phone, what: r.what, memo: r.memo, done: '', doneBy: '' });
+          store(KEY.localHelp, list); return Promise.resolve({ ok: true });
+        },
+        helpList: function () { return Promise.resolve(store(KEY.localHelp) || []); },
+        helpDone: function (key, c) {
+          store(KEY.localHelp, (store(KEY.localHelp) || []).map(function (h) { if (h.id === c.id) { h.done = new Date().toISOString(); h.doneBy = c.by; } return h; }));
+          return Promise.resolve({ ok: true });
         }
       };
     }
@@ -484,14 +498,15 @@
     say(msg, '불러오는 중이에요…');
     api.staff(key).then(function (r) {
       role = r;
-      return Promise.all([api.list(key), canEdit() ? api.customers(key) : []]);
+      // 찾기 요청은 예전 Apps Script에는 없으니 못 받아 와도 나머지는 연다
+      return Promise.all([api.list(key), canEdit() ? api.customers(key) : [], canEdit() && api.helpList ? api.helpList(key).catch(function () { return []; }) : []]);
     }).then(function (r) {
-      adminOrders = r[0] || []; customers = r[1] || []; say(msg, '');
+      adminOrders = r[0] || []; customers = r[1] || []; helps = r[2] || []; say(msg, '');
       $('#staff-badge').textContent = ROLES[role] + ' · ' + staffInfo().name;
       $('#staff-badge').className = 'role role-' + role;
       $('#tab-cust').hidden = !canEdit();
       if (!canEdit() && adminTab === 'customers') { toast('거래처 관리는 영업팀과 관리자만 열 수 있어요'); return show('admin'); }
-      renderAdmin(); renderLead(); if (canEdit()) renderCustomers();
+      renderAdmin(); renderLead(); if (canEdit()) { renderCustomers(); renderHelp(); }
       if (infoCode) renderCustInfo();
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
@@ -778,6 +793,63 @@
     }).catch(function (err) { $('#del-ok').disabled = false; say($('#del-msg'), errText(err, '삭제하지 못했어요.'), true); });
   });
 
+  // ----- 코드·비밀번호 찾기 -----
+  // 거래처: 로그인 화면에서 요청을 남긴다. 비밀번호는 암호로 바꿔 저장해서 아무도 알 수 없으므로, 회사가 전화로 확인한 뒤 새로 정해 알려 준다.
+  function showHelp(on) { $('#login-panel').hidden = on; $('#help-panel').hidden = !on; say($('#help-msg'), ''); (on ? $('#h-company') : $('#login-code')).focus(); }
+  $('#help-open').addEventListener('click', function () { showHelp(true); });
+  $('#help-close').addEventListener('click', function () { showHelp(false); });
+  $('#help-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('#help-msg'), r = { company: $('#h-company').value.trim(), contact: $('#h-contact').value.trim(), phone: $('#h-phone').value.trim(), what: $('#h-what').value, memo: $('#h-memo').value.trim() };
+    if (!r.company || !r.contact || !r.phone) { say(msg, T('회사명, 담당자, 연락처를 모두 적어 주세요.', 'Please enter your company name, your name and phone.'), true); return; }
+    if (digits(r.phone).length < 8) { say(msg, T('연락처를 숫자 8자리 이상으로 적어 주세요.', 'Please enter a phone number with at least 8 digits.'), true); return; }
+    if (!settings.open || !api.ready || !api.requestHelp) { say(msg, T('아직 요청을 받지 않아요. 담당 영업에 직접 연락해 주세요.', 'Requests are not open yet. Please contact your sales representative.'), true); return; }
+    say(msg, T('보내는 중이에요…', 'Sending…')); $('#help-send').disabled = true;
+    api.requestHelp(r).then(function () {
+      $('#help-form').reset();
+      say(msg, T('요청을 받았어요. 담당 영업이 ' + r.phone + '(으)로 확인 전화를 드린 뒤 거래처 코드와 새 비밀번호를 알려 드려요.', 'Request received. Your sales representative will call ' + r.phone + ' to confirm, then give you your customer code and a new password.'));
+    }).catch(function (err) { say(msg, errText(err, T('보내지 못했어요. 잠시 후 다시 눌러 주세요.', 'Could not send. Please try again in a moment.')), true); })
+      .then(function () { $('#help-send').disabled = false; });
+  });
+
+  // 회사: 거래처 관리 맨 위에 찾기 요청을 보여 주고, 회사명이나 연락처가 맞는 거래처를 찾아 준다.
+  var helps = [];
+  var HELP_WHAT = { pw: '비밀번호', code: '거래처 코드', both: '코드와 비밀번호' };
+  function norm(v) { return String(v || '').toLowerCase().replace(/\s|\(주\)|㈜|주식회사|co\.?|ltd\.?|inc\.?|[.,]/g, ''); }
+  function helpMatches(h) {
+    var n = norm(h.company), ph = digits(h.phone).slice(-8);
+    return customers.filter(function (c) {
+      var cn = norm(c.name);
+      return (n && cn && (cn.indexOf(n) >= 0 || n.indexOf(cn) >= 0)) || (ph.length === 8 && digits(c.phone).slice(-8) === ph);
+    });
+  }
+  function renderHelp() {
+    var all = $('#help-showdone').checked, open = helps.filter(function (h) { return !h.done; });
+    var list = all ? helps : open;
+    $('#help-box').hidden = !helps.length;
+    $('#help-title').textContent = '코드·비밀번호 찾기 요청 ' + open.length + '건';
+    $('#help-body').innerHTML = list.map(function (h) {
+      var m = helpMatches(h);
+      return '<tr' + (h.done ? ' class="done"' : '') + '><td class="mono">' + esc(kst(h.at)) + '</td><td><b>' + esc(h.company) + '</b><div class="order-items">' + esc(h.contact) + (h.memo ? ' · ' + esc(h.memo) : '') + '</div></td>' +
+        '<td class="mono">' + esc(h.phone) + '</td><td>' + esc(HELP_WHAT[h.what] || h.what || '') + '</td>' +
+        '<td>' + (m.length ? m.map(function (c) { return '<button type="button" class="code-link" data-edit="' + esc(c.code) + '" title="이 거래처 수정 열기">' + esc(c.code) + '</button> ' + esc(c.name); }).join('<br>') : '<span class="order-items">맞는 거래처 없음</span>') + '</td>' +
+        '<td>' + (h.done ? '<span class="order-items">처리 ' + esc(h.doneBy) + ' ' + esc(kst(h.done)) + '</span>' : '<button type="button" class="btn ghost small" data-help-done="' + esc(h.id) + '">처리 완료</button>') + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="order-items">남은 요청이 없어요.</td></tr>';
+  }
+  $('#help-showdone').addEventListener('change', renderHelp);
+  function finishHelp(id) {
+    api.helpDone(adminKey(), { id: id, by: staffInfo().name }).then(function () { return api.helpList(adminKey()); })
+      .then(function (list) { helps = list || []; renderHelp(); toast('처리 완료로 표시했어요'); })
+      .catch(function (err) { toast(errText(err, '처리하지 못했어요.')); });
+  }
+  // 임시 비밀번호: 헷갈리는 글자(0, O, 1, I)를 뺀 8자리
+  $('#cu-temp-pw').addEventListener('click', function () {
+    var abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = new Uint32Array(8), pw = '';
+    crypto.getRandomValues(r); r.forEach(function (n) { pw += abc[n % abc.length]; });
+    $('#cu-pw').value = pw;
+    say($('#cu-msg'), '임시 비밀번호 ' + pw + ' 를 만들었어요. 저장을 누른 뒤 거래처에 알려 주세요.');
+  });
+
   // ----- 탭 -----
   function show(view) {
     document.querySelectorAll('nav.tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.view === view); });
@@ -807,6 +879,7 @@
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
     if (d.custInfo) return openCustInfo(d.custInfo);
+    if (d.helpDone) return finishHelp(d.helpDone);
     if (d.period) { infoPeriod = d.period; infoKey = null; return renderCustInfo(); }
     if (d.edit) { fillCustomerForm(customers.filter(function (x) { return x.code === d.edit; })[0]); return $('#cust-form').scrollIntoView({ behavior: 'smooth' }); }
   });
