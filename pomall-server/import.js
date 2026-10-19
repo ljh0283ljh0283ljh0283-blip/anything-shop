@@ -56,9 +56,9 @@ for (let i = 0; i < args.length; i++) {
         num(r['온도(°C)']), num(r['수량']), num(r['단가']), num(r['금액']), txt(r['품목 메모']), num(r['발주 합계(VAT 포함)']), txt(r['상태']) || '접수 대기',
         txt(r['바뀐 시각']), txt(r['확정 출하일']), txt(r['발주서']), num(r['와이어2(mm)']), txt(r['마감']), num(r['탈피(mm)']), num(r['탈피2(mm)']));
     });
-    const insC = db.prepare('INSERT OR REPLACE INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+    const insC = db.prepare('INSERT OR REPLACE INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, vat_free) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     data.customers.forEach(c => insC.run(String(c.code).toUpperCase(), num(c.no), txt(c.name), txt(c.contact), txt(c.phone), txt(c.address), String(c.hash || ''),
-      c.active ? 1 : 0, num(c.discount), JSON.stringify(c.prices || {}), new Date().toISOString()));
+      c.active ? 1 : 0, num(c.discount), JSON.stringify(c.prices || {}), new Date().toISOString(), c.vatFree ? 1 : 0));
     const insL = db.prepare('INSERT INTO status_log (at, no, company, from_status, to_status, by, role, reason) VALUES (?,?,?,?,?,?,?,?)');
     (data.log || []).forEach(l => insL.run(l.at, l.no, txt(l.company), l.from, l.to, txt(l.by), l.role, txt(l.reason)));
     const set = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');

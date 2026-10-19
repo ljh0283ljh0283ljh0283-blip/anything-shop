@@ -67,6 +67,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, no TEXT, company TEXT, from_status TEXT, to_status TEXT, by TEXT, role TEXT, reason TEXT);
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);  -- LEAD(생산 소요일), CUST_SEQ(마지막 거래처 번호)
 `);
+// 나중에 생긴 칸: vat_free(1이면 부가세 0%, 수출 거래처)
+if (!db.prepare('PRAGMA table_info(customers)').all().some(c => c.name === 'vat_free')) db.exec('ALTER TABLE customers ADD COLUMN vat_free INTEGER DEFAULT 0');
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
 function setSetting(k, v) { q('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, String(v)); }
@@ -113,12 +115,12 @@ function staff(key, allowed, fn) {
 // ----- 거래처 -----
 function rowToCustomer(r) {
   return { no: r.no || 0, code: r.code, name: r.name || '', contact: r.contact || '', phone: r.phone || '', address: r.address || '',
-    hash: r.hash || '', active: !!r.active, discount: r.discount || 0, prices: JSON.parse(r.prices || '{}') };
+    hash: r.hash || '', active: !!r.active, discount: r.discount || 0, vatFree: !!r.vat_free, prices: JSON.parse(r.prices || '{}') };
 }
 function customers() { return q('SELECT * FROM customers').all().map(rowToCustomer); }
 function findCustomer(code) { const r = q('SELECT * FROM customers WHERE code = ?').get(code); return r ? rowToCustomer(r) : null; }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, vatFree: c.vatFree, hasPassword: !!c.hash };
 }
 function authCustomer(code, pw) {
   code = clip(code, 20).toUpperCase();
@@ -135,7 +137,7 @@ function login(code, pw) {
   const c = authCustomer(code, pw);
   if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount };
+  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount, vatFree: c.vatFree };
 }
 function customerList() { return customers().sort((a, b) => a.no - b.no).map(publicCustomer); }
 function saveCustomer(c) {
@@ -158,9 +160,9 @@ function saveCustomer(c) {
     const no = ex ? ex.no : custSeq() + 1;
     if (!ex) setSetting('CUST_SEQ', no);
     const row = [code, no, name, clip(c.contact, 20), clip(c.phone, 20), clip(c.address, 120), pw ? hash(code, pw) : ex.hash,
-      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString()];
+      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString(), c.vatFree ? 1 : 0];
     if (ex) q('DELETE FROM customers WHERE code = ?').run(ex.code);
-    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(...row);
+    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, vat_free) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(...row);
     // 코드를 바꾸면 지난 발주도 새 코드로 옮긴다
     if (renamed) q('UPDATE orders SET code = ? WHERE code = ?').run(code, oldCode);
     return { ok: true, code, no };
@@ -244,7 +246,7 @@ function placeOrder(d, base) {
     lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len, len2, strip, strip2, finish, temp, qty, unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   const net = lines.reduce((s, l) => s + l.amount, 0);
-  const total = Math.round(net * (1 + C.price.vat));
+  const total = Math.round(net * (1 + (cust.vatFree ? 0 : C.price.vat)));
   const L = lead(C), big = lines.some(l => l.qty >= L.bigQty);
   const eta = addBizDays(big ? L.bigDays : L.days);
   const wanted = /^\d{4}-\d{2}-\d{2}$/.test(o.requestedDate || '') && o.requestedDate >= eta ? o.requestedDate : eta;

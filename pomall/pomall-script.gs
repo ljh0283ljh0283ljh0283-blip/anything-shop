@@ -23,7 +23,7 @@ var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각'];
+var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '부가세'];  // 부가세: 비우면 10%, '없음'이면 0% (수출 거래처)
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 // 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
 var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -64,7 +64,7 @@ function login(code, pw) {
   var c = authCustomer(code, pw);
   if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount };
+  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount, vatFree: c.vatFree };
 }
 function authCustomer(code, pw) {
   code = clip(code, 20).toUpperCase();
@@ -91,7 +91,7 @@ function customerList() {
   return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(publicCustomer);
 }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, vatFree: c.vatFree, hasPassword: !!c.hash };
 }
 // oldCode가 있으면 그 거래처를 고친다. 코드를 바꾸면 비밀번호가 코드와 묶여 있어 새 비밀번호가 필요하고, 지난 발주의 거래처 코드도 함께 바꾼다.
 function saveCustomer(c) {
@@ -115,7 +115,7 @@ function saveCustomer(c) {
   var set = function (h, v) { var i = head.indexOf(h); if (i >= 0) row[i] = v; };
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
-  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date());
+  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('부가세', c.vatFree ? '없음' : '');
   if (pw) set('비밀번호', hash(code, pw));
   var no = ex ? ex.no : custSeq(customers()) + 1;
   if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
@@ -149,7 +149,7 @@ function customers() {
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
     return { index: k + 2, no: Number(at(r, '번호')) || 0, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
       phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), hash: String(at(r, '비밀번호')),
-      active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices };
+      active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, vatFree: String(at(r, '부가세')).trim() === '없음', prices: prices };
   }).filter(function (c) { return c.code; });
 }
 function findCustomer(code) { return customers().filter(function (c) { return c.code === code; })[0] || null; }
@@ -190,7 +190,7 @@ function placeOrder(d) {
     lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len: len, len2: len2, strip: strip, strip2: strip2, finish: finish, temp: temp, qty: qty, unit: unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   var net = lines.reduce(function (s, l) { return s + l.amount; }, 0);
-  var total = Math.round(net * (1 + C.price.vat));
+  var total = Math.round(net * (1 + (cust.vatFree ? 0 : C.price.vat)));
   var L = lead(C), big = lines.some(function (l) { return l.qty >= L.bigQty; });
   var eta = addBizDays(big ? L.bigDays : L.days);
   var wanted = /^\d{4}-\d{2}-\d{2}$/.test(o.requestedDate || '') && o.requestedDate >= eta ? o.requestedDate : eta;
@@ -359,7 +359,7 @@ function exportAll() {
     var o = {}; HEADER.forEach(function (h, i) { o[h] = r[i] instanceof Date ? (h === '접수 시각' || h === '바뀐 시각' ? iso(r[i]) : day(r[i])) : r[i]; }); return o;
   });
   var custs = numberCustomers().map(function (c) {
-    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices };
+    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, hash: c.hash, active: c.active, discount: c.discount, vatFree: c.vatFree, prices: c.prices };
   });
   var s = logSheet(), n = s.getLastRow();
   var log = n < 2 ? [] : s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().map(function (r) {

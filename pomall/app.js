@@ -105,10 +105,10 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, vatFree: !!c.vatFree, hasPassword: !!c.pw }; }
       return {
         ready: true,
-        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
+        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0, vatFree: !!c.vatFree }; }); },
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
             // 이 브라우저 저장 방식은 파일 내용을 두지 않고 이름만 남긴다
@@ -145,7 +145,7 @@
           var renamed = !!(c.oldCode && c.oldCode !== c.code);
           if (renamed && list.some(function (x) { return x.code === c.code; })) return Promise.reject(new Error('이미 있는 거래처 코드예요.'));
           if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
-          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount });
+          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, vatFree: !!c.vatFree });
           if (c.pw) row.pw = c.pw;
           if (!ex) { row.no = list.reduce(function (m, x) { return Math.max(m, x.no || 0); }, 0) + 1; list.push(row); }
           store(KEY.localCustomers, list);
@@ -162,7 +162,7 @@
   // ----- 상태 -----
   var C = null, settings = {}, api = null;
   var sel = { model: null };
-  var session = store(KEY.session);      // {code, pw, customer, prices, discount}
+  var session = store(KEY.session);      // {code, pw, customer, prices, discount, vatFree}
   var cart = [];
   var history = [];
   var adminOrders = [], adminFilter = 'all', adminTab = 'orders', customers = [], editing = null, role = null, pending = null;
@@ -202,7 +202,9 @@
     return Math.round(base * (1 - ((session && session.discount) || 0) / 100) * 10) / 10;
   }
   function leadDays(items) { return items.some(function (i) { return i.qty >= C.lead.bigQty; }) ? C.lead.bigDays : C.lead.days; }
-  function totals(items) { var net = items.reduce(function (s, i) { return s + i.unit * i.qty; }, 0); return { net: net, vat: net * C.price.vat, total: net * (1 + C.price.vat) }; }
+  // 수출 거래처(부가세 없음)는 부가세 0%
+  function vatRate() { return session && session.vatFree ? 0 : C.price.vat; }
+  function totals(items) { var net = items.reduce(function (s, i) { return s + i.unit * i.qty; }, 0); return { net: net, vat: net * vatRate(), total: net * (1 + vatRate()) }; }
 
   function toast(msg) { var t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, 2600); }
   function say(el, text, isErr) { el.textContent = text || ''; el.classList.toggle('err', !!isErr); }
@@ -223,7 +225,7 @@
   }
   function login(code, pw, quiet) {
     return api.login(code, pw).then(function (d) {
-      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0 };
+      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0, vatFree: !!d.vatFree };
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
@@ -321,6 +323,7 @@
     var c = $('#cart-count'); c.hidden = !cart.length; c.textContent = cart.length;
     if (!cart.length) { $('#checkout').hidden = true; return; }
     var t = totals(cart), d = addBizDays(leadDays(cart));
+    $('#sum-vat-label').textContent = vatRate() ? T('부가세 ', 'VAT ') + Math.round(vatRate() * 100) + '%' : T('부가세 없음 (수출)', 'VAT 0% (export)');
     $('#sum-net').textContent = won(t.net); $('#sum-vat').textContent = won(t.vat); $('#sum-total').textContent = won(t.total);
     $('#eta').innerHTML = T('오늘 확정하면 생산 소요 <b>' + leadDays(cart) + '영업일</b>, 예상 출하일 <b>' + ymd(d) + '</b> ' + kday(d) + '.<br>선주문 생산이라 재고 출고는 없습니다.',
       'If you order today: production takes <b>' + leadDays(cart) + ' business days</b>, estimated ship date <b>' + ymd(d) + '</b> ' + kday(d) + '.<br>All items are built to order; nothing ships from stock.');
@@ -622,7 +625,7 @@
     var c = customers.filter(function (x) { return x.code === infoCode; })[0];
     if (!c) { closeCustInfo(); return; }
     $('#ci-title').textContent = (c.no ? c.no + '번 ' : '') + c.name + ' (' + c.code + ')';
-    var meta = [['담당자', c.contact], ['연락처', c.phone], ['기본 납품 주소', c.address], ['할인율', c.discount ? c.discount + '%' : '없음'], ['상태', c.active ? '사용' : '중지']];
+    var meta = [['담당자', c.contact], ['연락처', c.phone], ['기본 납품 주소', c.address], ['할인율', c.discount ? c.discount + '%' : '없음'], ['부가세', c.vatFree ? '없음 (수출)' : '10%'], ['상태', c.active ? '사용' : '중지']];
     $('#ci-meta').innerHTML = meta.map(function (m) { return '<div><span>' + m[0] + '</span>' + esc(m[1] || '-') + '</div>'; }).join('');
     document.querySelectorAll('[data-period]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.period === infoPeriod); });
     var P = PERIOD[infoPeriod];
@@ -694,10 +697,10 @@
   function downloadCustomers() {
     if (!customers.length) { toast('내려받을 거래처가 없어요'); return; }
     var cell = csvCell, asText = csvText;
-    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
+    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '부가세', '상태']);
     var lines = [head.map(cell).join(',')].concat(customers.map(function (c) {
       return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.address)]
-        .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.active ? '사용' : '중지']).join(',');
+        .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.vatFree ? '없음' : '10%', c.active ? '사용' : '중지']).join(',');
     }));
     saveCsv('POmall_customers', lines);
   }
@@ -729,6 +732,7 @@
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
+    $('#cu-vat').value = c && c.vatFree ? '1' : '0';
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = c && c.prices ? Number(c.prices[inp.dataset.price]) : 0; inp.value = v > 0 ? v : ''; });
     say($('#cu-msg'), '');
     renderCustomers();
@@ -737,7 +741,7 @@
     e.preventDefault();
     var msg = $('#cu-msg'), prices = {};
     var c = { code: $('#cu-code').value.trim().toUpperCase(), name: $('#cu-name').value.trim(), contact: $('#cu-contact').value.trim(),
-      phone: $('#cu-phone').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
+      phone: $('#cu-phone').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', vatFree: $('#cu-vat').value === '1', pw: $('#cu-pw').value };
     if (!/^[A-Z0-9_-]{2,20}$/.test(c.code)) { say(msg, '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.', true); return; }
     if (!c.name) { say(msg, '거래처명을 적어 주세요.', true); return; }
     var renamed = !!(editing && editing !== c.code);
