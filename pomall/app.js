@@ -254,7 +254,7 @@
   function choiceName(key) { var g = (C.choices || []).filter(function (x) { return x.key === key; })[0]; return g ? T(g.name, g.name_en || g.name) : key; }
   function renderChoices() {
     var p = product(sel.model), gs = choiceGroups(p);
-    $('#choice-row').hidden = !gs.length;
+    $('#choice-row').hidden = !gs.length; $('#choice-row').classList.toggle('single', gs.length === 1);
     $('#choice-row').innerHTML = gs.map(function (g) {
       return '<div class="field"><span class="field-label" id="ch-' + esc(g.key) + '">' + esc(T(g.name, g.name_en || g.name)) + '</span>' +
         '<div class="checks" role="group" aria-labelledby="ch-' + esc(g.key) + '">' + g.options.map(function (o) {
@@ -358,7 +358,7 @@
       if (!ch[g.key]) errs.push(T(g.name + ' 항목을 골라 주세요.', 'Choose the ' + (g.name_en || g.name).toLowerCase() + '.'));
     });
     if (!qty || qty < Q.min || qty % Q.step) errs.push(T('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.', 'Enter a quantity of at least ' + Q.min + ' EA in ' + Q.step + ' EA steps.'));
-    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, speed: ch.speed || '', terminal: ch.terminal || '', temp: temp, qty: qty, finish: noFinish(p) ? '' : sel.finish || '', errs: errs };
+    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, speed: ch.speed || '', terminal: ch.terminal || '', term: ch.term || '', temp: temp, qty: qty, finish: noFinish(p) ? '' : sel.finish || '', errs: errs };
   }
   function renderSpec() {
     var v = validate(), add = $('#add-btn');
@@ -412,9 +412,9 @@
     var v = validate(); if (v.errs.length || !session) return;
     var unit = unitPrice(v.p); if (unit == null) return;
     var code = specCode(v.p.id, v.len, v.temp, v.len2, v.finish), memo = $('#item-memo').value.trim();
-    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo && (i.strip || 0) === v.strip && (i.strip2 || 0) === v.strip2 && (i.pin || 0) === v.pin && (i.speed || '') === v.speed && (i.terminal || '') === v.terminal; })[0];
+    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo && (i.strip || 0) === v.strip && (i.strip2 || 0) === v.strip2 && (i.pin || 0) === v.pin && (i.speed || '') === v.speed && (i.terminal || '') === v.terminal && (i.term || '') === v.term; })[0];
     if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p); }
-    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, pin: v.pin, speed: v.speed, terminal: v.terminal, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
+    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, pin: v.pin, speed: v.speed, terminal: v.terminal, term: v.term, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
     toast(T(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다', 'Added ' + code + ' × ' + v.qty.toLocaleString() + ' EA'));
@@ -438,7 +438,7 @@
     var order = {
       contact: v.name, phone: v.phone, customerPo: v.po, address: v.addr,
       memo: $('#c-memo').value.trim(), requestedDate: $('#c-date').value || ymd(ship), eta: ymd(ship),
-      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
+      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
@@ -486,14 +486,14 @@
   // ----- 최근 사양 (이 기기) -----
   function rememberSpecs(items) {
     var rec = store(KEY.recent) || [];
-    var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0) && (a.pin || 0) === (b.pin || 0) && (a.speed || '') === (b.speed || '') && (a.terminal || '') === (b.terminal || ''); };
-    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', finish: i.finish || '', temp: i.temp, qty: i.qty }); });
+    var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0) && (a.pin || 0) === (b.pin || 0) && (a.speed || '') === (b.speed || '') && (a.terminal || '') === (b.terminal || '') && (a.term || '') === (b.term || ''); };
+    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: i.temp, qty: i.qty }); });
     store(KEY.recent, rec.slice(0, 8)); renderRecent();
   }
   function renderRecent() {
     var rec = store(KEY.recent) || [];
     $('#reorder-panel').hidden = !rec.length;
-    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0, i.pin || 0, i.speed || '', i.terminal || ''].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
+    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0, i.pin || 0, i.speed || '', i.terminal || '', i.term || ''].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
   }
 
   // ----- 주문 조회 -----
@@ -511,8 +511,8 @@
     var a = +i.strip || 0, b = +i.strip2 || 0, parts = [];
     if (+i.pin) parts.push(T('핀 길이 ', 'Pin length ') + (+i.pin) + 'mm');
     else if (a || b) parts.push(T('탈피 ', 'Strip ') + (i.len2 ? '1: ' + (a ? a + 'mm' : T('없음', 'none')) + ', 2: ' + (b ? b + 'mm' : T('없음', 'none')) : a + 'mm'));
-    // 전류감응속도·터미널방향
-    ['speed', 'terminal'].forEach(function (k) { if (i[k]) parts.push(choiceName(k) + ' ' + i[k]); });
+    // 전류감응속도·터미널방향(CK), 터미널(HB)
+    ['speed', 'terminal', 'term'].forEach(function (k) { if (i[k]) parts.push(choiceName(k) + ' ' + i[k]); });
     return parts.join(', ');
   }
   // 품목 메모는 사양 코드 아래에 작게 보여 준다
@@ -548,7 +548,7 @@
     o.items.forEach(function (i) {
       var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
     toast(T(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''),
@@ -760,11 +760,11 @@
   });
   $('#ci-orders-excel').addEventListener('click', function () {
     var D = infoData; if (!D || !D.list.length) { toast('내려받을 발주가 없어요'); return; }
-    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
+    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
     var lines = [head.map(csvCell).join(',')];
     D.list.forEach(function (o) {
       o.items.forEach(function (i) {
-        lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '', i.pin || '', csvCell(i.speed || ''), csvCell(i.terminal || ''),
+        lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '', i.pin || '', csvCell(i.speed || ''), csvCell(i.terminal || ''), csvCell(i.term || ''),
           csvCell(i.finish || ''), i.temp || '', i.qty || '', i.unit || '', (Number(i.unit) || 0) * (Number(i.qty) || 0), csvCell(i.memo || ''), o.total || ''].join(','));
       });
     });
@@ -993,7 +993,7 @@
     if (d.temp) { $('#temp').value = d.temp; return renderSpec(); }
     if (d.qty) { $('#qty').value = d.qty; return renderSpec(); }
     if (d.del !== undefined) { cart.splice(+d.del, 1); saveCart(); return renderCart(); }
-    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0, +s[8] || 0, { speed: s[9] || '', terminal: s[10] || '' }); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0, +s[8] || 0, { speed: s[9] || '', terminal: s[10] || '', term: s[11] || '' }); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
     if (d.custInfo) return openCustInfo(d.custInfo);
