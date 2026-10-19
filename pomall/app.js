@@ -520,6 +520,16 @@
   // 관리 열쇠는 팀마다 다르다(관리자, 영업팀, 조회 전용). 이름은 상태를 바꿀 때 기록에 남는다.
   function staffInfo() { var v = store(KEY.admin); return v && typeof v === 'object' && v.key ? v : null; }
   function adminKey() { var v = staffInfo(); return v ? v.key : null; }
+  // 담당자로 열려 있으면 위쪽에 이름과 관리자 로그아웃을 보인다
+  function renderStaff() {
+    var info = staffInfo();
+    $('#staff-who').hidden = !info;
+    if (info) $('#staff-who-name').textContent = info.name + (role ? ' (' + ROLES[role] + ')' : '');
+  }
+  function staffLogout() {
+    store(KEY.admin, null); role = null; $('#tab-admin').hidden = true; $('#tab-cust').hidden = true;
+    closeCustInfo(); renderStaff(); show('order'); toast('관리자 로그아웃했어요');
+  }
   function adminLoad() {
     var key = adminKey(), msg = $('#admin-msg');
     $('#key-form').hidden = !!key; $('#admin-wrap').hidden = !key;
@@ -534,12 +544,12 @@
       adminOrders = r[0] || []; customers = r[1] || []; helps = r[2] || []; say(msg, '');
       $('#staff-badge').textContent = ROLES[role] + ' · ' + staffInfo().name;
       $('#staff-badge').className = 'role role-' + role;
-      $('#tab-cust').hidden = !canEdit();
+      $('#tab-cust').hidden = !canEdit(); renderStaff();
       if (!canEdit() && adminTab === 'customers') { toast('거래처 관리는 영업팀과 관리자만 열 수 있어요'); return show('admin'); }
       renderAdmin(); renderLead(); if (canEdit()) { renderCustomers(); renderHelp(); }
       if (infoCode) renderCustInfo();
     }).catch(function (err) {
-      store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true;
+      store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true; renderStaff();
       say(msg, errText(err, '불러오지 못했어요.'), true);
     });
   }
@@ -972,8 +982,10 @@
     store(KEY.admin, { key: k, name: name.slice(0, 20) }); $('#admin-key').value = ''; adminLoad();
   });
   $('#admin-reload').addEventListener('click', adminLoad);
-  // 닫기: 저장된 열쇠를 지우고 주문관리 탭도 감춘다 (다시 열려면 맨 아래 관리자 버튼)
-  $('#admin-logout').addEventListener('click', function () { store(KEY.admin, null); role = null; $('#tab-admin').hidden = true; $('#tab-cust').hidden = true; closeCustInfo(); show('order'); toast('주문관리를 닫았어요'); });
+  // 닫기·관리자 로그아웃: 저장된 열쇠를 지우고 주문관리 탭도 감춘다 (다시 열려면 첫 화면의 관리자 로그인)
+  $('#admin-logout').addEventListener('click', staffLogout);
+  $('#staff-logout').addEventListener('click', staffLogout);
+  $('#staff-open').addEventListener('click', function () { show('admin'); });
   $('#admin-body').addEventListener('change', function (e) {
     if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value);
     if (e.target.dataset.ship) saveShip(e.target);
@@ -1015,6 +1027,7 @@
     $('#notice').hidden = !!(settings.open && api.ready);
     if (settings.company) { $('.brand b').textContent = settings.company; $('#footer-company').textContent = '© 2026 ' + settings.company; }
     if (adminKey()) { $('#tab-admin').hidden = false; $('#tab-cust').hidden = false; }
+    renderStaff();
     setSpec(C.products[0].id, 70, 100, 1000); renderFinish();
     renderRecent();
     // 담당자가 관리 화면에서 바꾼 생산 소요일을 받아 온다

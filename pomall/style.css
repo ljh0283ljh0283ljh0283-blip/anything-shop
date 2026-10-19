@@ -123,7 +123,7 @@ footer.site button{font:inherit;background:none;border:none;color:var(--muted);t
 td select{min-width:110px}
 .who{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:13px}
 .lang-btn{margin-left:auto}
-.lang-btn + .who{margin-left:0}
+.lang-btn + .who,.who + .who{margin-left:0}
 .who span{font-weight:600}
 .price-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:6px}
 .price-grid label{display:grid;gap:2px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
@@ -183,6 +183,7 @@ label.ship input{font-size:13px;padding:4px 6px;min-width:140px}
 /* 첫 화면 거래처 로그인 */
 .login-view{max-width:440px;margin:24px auto 0;text-align:center}
 .login-view .panel{margin-top:20px;text-align:left}
+.staff-entry{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:16px;font-size:13px;color:var(--muted)}
 .link-btn{font:inherit;font-size:13px;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0;margin-top:14px}
 .help-box{margin-top:12px;border-color:var(--accent)}
 tr.done{opacity:.55}

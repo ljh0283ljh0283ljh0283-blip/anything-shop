@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261019d">
+<link rel="stylesheet" href="style.css?v=20261019e">
 </head>
 <body>
 
@@ -23,6 +23,7 @@
     </nav>
     <button type="button" class="btn ghost small lang-btn" id="lang-btn" lang="en">English</button>
     <div class="who" id="who" hidden><span id="who-name"></span><button type="button" class="btn ghost small" id="logout" data-en="Sign out">로그아웃</button></div>
+    <div class="who" id="staff-who" hidden><span id="staff-who-name"></span><button type="button" class="btn ghost small" id="staff-logout" data-en="Staff sign out">관리자 로그아웃</button></div>
   </div>
 </header>
 
@@ -44,6 +45,11 @@
       <p class="msg" id="login-msg" role="status"></p>
     </form>
     <button type="button" class="link-btn" id="help-open" data-en="Forgot your code or password?">거래처 코드나 비밀번호를 잊으셨나요?</button>
+  </div>
+  <!-- 회사 담당자: 팀 열쇠로 주문관리를 연다 -->
+  <div class="staff-entry" id="staff-entry">
+    <span data-en="Are you SEKI staff?">회사 담당자이신가요?</span>
+    <button type="button" class="btn ghost small" id="staff-open" data-en="Staff sign-in">관리자 로그인</button>
   </div>
   <!-- 코드·비밀번호 찾기: 등록된 메일로 받은 인증번호로 거래처가 바로 찾는다. 메일이 없으면 회사에 요청 -->
   <div class="panel" id="help-panel" hidden>
@@ -340,6 +346,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261019d"></script>
+<script src="app.js?v=20261019e"></script>
 </body>
 </html>
