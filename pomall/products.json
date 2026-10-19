@@ -33,7 +33,8 @@
         150
       ],
       "name_en": "Compact",
-      "wires": 0
+      "wires": 0,
+      "noFinish": true
     },
     {
       "id": "ST-30",

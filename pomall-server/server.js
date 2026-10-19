@@ -237,7 +237,7 @@ function placeOrder(d, base) {
     if (p.wires !== 0 && !okLen(C, len)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
     const len2 = p.wires === 2 ? Math.floor(Number(it.len2)) : 0;
     if (p.wires === 2 && !okLen(C, len2)) return { ok: false, error: p.id + ' 와이어 길이 2가 범위를 벗어났어요.' };
-    const finish = String(it.finish || '');
+    const finish = p.noFinish ? '' : String(it.finish || '');
     if (finish && !(C.finishes || []).some(f => f.code === finish)) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
     const strip = p.wires === 0 ? 0 : Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
     if (!okStrip(strip, len) || !okStrip(strip2, len2)) return { ok: false, error: p.id + ' 탈피 길이는 와이어 길이보다 짧게 0.1mm 단위로 적어 주세요.' };
