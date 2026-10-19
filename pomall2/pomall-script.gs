@@ -182,10 +182,11 @@ function placeOrder(d) {
   var C = catalog(), lines = [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i], p = findProduct(C, it.model);
-    var len = Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
+    // 와이어가 없는 모델(products.json의 wires: 0)은 와이어 길이와 탈피가 없다
+    var len = p && p.wires === 0 ? 0 : Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
     if (!p) return { ok: false, error: '없는 모델이에요: ' + clip(it.model, 20) };
     if (!(cust.prices[p.id] > 0)) return { ok: false, error: p.id + '는 단가가 정해지지 않아 주문할 수 없어요.' };
-    if (!okLen(C, len)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
+    if (p.wires !== 0 && !okLen(C, len)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
     // 와이어가 두 줄인 모델(products.json의 wires: 2)은 두 번째 길이도 받는다
     var len2 = p.wires === 2 ? Math.floor(Number(it.len2)) : 0;
     if (p.wires === 2 && !okLen(C, len2)) return { ok: false, error: p.id + ' 와이어 길이 2가 범위를 벗어났어요.' };
@@ -193,7 +194,7 @@ function placeOrder(d) {
     var finishes = (C.finishes || []).map(function (f) { return f.code; }), finish = String(it.finish || '');
     if (finish && finishes.indexOf(finish) < 0) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
     // 탈피 길이는 선택 사항(0이면 없음): 0.1mm 단위, 와이어 길이보다 짧아야 한다
-    var strip = Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
+    var strip = p.wires === 0 ? 0 : Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
     if (!okStrip(strip, len) || !okStrip(strip2, len2)) return { ok: false, error: p.id + ' 탈피 길이는 와이어 길이보다 짧게 0.1mm 단위로 적어 주세요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
@@ -214,7 +215,7 @@ function placeOrder(d) {
   lines.forEach(function (l, k) {
     // 거래처가 적은 칸은 수식으로 해석되지 않도록 글자로 저장한다
     s.appendRow([no, now, cust.code, text(cust.name), text(contact), "'" + phone, text(clip(o.customerPo, 40)), text(address), text(clip(o.memo, 200)),
-      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish, l.strip || '', l.strip2 || '']);
+      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len || '', l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish, l.strip || '', l.strip2 || '']);
   });
   return { ok: true, order: { no: no, total: total, eta: eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -462,7 +463,7 @@ function catalog() {
 function findProduct(C, id) { for (var i = 0; i < C.products.length; i++) if (C.products[i].id === id) return C.products[i]; return null; }
 // 와이어가 두 줄이면 길이를 둘 다 적고, 마감은 맨 끝에 붙인다: ST-22W-L070-L100-T100-TD
 function specCode(model, len, temp, len2, finish) {
-  return model + '-L' + ('00' + len).slice(-3) + (len2 ? '-L' + ('00' + len2).slice(-3) : '') + '-T' + ('00' + temp).slice(-3) + (finish ? '-' + finish : '');
+  return model + (len ? '-L' + ('00' + len).slice(-3) : '') + (len2 ? '-L' + ('00' + len2).slice(-3) : '') + '-T' + ('00' + temp).slice(-3) + (finish ? '-' + finish : '');
 }
 function okStrip(v, len) { return v === 0 || (v > 0 && v < len && Math.abs(Math.round(v * 10) - v * 10) < 1e-9); }
 function okLen(C, v) { return v >= C.length.min && v <= C.length.max && v % C.length.step === 0; }
