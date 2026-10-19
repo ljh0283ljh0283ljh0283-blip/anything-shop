@@ -254,7 +254,7 @@
   function choiceName(key) { var g = (C.choices || []).filter(function (x) { return x.key === key; })[0]; return g ? T(g.name, g.name_en || g.name) : key; }
   function renderChoices() {
     var p = product(sel.model), gs = choiceGroups(p);
-    $('#choice-row').hidden = !gs.length;
+    $('#choice-row').hidden = !gs.length; $('#choice-row').classList.toggle('single', gs.length === 1);
     $('#choice-row').innerHTML = gs.map(function (g) {
       return '<div class="field"><span class="field-label" id="ch-' + esc(g.key) + '">' + esc(T(g.name, g.name_en || g.name)) + '</span>' +
         '<div class="checks" role="group" aria-labelledby="ch-' + esc(g.key) + '">' + g.options.map(function (o) {
