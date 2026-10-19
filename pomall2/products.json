@@ -92,7 +92,7 @@
   ],
   "length": {
     "min": 1,
-    "max": 500,
+    "max": 3000,
     "step": 1,
     "presets": [
       50,
