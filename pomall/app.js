@@ -230,7 +230,7 @@
   // 와이어가 두 줄인 모델은 길이를 둘 다 적는다: ST-22W-L070-L100-T100
   // 마감(T, TD)은 맨 끝에 붙는다: ST-12-L070-T100-TD
   function specCode(model, len, temp, len2, finish) {
-    return model + '-L' + String(len).padStart(3, '0') + (len2 ? '-L' + String(len2).padStart(3, '0') : '') + '-T' + String(temp).padStart(3, '0') + (finish ? '-' + finish : '');
+    return model + (len ? '-L' + String(len).padStart(3, '0') : '') + (len2 ? '-L' + String(len2).padStart(3, '0') : '') + '-T' + String(temp).padStart(3, '0') + (finish ? '-' + finish : '');
   }
   function finishes() { return C.finishes || []; }
   function renderFinish() {
@@ -239,6 +239,8 @@
     }).join('');
   }
   function twoWires(p) { return !!p && p.wires === 2; }
+  // 와이어가 없는 모델(products.json의 wires: 0)은 와이어 길이와 탈피를 받지 않는다
+  function noWire(p) { return !!p && p.wires === 0; }
   function basePrice(model) { var v = session && session.prices ? Number(session.prices[model]) : 0; return v > 0 ? v : null; }
   // 최종 단가 = 거래처 모델 단가 × (1 - 거래처 할인율). 와이어 길이, 온도, 수량과 상관없다. 단가가 없으면 null.
   function unitPrice(p) {
@@ -303,6 +305,7 @@
   }
   function renderChips() {
     var p = product(sel.model), L = C.length, Q = C.qty;
+    $('#len-field').hidden = noWire(p);
     $('#len2-field').hidden = !twoWires(p);
     $('#len-label').textContent = twoWires(p) ? T('와이어 길이 1', 'Wire length 1') : T('와이어 길이', 'Wire length');
     if (twoWires(p) && !$('#len2').value) $('#len2').value = $('#len').value;
@@ -312,12 +315,12 @@
   }
   function validate() {
     var p = product(sel.model), L = C.length, Q = C.qty;
-    var len = +$('#len').value, len2 = twoWires(p) ? +$('#len2').value : 0, temp = +$('#temp').value, qty = +$('#qty').value, errs = [];
+    var len = noWire(p) ? 0 : +$('#len').value, len2 = twoWires(p) ? +$('#len2').value : 0, temp = +$('#temp').value, qty = +$('#qty').value, errs = [];
     var badLen = function (v) { return !v || v < L.min || v > L.max || v % L.step; };
-    if (badLen(len)) errs.push(T('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.', 'Enter a wire length of ' + L.min + '–' + L.max + ' mm in ' + L.step + ' mm steps.'));
+    if (!noWire(p) && badLen(len)) errs.push(T('와이어 길이는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.', 'Enter a wire length of ' + L.min + '–' + L.max + ' mm in ' + L.step + ' mm steps.'));
     if (twoWires(p) && badLen(len2)) errs.push(T('와이어 길이 2는 ' + L.min + '~' + L.max + 'mm 사이 ' + L.step + 'mm 단위로 입력하세요.', 'Enter wire length 2 of ' + L.min + '–' + L.max + ' mm in ' + L.step + ' mm steps.'));
     // 탈피는 선택 사항: 비워 두면 0, 적으면 0.1mm 단위로 와이어 길이보다 짧게
-    var strip = +$('#strip').value || 0, strip2 = twoWires(p) ? +$('#strip2').value || 0 : 0;
+    var strip = noWire(p) ? 0 : +$('#strip').value || 0, strip2 = twoWires(p) ? +$('#strip2').value || 0 : 0;
     var badStrip = function (v, l) { return v && (v < 0 || v >= l || Math.abs(Math.round(v * 10) - v * 10) > 1e-9); };
     if (badStrip(strip, len)) errs.push(T('탈피' + (twoWires(p) ? ' 1' : '') + '은 와이어 길이보다 짧게 0.1mm 단위로 입력하세요.', 'Strip' + (twoWires(p) ? ' 1' : '') + ' must be shorter than the wire length, in 0.1 mm steps.'));
     if (badStrip(strip2, len2)) errs.push(T('탈피 2는 와이어 길이 2보다 짧게 0.1mm 단위로 입력하세요.', 'Strip 2 must be shorter than wire length 2, in 0.1 mm steps.'));
