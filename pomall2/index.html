@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261016c">
+<link rel="stylesheet" href="style.css?v=20261019a">
 </head>
 <body>
 
@@ -30,6 +30,22 @@
 
 <p class="notice"><b data-en="Draft version">수정안 (시험판)</b><span data-en="This is a draft for trying changes. Orders here are not sent to us and stay only in this browser.">지금 버전과 따로 고쳐 보는 시험판이에요. 여기서 넣은 주문과 거래처는 실제로 접수되지 않고 이 브라우저에만 저장돼요.</span></p>
 <p class="notice" id="notice" hidden><b data-en="Opening soon">주문 접수 준비 중</b><span data-en="You can check specifications now. Sign-in and ordering open at launch.">지금은 사양을 확인해 보실 수 있어요. 로그인과 발주는 정식 오픈 후에 받습니다.</span></p>
+
+<!-- 거래처 로그인: 로그인하기 전에는 이 화면만 보인다 -->
+<section class="view login-view" id="view-login" hidden>
+  <h2 data-en="SEKI POmall customer order">SEKI POmall 거래처 발주</h2>
+  <p class="lede" data-en="Sign in to see your prices and place production orders.">로그인하면 우리 회사 단가로 바로 생산 발주를 할 수 있어요.</p>
+  <div class="panel" id="login-panel">
+    <h3 data-en="Customer sign-in">거래처 로그인</h3>
+    <p class="note" data-en="Enter the customer code and password we gave you. If you don’t have one, please ask your sales representative.">회사에서 받은 거래처 코드와 비밀번호를 넣으세요. 코드가 없으면 담당 영업에 요청해 주세요.</p>
+    <form id="login-form" class="stack" style="gap:10px;margin-top:12px" novalidate>
+      <div class="field"><label for="login-code" data-en="Customer code">거래처 코드</label><input id="login-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
+      <div class="field"><label for="login-pw" data-en="Password">비밀번호</label><input id="login-pw" type="password" maxlength="40" autocomplete="current-password"></div>
+      <button class="btn" type="submit" id="login-btn" data-en="Sign in">로그인</button>
+      <p class="msg" id="login-msg" role="status"></p>
+    </form>
+  </div>
+</section>
 
 <!-- 주문하기 -->
 <section class="view" id="view-order">
@@ -99,16 +115,6 @@
     </div>
 
     <aside class="stack">
-      <div class="panel" id="login-panel">
-        <h3 data-en="Customer sign-in">거래처 로그인</h3>
-        <p class="note" data-en="Enter the customer code and password we gave you. If you don’t have one, please ask your sales representative.">회사에서 받은 거래처 코드와 비밀번호를 넣으세요. 코드가 없으면 담당 영업에 요청해 주세요.</p>
-        <form id="login-form" class="stack" style="gap:10px;margin-top:12px" novalidate>
-          <div class="field"><label for="login-code" data-en="Customer code">거래처 코드</label><input id="login-code" maxlength="20" autocomplete="username" autocapitalize="characters"></div>
-          <div class="field"><label for="login-pw" data-en="Password">비밀번호</label><input id="login-pw" type="password" maxlength="40" autocomplete="current-password"></div>
-          <button class="btn" type="submit" id="login-btn" data-en="Sign in">로그인</button>
-          <p class="msg" id="login-msg" role="status"></p>
-        </form>
-      </div>
 
       <div class="panel" id="cart-panel">
         <h3 data-en="Your order">발주서</h3>
@@ -291,6 +297,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261016c"></script>
+<script src="app.js?v=20261019a"></script>
 </body>
 </html>
