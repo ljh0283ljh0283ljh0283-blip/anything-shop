@@ -184,3 +184,6 @@ label.ship input{font-size:13px;padding:4px 6px;min-width:140px}
 .link-btn{font:inherit;font-size:13px;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0;margin-top:14px}
 .help-box{margin-top:12px;border-color:var(--accent)}
 tr.done{opacity:.55}
+.mail-preview{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--surface)}
+.help-ask{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+.help-ask summary{cursor:pointer;font-size:13px;color:var(--muted)}
