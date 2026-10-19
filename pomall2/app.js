@@ -216,7 +216,8 @@
   function auth() { return { code: session.code, pw: session.pw }; }
   function renderSession() {
     var on = !!session;
-    $('#login-panel').hidden = on;
+    // 로그인 전에는 로그인 화면만 보이고, 주문하기·주문 조회 탭은 감춘다
+    $('#tab-order').hidden = !on; $('#tab-history').hidden = !on;
     $('#who').hidden = !on;
     if (on) $('#who-name').textContent = session.customer.name + ' (' + session.code + ')';
     if (C) { renderModels(); renderSpec(); }
@@ -227,7 +228,7 @@
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
-      if (!quiet) toast(T(d.customer.name + '으로 로그인했어요', 'Signed in as ' + d.customer.name));
+      if (!quiet) { toast(T(d.customer.name + '으로 로그인했어요', 'Signed in as ' + d.customer.name)); show('order'); }
     });
   }
   function logout() {
@@ -782,9 +783,11 @@
     document.querySelectorAll('nav.tabs button').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.view === view); });
     // 거래처 관리는 주문관리와 같은 화면(같은 팀 열쇠)에서 거래처 부분만 보여 준다
     var page = view === 'customers' ? 'admin' : view;
-    ['order', 'history', 'admin'].forEach(function (v) { $('#view-' + v).hidden = v !== page; });
+    // 거래처 화면(주문하기, 주문 조회)은 로그인해야 열린다. 로그인 전에는 로그인 화면으로
+    if ((page === 'order' || page === 'history') && !session) page = 'login';
+    ['login', 'order', 'history', 'admin'].forEach(function (v) { $('#view-' + v).hidden = v !== page; });
     if (page === 'admin') { $('#tab-admin').hidden = false; showAdminTab(view === 'customers' ? 'customers' : 'orders'); adminLoad(); }
-    if (view === 'history') loadHistory();
+    if (page === 'history') loadHistory();
     window.scrollTo(0, 0);
   }
 
@@ -879,9 +882,10 @@
       renderSession(); renderCart();
       // 저장된 로그인으로 단가를 새로 받아 온다. 비밀번호가 바뀌었거나 중지된 거래처면 로그아웃한다.
       login(session.code, session.pw, true).catch(function (err) {
-        if (/맞지|중지/.test((err && err.message) || '')) { logout(); toast(T('다시 로그인해 주세요', 'Please sign in again')); }
+        if (/맞지|중지/.test((err && err.message) || '')) { logout(); show('order'); toast(T('다시 로그인해 주세요', 'Please sign in again')); }
       });
     } else { session = null; renderSession(); renderCart(); }
+    show('order');
   }).catch(function () {
     $('#models').innerHTML = '<p class="msg err">' + T('제품 목록을 불러오지 못했어요. 새로고침해 주세요.', 'Could not load the product list. Please refresh the page.') + '</p>';
   });
