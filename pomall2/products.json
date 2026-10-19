@@ -1,0 +1,159 @@
+{
+  "note": "모델, 길이·온도 범위, 생산 기간입니다. 모델 단가는 거래처마다 다르므로 여기 두지 않고 관리 > 거래처 단가에서 정합니다. 거래처 할인율도 그 화면에서 정합니다. price의 가산·할인 값은 모두 0이며, 예전 주문 스크립트와 호환되도록만 남겨 둔 것입니다. vat만 쓰입니다. wires가 2인 모델(ST-22W, ST-30, CK-01, CK-99)은 와이어 두 줄의 길이를 따로 받습니다. name_en은 영어 화면에 보이는 모델 설명입니다. finishes는 와이어 끝 마감 종류이며 사양 코드 끝에 붙습니다(예: ST-12-L070-T100-TD).",
+  "products": [
+    {
+      "id": "ST-22W",
+      "family": "ST",
+      "name": "표준형 와이어",
+      "temp": [
+        50,
+        150
+      ],
+      "wires": 2,
+      "name_en": "Standard, wire"
+    },
+    {
+      "id": "ST-22P",
+      "family": "ST",
+      "name": "표준형 핀",
+      "temp": [
+        50,
+        150
+      ],
+      "name_en": "Standard, pin"
+    },
+    {
+      "id": "ST-12",
+      "family": "ST",
+      "name": "소형",
+      "temp": [
+        50,
+        150
+      ],
+      "name_en": "Compact"
+    },
+    {
+      "id": "ST-30",
+      "family": "ST",
+      "name": "대용량",
+      "temp": [
+        50,
+        150
+      ],
+      "wires": 2,
+      "name_en": "High capacity"
+    },
+    {
+      "id": "CK-01",
+      "family": "CK",
+      "name": "중온형",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 2,
+      "name_en": "Mid-temperature"
+    },
+    {
+      "id": "CK-99",
+      "family": "CK",
+      "name": "중온 고정밀",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 2,
+      "name_en": "Mid-temp, high precision"
+    },
+    {
+      "id": "HB-2",
+      "family": "HB",
+      "name": "고온형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temperature"
+    },
+    {
+      "id": "HB-21",
+      "family": "HB",
+      "name": "고온 개량형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temp, improved"
+    }
+  ],
+  "length": {
+    "min": 30,
+    "max": 500,
+    "step": 5,
+    "presets": [
+      50,
+      70,
+      100,
+      150,
+      200,
+      300
+    ]
+  },
+  "tempStep": 5,
+  "tempPresets": {
+    "ST": [
+      70,
+      80,
+      100,
+      120,
+      150
+    ],
+    "CK": [
+      80,
+      100,
+      130,
+      150,
+      180
+    ],
+    "HB": [
+      100,
+      130,
+      150,
+      180,
+      220
+    ]
+  },
+  "qty": {
+    "min": 100,
+    "step": 100,
+    "presets": [
+      500,
+      1000,
+      3000,
+      5000
+    ]
+  },
+  "price": {
+    "vat": 0.1,
+    "wireBaseMm": 0,
+    "wirePer10mm": 0,
+    "highTempOver": 9999,
+    "highTempRate": 0,
+    "volume": []
+  },
+  "lead": {
+    "days": 10,
+    "bigQty": 5000,
+    "bigDays": 15
+  },
+  "finishes": [
+    {
+      "code": "T",
+      "name": "Twisted"
+    },
+    {
+      "code": "TD",
+      "name": "Tin Dipped"
+    }
+  ]
+}
