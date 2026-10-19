@@ -68,7 +68,8 @@
         200
       ],
       "wires": 0,
-      "name_en": "Mid-temperature"
+      "name_en": "Mid-temperature",
+      "noFinish": true
     },
     {
       "id": "CK-011",
@@ -90,7 +91,8 @@
         200
       ],
       "wires": 0,
-      "name_en": "Mid-temp, high precision"
+      "name_en": "Mid-temp, high precision",
+      "noFinish": true
     },
     {
       "id": "CK-991",
