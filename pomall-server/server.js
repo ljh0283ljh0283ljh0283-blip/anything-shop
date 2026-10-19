@@ -81,7 +81,7 @@ function catalog() { return JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); 
 function findProduct(C, id) { return C.products.find(p => p.id === id) || null; }
 function specCode(model, len, temp, len2, finish) {
   const p3 = n => String(n).padStart(3, '0');
-  return model + '-L' + p3(len) + (len2 ? '-L' + p3(len2) : '') + '-T' + p3(temp) + (finish ? '-' + finish : '');
+  return model + (len ? '-L' + p3(len) : '') + (len2 ? '-L' + p3(len2) : '') + '-T' + p3(temp) + (finish ? '-' + finish : '');
 }
 const okStrip = (v, len) => v === 0 || (v > 0 && v < len && Math.abs(Math.round(v * 10) - v * 10) < 1e-9);
 const okLen = (C, v) => v >= C.length.min && v <= C.length.max && v % C.length.step === 0;
@@ -228,15 +228,16 @@ function placeOrder(d, base) {
   const C = catalog(), lines = [];
   for (const it of items) {
     const p = findProduct(C, it.model);
-    const len = Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
+    // 와이어가 없는 모델(products.json의 wires: 0)은 와이어 길이와 탈피가 없다
+    const len = p && p.wires === 0 ? 0 : Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
     if (!p) return { ok: false, error: '없는 모델이에요: ' + clip(it.model, 20) };
     if (!(cust.prices[p.id] > 0)) return { ok: false, error: p.id + '는 단가가 정해지지 않아 주문할 수 없어요.' };
-    if (!okLen(C, len)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
+    if (p.wires !== 0 && !okLen(C, len)) return { ok: false, error: p.id + ' 와이어 길이가 범위를 벗어났어요.' };
     const len2 = p.wires === 2 ? Math.floor(Number(it.len2)) : 0;
     if (p.wires === 2 && !okLen(C, len2)) return { ok: false, error: p.id + ' 와이어 길이 2가 범위를 벗어났어요.' };
     const finish = String(it.finish || '');
     if (finish && !(C.finishes || []).some(f => f.code === finish)) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
-    const strip = Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
+    const strip = p.wires === 0 ? 0 : Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
     if (!okStrip(strip, len) || !okStrip(strip2, len2)) return { ok: false, error: p.id + ' 탈피 길이는 와이어 길이보다 짧게 0.1mm 단위로 적어 주세요.' };
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
