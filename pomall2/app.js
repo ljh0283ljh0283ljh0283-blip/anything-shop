@@ -40,6 +40,7 @@
     [/^(\S+) 마감을 다시/, 'Please choose the $1 finish again.'],
     [/^(\S+) (.+) 항목을 골라/, 'Please choose the $1 $2.'],
     [/^(\S+) 탈피 길이는/, '$1 strip length must be shorter than the wire, in 0.1 mm steps.'],
+    [/^(\S+) 복귀온도는/, '$1 reset temperature must be lower than the operating temperature, in 5°C steps.'],
     [/^(\S+) 동작온도가 범위/, '$1 operating temperature is out of range.'],
     [/^수량은 (\d+)EA 이상 (\d+)EA 단위/, 'Quantity must be at least $1 EA, in steps of $2 EA.'],
     [/발주서는 PDF/, 'The PO file must be a PDF, image, Excel, Word or HWP file.'],
@@ -246,6 +247,10 @@
   function hasPin(p) { return !!p && !!p.pinLength; }
   // 마감을 고르지 않는 모델(products.json의 noFinish: true)
   function noFinish(p) { return !!p && !!p.noFinish; }
+  // 복귀온도를 받는 모델(products.json의 resetTemp: true). 동작온도보다 낮게 tempStep 단위
+  function hasReset(p) { return !!p && !!p.resetTemp; }
+  // 품목의 복귀온도(복귀온도 모델이 아니거나 기록이 없으면 빈 글자)
+  function rtempOf(i) { return hasReset(product(i.model)) && i.rtemp !== '' && i.rtemp != null ? +i.rtemp : ''; }
   // 체크박스로 하나를 고르는 항목(products.json의 choices). 모델의 choices에 적힌 것 중 고를 값이 있는 것만 받는다
   function choiceGroups(p) {
     var keys = (p && p.choices) || [];
@@ -335,6 +340,8 @@
     $('#len-label').textContent = twoWires(p) ? T('와이어 길이 1', 'Wire length 1') : T('와이어 길이', 'Wire length');
     if (twoWires(p) && !$('#len2').value) $('#len2').value = $('#len').value;
     $('#len-hint').textContent = L.min + '~' + L.max + 'mm, ' + T(L.step + 'mm 단위', 'in ' + L.step + ' mm steps');
+    $('#rtemp-field').hidden = !hasReset(p);
+    $('#rtemp-hint').textContent = T('동작온도보다 낮게, ' + C.tempStep + '°C 단위', 'Below the operating temperature, in ' + C.tempStep + '°C steps');
     $('#temp-hint').textContent = p.id + ': ' + p.temp[0] + '~' + p.temp[1] + '°C, ' + T(C.tempStep + '°C 단위', 'in ' + C.tempStep + '°C steps');
     $('#qty-hint').textContent = T('최소 ' + Q.min.toLocaleString() + 'EA, ' + Q.step + 'EA 단위', 'Min. ' + Q.min.toLocaleString() + ' EA, in ' + Q.step + ' EA steps');
   }
@@ -352,13 +359,15 @@
     var pin = hasPin(p) ? +$('#pin').value || 0 : 0, PN = C.pin || { min: 0.1, max: 1000 };
     if (hasPin(p) && (!pin || pin < PN.min || pin > PN.max || Math.abs(Math.round(pin * 10) - pin * 10) > 1e-9)) errs.push(T('핀 길이는 ' + PN.min + '~' + PN.max + 'mm 사이 0.1mm 단위로 입력하세요.', 'Enter a pin length of ' + PN.min + '–' + PN.max + ' mm in 0.1 mm steps.'));
     if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(T(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.', 'Enter a ' + p.id + ' operating temperature of ' + p.temp[0] + '–' + p.temp[1] + '°C in ' + C.tempStep + '°C steps.'));
+    var rtemp = hasReset(p) ? +$('#rtemp').value || 0 : 0;
+    if (hasReset(p) && (!$('#rtemp').value || rtemp < 0 || rtemp >= temp || rtemp % C.tempStep)) errs.push(T('복귀온도는 동작온도보다 낮게 ' + C.tempStep + '°C 단위로 입력하세요.', 'Enter a reset temperature below the operating temperature, in ' + C.tempStep + '°C steps.'));
     var ch = {};
     choiceGroups(p).forEach(function (g) {
       ch[g.key] = g.options.indexOf(sel.choice[g.key]) >= 0 ? sel.choice[g.key] : '';
       if (!ch[g.key]) errs.push(T(g.name + ' 항목을 골라 주세요.', 'Choose the ' + (g.name_en || g.name).toLowerCase() + '.'));
     });
     if (!qty || qty < Q.min || qty % Q.step) errs.push(T('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.', 'Enter a quantity of at least ' + Q.min + ' EA in ' + Q.step + ' EA steps.'));
-    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, speed: ch.speed || '', terminal: ch.terminal || '', term: ch.term || '', temp: temp, qty: qty, finish: noFinish(p) ? '' : sel.finish || '', errs: errs };
+    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, speed: ch.speed || '', terminal: ch.terminal || '', term: ch.term || '', rtemp: rtemp, temp: temp, qty: qty, finish: noFinish(p) ? '' : sel.finish || '', errs: errs };
   }
   function renderSpec() {
     var v = validate(), add = $('#add-btn');
@@ -376,11 +385,11 @@
     var p = product(id), t = +$('#temp').value;
     if (!(t >= p.temp[0] && t <= p.temp[1])) $('#temp').value = (C.tempPresets[p.family] || [p.temp[0]])[0];
   }
-  function setSpec(model, len, temp, qty, len2, finish, strip, strip2, pin, choice) {
+  function setSpec(model, len, temp, qty, len2, finish, strip, strip2, pin, choice, rtemp) {
     if (!product(model)) return;
     if (choice) Object.keys(choice).forEach(function (k) { if (choice[k]) sel.choice[k] = choice[k]; });
     if (finish) { sel.finish = finish; renderFinish(); }
-    $('#len').value = len; $('#len2').value = len2 || ''; $('#strip').value = strip || ''; $('#strip2').value = strip2 || ''; $('#pin').value = pin || ''; $('#temp').value = temp; if (qty) $('#qty').value = qty;
+    $('#len').value = len; $('#len2').value = len2 || ''; $('#strip').value = strip || ''; $('#strip2').value = strip2 || ''; $('#pin').value = pin || ''; $('#rtemp').value = rtemp || ''; $('#temp').value = temp; if (qty) $('#qty').value = qty;
     selectModel(model); renderSpec();
   }
 
@@ -412,9 +421,9 @@
     var v = validate(); if (v.errs.length || !session) return;
     var unit = unitPrice(v.p); if (unit == null) return;
     var code = specCode(v.p.id, v.len, v.temp, v.len2, v.finish), memo = $('#item-memo').value.trim();
-    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo && (i.strip || 0) === v.strip && (i.strip2 || 0) === v.strip2 && (i.pin || 0) === v.pin && (i.speed || '') === v.speed && (i.terminal || '') === v.terminal && (i.term || '') === v.term; })[0];
+    var ex = cart.filter(function (i) { return i.code === code && i.memo === memo && (i.strip || 0) === v.strip && (i.strip2 || 0) === v.strip2 && (i.pin || 0) === v.pin && (i.speed || '') === v.speed && (i.terminal || '') === v.terminal && (i.term || '') === v.term && (i.rtemp || 0) === v.rtemp; })[0];
     if (ex) { ex.qty += v.qty; ex.unit = unitPrice(v.p); }
-    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, pin: v.pin, speed: v.speed, terminal: v.terminal, term: v.term, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
+    else cart.push({ code: code, model: v.p.id, len: v.len, len2: v.len2, strip: v.strip, strip2: v.strip2, pin: v.pin, speed: v.speed, terminal: v.terminal, term: v.term, rtemp: v.rtemp, finish: v.finish, temp: v.temp, qty: v.qty, unit: unit, memo: memo });
     $('#item-memo').value = '';
     saveCart(); renderCart(); $('#done').hidden = true;
     toast(T(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다', 'Added ' + code + ' × ' + v.qty.toLocaleString() + ' EA'));
@@ -438,7 +447,7 @@
     var order = {
       contact: v.name, phone: v.phone, customerPo: v.po, address: v.addr,
       memo: $('#c-memo').value.trim(), requestedDate: $('#c-date').value || ymd(ship), eta: ymd(ship),
-      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
+      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
@@ -486,14 +495,14 @@
   // ----- 최근 사양 (이 기기) -----
   function rememberSpecs(items) {
     var rec = store(KEY.recent) || [];
-    var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0) && (a.pin || 0) === (b.pin || 0) && (a.speed || '') === (b.speed || '') && (a.terminal || '') === (b.terminal || '') && (a.term || '') === (b.term || ''); };
-    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: i.temp, qty: i.qty }); });
+    var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0) && (a.pin || 0) === (b.pin || 0) && (a.speed || '') === (b.speed || '') && (a.terminal || '') === (b.terminal || '') && (a.term || '') === (b.term || '') && (a.rtemp || 0) === (b.rtemp || 0); };
+    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty }); });
     store(KEY.recent, rec.slice(0, 8)); renderRecent();
   }
   function renderRecent() {
     var rec = store(KEY.recent) || [];
     $('#reorder-panel').hidden = !rec.length;
-    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0, i.pin || 0, i.speed || '', i.terminal || '', i.term || ''].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
+    $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0, i.pin || 0, i.speed || '', i.terminal || '', i.term || '', i.rtemp || 0].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
   }
 
   // ----- 주문 조회 -----
@@ -509,6 +518,7 @@
   // 탈피 길이: 와이어가 두 줄이면 1·2를 나눠 적는다. 적지 않았으면 빈 글자
   function stripText(i) {
     var a = +i.strip || 0, b = +i.strip2 || 0, parts = [];
+    if (rtempOf(i) !== '') parts.push(T('복귀온도 ', 'Reset ') + (+i.rtemp) + '°C');
     if (+i.pin) parts.push(T('핀 길이 ', 'Pin length ') + (+i.pin) + 'mm');
     else if (a || b) parts.push(T('탈피 ', 'Strip ') + (i.len2 ? '1: ' + (a ? a + 'mm' : T('없음', 'none')) + ', 2: ' + (b ? b + 'mm' : T('없음', 'none')) : a + 'mm'));
     // 전류감응속도·터미널방향(CK), 터미널(HB)
@@ -548,7 +558,7 @@
     o.items.forEach(function (i) {
       var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: +i.rtemp || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
     toast(T(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''),
@@ -760,11 +770,11 @@
   });
   $('#ci-orders-excel').addEventListener('click', function () {
     var D = infoData; if (!D || !D.list.length) { toast('내려받을 발주가 없어요'); return; }
-    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
+    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
     var lines = [head.map(csvCell).join(',')];
     D.list.forEach(function (o) {
       o.items.forEach(function (i) {
-        lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '', i.pin || '', csvCell(i.speed || ''), csvCell(i.terminal || ''), csvCell(i.term || ''),
+        lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '', i.pin || '', csvCell(i.speed || ''), csvCell(i.terminal || ''), csvCell(i.term || ''), rtempOf(i),
           csvCell(i.finish || ''), i.temp || '', i.qty || '', i.unit || '', (Number(i.unit) || 0) * (Number(i.qty) || 0), csvCell(i.memo || ''), o.total || ''].join(','));
       });
     });
@@ -993,7 +1003,7 @@
     if (d.temp) { $('#temp').value = d.temp; return renderSpec(); }
     if (d.qty) { $('#qty').value = d.qty; return renderSpec(); }
     if (d.del !== undefined) { cart.splice(+d.del, 1); saveCart(); return renderCart(); }
-    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0, +s[8] || 0, { speed: s[9] || '', terminal: s[10] || '', term: s[11] || '' }); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (d.spec) { var s = d.spec.split('|'); setSpec(s[0], +s[1], +s[2], +s[3], +s[4] || 0, s[5] || '', +s[6] || 0, +s[7] || 0, +s[8] || 0, { speed: s[9] || '', terminal: s[10] || '', term: s[11] || '' }, +s[12] || 0); return window.scrollTo({ top: 0, behavior: 'smooth' }); }
     if (d.reorder) return reorder(d.reorder);
     if (d.filter) { adminFilter = d.filter; return renderAdmin(); }
     if (d.custInfo) return openCustInfo(d.custInfo);
@@ -1001,7 +1011,7 @@
     if (d.period) { infoPeriod = d.period; infoKey = null; return renderCustInfo(); }
     if (d.edit) { fillCustomerForm(customers.filter(function (x) { return x.code === d.edit; })[0]); return $('#cust-form').scrollIntoView({ behavior: 'smooth' }); }
   });
-  ['len', 'len2', 'strip', 'strip2', 'pin', 'temp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
+  ['len', 'len2', 'strip', 'strip2', 'pin', 'temp', 'rtemp', 'qty'].forEach(function (id) { $('#' + id).addEventListener('input', function () { if (C) renderSpec(); }); });
   $('#add-btn').addEventListener('click', addToCart);
   // 체크박스는 하나만 고른다: 하나를 체크하면 같은 항목의 다른 것은 풀리고, 다시 누르면 선택이 풀린다
   $('#choice-row').addEventListener('change', function (e) {

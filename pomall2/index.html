@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261019k">
+<link rel="stylesheet" href="style.css?v=20261019l">
 </head>
 <body>
 
@@ -105,6 +105,11 @@
             <label for="temp" data-en="Operating temperature">동작온도</label>
             <div class="inrow"><input class="num" id="temp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
             <div class="hint" id="temp-hint"></div>
+          </div>
+          <div class="field" id="rtemp-field" hidden>
+            <label for="rtemp" data-en="Reset temperature">복귀온도</label>
+            <div class="inrow"><input class="num" id="rtemp" type="number" inputmode="numeric"><span class="unit">°C</span></div>
+            <div class="hint" id="rtemp-hint"></div>
           </div>
           <div class="field">
             <label for="qty" data-en="Quantity">수량</label>
@@ -353,6 +358,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261019k"></script>
+<script src="app.js?v=20261019l"></script>
 </body>
 </html>
