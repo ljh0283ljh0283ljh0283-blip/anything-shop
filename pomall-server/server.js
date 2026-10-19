@@ -68,7 +68,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);  -- LEAD(생산 소요일), CUST_SEQ(마지막 거래처 번호)
 `);
 // 나중에 생긴 칸은 예전 자료에도 붙인다
-for (const [c, t] of [['pin', 'REAL'], ['speed', 'TEXT'], ['terminal', 'TEXT']])
+for (const [c, t] of [['pin', 'REAL'], ['speed', 'TEXT'], ['terminal', 'TEXT'], ['term', 'TEXT']])
   if (!db.prepare('PRAGMA table_info(orders)').all().some(x => x.name === c)) db.exec('ALTER TABLE orders ADD COLUMN ' + c + ' ' + t);
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
@@ -256,7 +256,7 @@ function placeOrder(d, base) {
     if (!(temp >= p.temp[0] && temp <= p.temp[1] && temp % C.tempStep === 0)) return { ok: false, error: p.id + ' 동작온도가 범위를 벗어났어요.' };
     if (!(qty >= C.qty.min && qty % C.qty.step === 0)) return { ok: false, error: '수량은 ' + C.qty.min + 'EA 이상 ' + C.qty.step + 'EA 단위예요.' };
     const unit = unitPrice(cust.prices[p.id], cust.discount);
-    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len, len2, strip, strip2, pin, speed: ch.speed || '', terminal: ch.terminal || '', finish, temp, qty, unit, amount: unit * qty, memo: clip(it.memo, 100) });
+    lines.push({ code: specCode(p.id, len, temp, len2, finish), model: p.id, len, len2, strip, strip2, pin, speed: ch.speed || '', terminal: ch.terminal || '', term: ch.term || '', finish, temp, qty, unit, amount: unit * qty, memo: clip(it.memo, 100) });
   }
   const net = lines.reduce((s, l) => s + l.amount, 0);
   const total = Math.round(net * (1 + C.price.vat));
@@ -270,10 +270,10 @@ function placeOrder(d, base) {
   const now = new Date().toISOString();
   tx(() => {
     const ins = q(`INSERT INTO orders (no, line, created_at, code, company, contact, phone, customer_po, address, memo, requested_date, eta,
-      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin, speed, terminal)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin, speed, terminal, term)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     lines.forEach((l, k) => ins.run(no, k + 1, now, cust.code, cust.name, contact, phone, clip(o.customerPo, 40), address, clip(o.memo, 200),
-      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0, l.pin || 0, l.speed, l.terminal));
+      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0, l.pin || 0, l.speed, l.terminal, l.term));
   });
   return { ok: true, order: { no, total, eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -292,7 +292,7 @@ function orders(where, args, withLog) {
       customerPo: r.customer_po || '', address: r.address, memo: r.memo || '', requestedDate: r.requested_date || '', eta: r.eta || '',
       total: r.total || 0, shipDate: r.ship_date || '', attachment: r.attachment || '', status: statusOf(r.status), items: [], log: log[r.no] || []
     });
-    map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0, pin: r.pin || 0, speed: r.speed || '', terminal: r.terminal || '',
+    map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0, pin: r.pin || 0, speed: r.speed || '', terminal: r.terminal || '', term: r.term || '',
       temp: r.temp, qty: r.qty, unit: r.unit, memo: r.item_memo || '' });
   });
   return [...map.values()].reverse();
