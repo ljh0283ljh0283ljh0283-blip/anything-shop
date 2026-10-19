@@ -243,6 +243,8 @@
   function noWire(p) { return !!p && p.wires === 0; }
   // 핀 모델(products.json의 pinLength: true)은 핀 길이를 받는다
   function hasPin(p) { return !!p && !!p.pinLength; }
+  // 마감을 고르지 않는 모델(products.json의 noFinish: true)
+  function noFinish(p) { return !!p && !!p.noFinish; }
   function basePrice(model) { var v = session && session.prices ? Number(session.prices[model]) : 0; return v > 0 ? v : null; }
   // 최종 단가 = 거래처 모델 단가 × (1 - 거래처 할인율). 와이어 길이, 온도, 수량과 상관없다. 단가가 없으면 null.
   function unitPrice(p) {
@@ -308,6 +310,7 @@
   function renderChips() {
     var p = product(sel.model), L = C.length, Q = C.qty;
     $('#len-field').hidden = noWire(p);
+    $('#finish-field').hidden = noFinish(p); $('#finish-row').classList.toggle('no-finish', noFinish(p));
     $('#pin-field').hidden = !hasPin(p); $('#finish-row').classList.toggle('has-pin', hasPin(p));
     if (C.pin) $('#pin-hint').textContent = C.pin.min + '~' + C.pin.max + 'mm, ' + T('0.1mm 단위', 'in 0.1 mm steps');
     $('#len2-field').hidden = !twoWires(p);
@@ -332,7 +335,7 @@
     if (hasPin(p) && (!pin || pin < PN.min || pin > PN.max || Math.abs(Math.round(pin * 10) - pin * 10) > 1e-9)) errs.push(T('핀 길이는 ' + PN.min + '~' + PN.max + 'mm 사이 0.1mm 단위로 입력하세요.', 'Enter a pin length of ' + PN.min + '–' + PN.max + ' mm in 0.1 mm steps.'));
     if (!temp || temp < p.temp[0] || temp > p.temp[1] || temp % C.tempStep) errs.push(T(p.id + ' 동작온도는 ' + p.temp[0] + '~' + p.temp[1] + '°C 사이 ' + C.tempStep + '°C 단위로 입력하세요.', 'Enter a ' + p.id + ' operating temperature of ' + p.temp[0] + '–' + p.temp[1] + '°C in ' + C.tempStep + '°C steps.'));
     if (!qty || qty < Q.min || qty % Q.step) errs.push(T('수량은 ' + Q.min + 'EA 이상 ' + Q.step + 'EA 단위로 입력하세요.', 'Enter a quantity of at least ' + Q.min + ' EA in ' + Q.step + ' EA steps.'));
-    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, temp: temp, qty: qty, finish: sel.finish || '', errs: errs };
+    return { p: p, len: len, len2: len2, strip: strip, strip2: strip2, pin: pin, temp: temp, qty: qty, finish: noFinish(p) ? '' : sel.finish || '', errs: errs };
   }
   function renderSpec() {
     var v = validate(), add = $('#add-btn');
@@ -475,7 +478,7 @@
   function pill(s) { s = OLD_STATUS[s] || s || '접수 대기'; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(LANG === 'en' ? STATUS_EN[s] || s : s) + '</span>'; }
   // 마감(T, TD)을 이름과 함께 보여 준다. 마감 칸이 생기기 전 발주는 "기록 없음"
   function finishTag(i) {
-    if (!finishes().length) return '';
+    if (!finishes().length || noFinish(product(i.model))) return '';
     var f = finishes().filter(function (x) { return x.code === i.finish; })[0];
     return '<div class="item-finish">' + T('마감: ', 'Finish: ') + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : T('마감 없음', 'none')) + '</div>';
   }

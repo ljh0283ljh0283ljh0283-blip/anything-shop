@@ -166,7 +166,7 @@ label.ship input{font-size:13px;padding:4px 6px;min-width:140px}
 .fields-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 @media (max-width:560px){.fields-row{grid-template-columns:minmax(0,1fr)}}
 /* 핀 길이가 마감 오른쪽에 오면 품목 메모는 아래 줄 전체를 쓴다 */
-.fields-row.has-pin .memo-field{grid-column:1/-1}
+.fields-row.has-pin .memo-field,.fields-row.no-finish .memo-field{grid-column:1/-1}
 .field-label{font-weight:600}
 .seg{display:flex;gap:8px;flex-wrap:wrap}
 .seg button{font:inherit;padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}

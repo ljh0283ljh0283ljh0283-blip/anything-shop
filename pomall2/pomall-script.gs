@@ -191,7 +191,7 @@ function placeOrder(d) {
     var len2 = p.wires === 2 ? Math.floor(Number(it.len2)) : 0;
     if (p.wires === 2 && !okLen(C, len2)) return { ok: false, error: p.id + ' 와이어 길이 2가 범위를 벗어났어요.' };
     // 마감(products.json의 finishes: T Twisted, TD Tin Dipped)은 선택 사항: 비어 있으면 '마감 없음'
-    var finishes = (C.finishes || []).map(function (f) { return f.code; }), finish = String(it.finish || '');
+    var finishes = (C.finishes || []).map(function (f) { return f.code; }), finish = p.noFinish ? '' : String(it.finish || '');
     if (finish && finishes.indexOf(finish) < 0) return { ok: false, error: p.id + ' 마감을 다시 골라 주세요.' };
     // 탈피 길이는 선택 사항(0이면 없음): 0.1mm 단위, 와이어 길이보다 짧아야 한다
     var strip = p.wires === 0 ? 0 : Number(it.strip) || 0, strip2 = p.wires === 2 ? Number(it.strip2) || 0 : 0;
