@@ -883,21 +883,44 @@
       (q.length > 2 ? '<div class="order-items">외 ' + (q.length - 2) + '개</div>' : '');
   }
   // 주문모델·견적단가 입력 줄. +를 누르면 한 줄씩 늘어난다
-  function quoteRow(q) {
+  // 이미 저장된 줄은 '삭제'(바로 저장돼 거래처 화면에서 사라짐), 새로 적는 줄은 '빼기'(저장 전 입력만 지움)
+  function quoteRow(q, saved) {
     return '<div class="quote-row"><input data-qm maxlength="60" placeholder="주문모델 (예: ST-22W-L070-L120-T100)" aria-label="주문모델" value="' + esc(q ? q.model : '') + '">' +
       '<div class="inrow"><input class="num" data-qp type="number" min="0" step="0.1" inputmode="decimal" placeholder="견적단가" aria-label="견적단가" value="' + (q && q.price ? q.price : '') + '"><span class="unit">원</span></div>' +
-      '<button type="button" class="btn ghost small" data-q-del aria-label="이 줄 빼기">빼기</button></div>';
+      (saved && q ? '<button type="button" class="btn ghost small danger-text" data-q-del data-q-saved="' + esc(q.model) + '" aria-label="' + esc(q.model) + ' 삭제">삭제</button>'
+        : '<button type="button" class="btn ghost small" data-q-del aria-label="이 줄 빼기">빼기</button>') + '</div>';
   }
-  function fillQuotes(list) { $('#cu-quotes').innerHTML = (list && list.length ? list : [null]).map(quoteRow).join(''); }
+  function fillQuotes(list, saved) { $('#cu-quotes').innerHTML = (list && list.length ? list : [null]).map(function (q) { return quoteRow(q, saved); }).join(''); }
   $('#cu-quote-add').addEventListener('click', function () {
     $('#cu-quotes').insertAdjacentHTML('beforeend', quoteRow(null));
     var all = $('#cu-quotes').querySelectorAll('[data-qm]'); all[all.length - 1].focus();
   });
   $('#cu-quotes').addEventListener('click', function (e) {
     if (!e.target.hasAttribute('data-q-del')) return;
-    e.target.closest('.quote-row').remove();
-    if (!$('#cu-quotes').children.length) fillQuotes(null);
+    var row = e.target.closest('.quote-row'), model = e.target.dataset.qSaved;
+    if (!model) { row.remove(); if (!$('#cu-quotes').children.length) fillQuotes(null); return; }
+    deleteQuote(model, row, e.target);
   });
+  // 저장된 견적 모델 삭제: 한 번 묻고, 시트에 저장된 거래처 정보에서 그 모델만 빼서 바로 저장한다.
+  // 화면에 적다 만 다른 칸은 저장하지 않는다. 지난 발주에 남은 주문모델은 그대로다.
+  function deleteQuote(model, row, btn) {
+    var c = customers.filter(function (x) { return x.code === editing; })[0], msg = $('#cu-msg');
+    if (!c) return;
+    if (!window.confirm(model + ' 주문모델을 삭제할까요?\n거래처 화면에서 바로 사라져요. 지난 발주 기록은 그대로 남아요.')) return;
+    var left = (c.quotes || []).filter(function (q) { return q.model !== model; });
+    btn.disabled = true; say(msg, '삭제하는 중이에요…');
+    api.saveCustomer(adminKey(), { code: c.code, oldCode: c.code, name: c.name, contact: c.contact, phone: String(c.phone || '').replace(/^'/, ''), email: c.email || '', address: c.address,
+      active: c.active, discount: c.discount || 0, prices: c.prices || {}, quotes: left, pw: '' })
+      .then(function () { return api.customers(adminKey()); })
+      .then(function (list) {
+        customers = list || [];
+        var now = customers.filter(function (x) { return x.code === c.code; })[0];
+        if (now && (now.quotes || []).some(function (q) { return q.model === model; })) { btn.disabled = false; say(msg, '삭제되지 않았어요. Apps Script에 새 pomall-script.gs를 붙여 넣고 새 버전으로 배포해 주세요.', true); return; }
+        row.remove(); if (!$('#cu-quotes').children.length) fillQuotes(null);
+        renderCustomers(); say(msg, model + ' 주문모델을 삭제했어요.');
+      })
+      .catch(function (err) { btn.disabled = false; say(msg, errText(err, '삭제하지 못했어요. 다시 눌러 주세요.'), true); });
+  }
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
     $('#cust-form-title').textContent = c ? (c.no ? c.no + '번 ' : '') + c.name + ' 수정' : '거래처 추가';
@@ -908,7 +931,7 @@
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
-    fillQuotes(c ? c.quotes : null);
+    fillQuotes(c ? c.quotes : null, true);
     say($('#cu-msg'), '');
     renderCustomers();
   }
