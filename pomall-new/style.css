@@ -216,3 +216,6 @@ tr.done{opacity:.55}
 #quote-panel{min-width:0}
 .quote-table code{white-space:nowrap}
 @media (max-width:560px){.quote-row{grid-template-columns:minmax(0,1fr) 110px auto}}
+/* 담당자메모: 주문관리 상태 변경 옆 */
+.staff-memo-input{width:100%;min-width:180px;font-size:13px;padding:6px 8px;resize:vertical;font-family:inherit}
+.staff-memo{white-space:pre-wrap;font-size:13px;min-width:160px}
