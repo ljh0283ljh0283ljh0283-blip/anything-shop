@@ -324,7 +324,8 @@
   }
   $('#login-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var code = $('#login-code').value.trim().toUpperCase(), pw = $('#login-pw').value, msg = $('#login-msg');
+    // 복사해 붙여 넣으면 앞뒤에 빈칸이 따라오기 쉽다(윈도에서 두 번 클릭해 복사하면 뒤 빈칸까지 잡힘). 비밀번호에는 빈칸이 없으니 뗀다
+    var code = $('#login-code').value.trim().toUpperCase(), pw = $('#login-pw').value.trim(), msg = $('#login-msg');
     if (!code || !pw) { say(msg, T('거래처 코드와 비밀번호를 넣어 주세요.', 'Enter your customer code and password.'), true); return; }
     if (!settings.open || !api.ready) { say(msg, T('아직 로그인을 받지 않아요. 정식 오픈 후에 다시 와 주세요.', 'Sign-in is not open yet. Please come back after launch.'), true); return; }
     say(msg, T('확인하는 중이에요…', 'Checking…')); $('#login-btn').disabled = true;
@@ -1126,6 +1127,16 @@
     do { crypto.getRandomValues(r); pw = ''; r.forEach(function (n) { pw += all[n % all.length]; }); } while (!/[a-z]/.test(pw) || !/\d/.test(pw));
     return pw;
   }
+  // 비밀번호 복사: 빈칸 없이 비밀번호만 복사한다. 칸에 저장 전 새 비밀번호가 있으면 그것을, 없으면 지금 비밀번호(관리자)를
+  $('#cu-copy-pw').addEventListener('click', function () {
+    var c = customers.filter(function (x) { return x.code === editing; })[0], typed = $('#cu-pw').value.trim(), pw = typed || (c && c.pwView) || '';
+    if (!pw) { say($('#cu-msg'), '복사할 비밀번호가 없어요. 새 비밀번호 만들기를 누르고 저장해 주세요.', true); return; }
+    var done = function () { say($('#cu-msg'), '비밀번호 ' + pw + ' 를 복사했어요.' + (typed ? ' 저장을 눌러야 이 비밀번호로 로그인돼요.' : '')); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(pw).then(done, function () { window.prompt('아래 비밀번호를 복사하세요', pw); });
+    else window.prompt('아래 비밀번호를 복사하세요', pw);
+    if (navigator.clipboard && window.isSecureContext) return;
+    done();
+  });
   $('#cu-temp-pw').addEventListener('click', function () {
     var pw = newPassword();
     $('#cu-pw').value = pw;
