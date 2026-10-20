@@ -1,0 +1,281 @@
+{
+  "note": "모델, 길이·온도 범위, 생산 기간입니다. 모델 단가는 거래처마다 다르므로 여기 두지 않고 관리 > 거래처 단가에서 정합니다. 거래처 할인율도 그 화면에서 정합니다. price의 가산·할인 값은 모두 0이며, 예전 주문 스크립트와 호환되도록만 남겨 둔 것입니다. vat만 쓰입니다. wires가 2인 모델(ST-22W, ST-30W, CK-011, CK-991)은 와이어 두 줄의 길이를 따로 받습니다. name_en은 영어 화면에 보이는 모델 설명입니다. finishes는 와이어 끝 마감 종류이며 사양 코드 끝에 붙습니다(예: ST-12-L070-T100-TD). choices는 체크박스로 하나를 고르는 항목(CK: 전류감응속도, 터미널방향 / HB: 터미널)이며 options가 비어 있으면 화면에 나오지 않습니다. 모델의 choices에 key를 적으면 그 모델에서 반드시 하나를 골라야 합니다. 사양 코드에는 들어가지 않습니다. resetTemp가 true인 모델(HB-2, HB-2C)은 복귀온도를 동작온도보다 낮게 tempStep 단위로 받습니다(사양 코드엔 안 넣음).",
+  "products": [
+    {
+      "id": "ST-22W",
+      "family": "ST",
+      "name": "표준형 와이어",
+      "temp": [
+        50,
+        150
+      ],
+      "wires": 2,
+      "name_en": "Standard, wire"
+    },
+    {
+      "id": "ST-22P",
+      "family": "ST",
+      "name": "표준형 핀",
+      "temp": [
+        50,
+        150
+      ],
+      "name_en": "Standard, pin",
+      "wires": 0,
+      "pinLength": true,
+      "noFinish": true
+    },
+    {
+      "id": "ST-12",
+      "family": "ST",
+      "name": "소형",
+      "temp": [
+        50,
+        150
+      ],
+      "name_en": "Compact",
+      "wires": 0,
+      "noFinish": true
+    },
+    {
+      "id": "ST-30W",
+      "family": "ST",
+      "name": "대용량 와이어",
+      "temp": [
+        50,
+        150
+      ],
+      "wires": 2,
+      "name_en": "High capacity, wire"
+    },
+    {
+      "id": "ST-30P",
+      "family": "ST",
+      "name": "대용량 핀",
+      "temp": [
+        50,
+        150
+      ],
+      "name_en": "High capacity, pin",
+      "wires": 0,
+      "pinLength": true,
+      "noFinish": true
+    },
+    {
+      "id": "CK-01",
+      "family": "CK",
+      "name": "중온형",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 0,
+      "name_en": "Mid-temperature",
+      "noFinish": true,
+      "choices": [
+        "speed",
+        "terminal"
+      ]
+    },
+    {
+      "id": "CK-011",
+      "family": "CK",
+      "name": "중온형",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 2,
+      "name_en": "Mid-temperature",
+      "choices": [
+        "speed",
+        "terminal"
+      ]
+    },
+    {
+      "id": "CK-99",
+      "family": "CK",
+      "name": "중온 고정밀",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 0,
+      "name_en": "Mid-temp, high precision",
+      "noFinish": true,
+      "choices": [
+        "speed",
+        "terminal"
+      ]
+    },
+    {
+      "id": "CK-991",
+      "family": "CK",
+      "name": "중온 고정밀",
+      "temp": [
+        60,
+        200
+      ],
+      "wires": 2,
+      "name_en": "Mid-temp, high precision",
+      "choices": [
+        "speed",
+        "terminal"
+      ]
+    },
+    {
+      "id": "HB-2",
+      "family": "HB",
+      "name": "고온형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temperature",
+      "wires": 0,
+      "noFinish": true,
+      "choices": [
+        "term"
+      ],
+      "resetTemp": true
+    },
+    {
+      "id": "HB-2C",
+      "family": "HB",
+      "name": "고온형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temperature",
+      "wires": 0,
+      "noFinish": true,
+      "choices": [
+        "term"
+      ],
+      "resetTemp": true
+    },
+    {
+      "id": "HB-21",
+      "family": "HB",
+      "name": "고온 개량형",
+      "temp": [
+        70,
+        240
+      ],
+      "name_en": "High-temp, improved",
+      "wires": 0,
+      "noFinish": true,
+      "choices": [
+        "term"
+      ]
+    }
+  ],
+  "length": {
+    "min": 1,
+    "max": 3000,
+    "step": 1,
+    "presets": [
+      50,
+      70,
+      100,
+      150,
+      200,
+      300
+    ]
+  },
+  "pin": {
+    "min": 0.5,
+    "max": 100,
+    "step": 0.1,
+    "note": "핀 길이(mm): pinLength가 있는 모델만 받는다"
+  },
+  "tempStep": 5,
+  "tempPresets": {
+    "ST": [
+      70,
+      80,
+      100,
+      120,
+      150
+    ],
+    "CK": [
+      80,
+      100,
+      130,
+      150,
+      180
+    ],
+    "HB": [
+      100,
+      130,
+      150,
+      180,
+      220
+    ]
+  },
+  "qty": {
+    "min": 100,
+    "step": 100,
+    "presets": [
+      500,
+      1000,
+      3000,
+      5000
+    ]
+  },
+  "price": {
+    "vat": 0.1,
+    "wireBaseMm": 0,
+    "wirePer10mm": 0,
+    "highTempOver": 9999,
+    "highTempRate": 0,
+    "volume": []
+  },
+  "lead": {
+    "days": 10,
+    "bigQty": 5000,
+    "bigDays": 15
+  },
+  "finishes": [
+    {
+      "code": "T",
+      "name": "Twisted"
+    },
+    {
+      "code": "TD",
+      "name": "Tin Dipped"
+    }
+  ],
+  "choices": [
+    {
+      "key": "speed",
+      "name": "전류감응속도",
+      "name_en": "Current response speed",
+      "options": [
+        "LOW",
+        "HIGH"
+      ]
+    },
+    {
+      "key": "terminal",
+      "name": "터미널방향",
+      "name_en": "Terminal direction",
+      "options": [
+        "A",
+        "B"
+      ]
+    },
+    {
+      "key": "term",
+      "name": "터미널",
+      "name_en": "Terminal",
+      "options": [
+        "187V",
+        "187H",
+        "250V",
+        "250H"
+      ]
+    }
+  ]
+}

@@ -70,6 +70,9 @@ db.exec(`
 // 나중에 생긴 칸은 예전 자료에도 붙인다
 for (const [c, t] of [['pin', 'REAL'], ['speed', 'TEXT'], ['terminal', 'TEXT'], ['term', 'TEXT'], ['rtemp', 'REAL']])
   if (!db.prepare('PRAGMA table_info(orders)').all().some(x => x.name === c)) db.exec('ALTER TABLE orders ADD COLUMN ' + c + ' ' + t);
+// 견적 모델(pomall-new/): 거래처의 주문모델·견적단가 [{model, price}]와 발주 줄의 견적 모델 표시·품목 희망납기일
+for (const [tb, c, t] of [['customers', 'quotes', 'TEXT'], ['orders', 'quote', 'INTEGER'], ['orders', 'due', 'TEXT']])
+  if (!db.prepare('PRAGMA table_info(' + tb + ')').all().some(x => x.name === c)) db.exec('ALTER TABLE ' + tb + ' ADD COLUMN ' + c + ' ' + t);
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
 function setSetting(k, v) { q('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, String(v)); }
@@ -116,12 +119,12 @@ function staff(key, allowed, fn) {
 // ----- 거래처 -----
 function rowToCustomer(r) {
   return { no: r.no || 0, code: r.code, name: r.name || '', contact: r.contact || '', phone: r.phone || '', address: r.address || '',
-    hash: r.hash || '', active: !!r.active, discount: r.discount || 0, prices: JSON.parse(r.prices || '{}') };
+    hash: r.hash || '', active: !!r.active, discount: r.discount || 0, prices: JSON.parse(r.prices || '{}'), quotes: JSON.parse(r.quotes || '[]') };
 }
 function customers() { return q('SELECT * FROM customers').all().map(rowToCustomer); }
 function findCustomer(code) { const r = q('SELECT * FROM customers WHERE code = ?').get(code); return r ? rowToCustomer(r) : null; }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, quotes: c.quotes, discount: c.discount, hasPassword: !!c.hash };
 }
 function authCustomer(code, pw) {
   code = clip(code, 20).toUpperCase();
@@ -138,7 +141,7 @@ function login(code, pw) {
   const c = authCustomer(code, pw);
   if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount };
+  return { ok: true, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
 }
 function customerList() { return customers().sort((a, b) => a.no - b.no).map(publicCustomer); }
 function saveCustomer(c) {
@@ -157,13 +160,25 @@ function saveCustomer(c) {
   if (discount < 0 || discount >= 100) return { ok: false, error: '할인율은 0 이상 100 미만이에요.' };
   const models = catalog().products.map(p => p.id), prices = {};
   models.forEach(m => { const v = Number((c.prices || {})[m]); if (v > 0) prices[m] = Math.round(v * 10) / 10; });
+  // 견적 모델: 견적 모델 칸이 없는 예전 화면(pomall/)이 저장하면 그대로 둔다
+  let quotes = ex ? ex.quotes : [];
+  if (Array.isArray(c.quotes)) {
+    quotes = [];
+    for (const x of c.quotes.slice(0, 200)) {
+      const m = clip(x && x.model, 60), v = Math.round(Number(x && x.price) * 10) / 10;
+      if (!m) continue;
+      if (!(v > 0)) return { ok: false, error: m + ' 견적단가를 0보다 크게 적어 주세요.' };
+      if (quotes.some(y => y.model === m)) return { ok: false, error: m + ' 주문모델이 두 번 적혀 있어요.' };
+      quotes.push({ model: m, price: v });
+    }
+  }
   return tx(() => {
     const no = ex ? ex.no : custSeq() + 1;
     if (!ex) setSetting('CUST_SEQ', no);
     const row = [code, no, name, clip(c.contact, 20), clip(c.phone, 20), clip(c.address, 120), pw ? hash(code, pw) : ex.hash,
-      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString()];
+      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString(), JSON.stringify(quotes)];
     if (ex) q('DELETE FROM customers WHERE code = ?').run(ex.code);
-    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(...row);
+    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, quotes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(...row);
     // 코드를 바꾸면 지난 발주도 새 코드로 옮긴다
     if (renamed) q('UPDATE orders SET code = ? WHERE code = ?').run(code, oldCode);
     return { ok: true, code, no };
@@ -230,6 +245,15 @@ function placeOrder(d, base) {
 
   const C = catalog(), lines = [];
   for (const it of items) {
+    // 견적 모델 품목: 거래처에 적힌 주문모델이어야 하고, 단가는 견적단가(할인율 적용 안 함). 수량은 1EA 단위, 품목 희망납기일은 선택
+    if (it.quote) {
+      const m = clip(it.model, 60), qt = (cust.quotes || []).find(x => x.model === m), qq = Number(it.qty), due = String(it.due || '');
+      if (!qt) return { ok: false, error: m + ' 견적 모델이 아니에요. 새로고침해 주세요.' };
+      if (!(qq >= 1 && qq === Math.floor(qq))) return { ok: false, error: m + ' 수량은 1EA 이상이에요.' };
+      if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false, error: m + ' 희망납기일을 확인해 주세요.' };
+      lines.push({ quote: 1, code: m, model: m, len: 0, len2: 0, strip: 0, strip2: 0, pin: 0, speed: '', terminal: '', term: '', rtemp: null, finish: '', temp: 0, qty: qq, unit: qt.price, amount: qt.price * qq, memo: clip(it.memo, 100), due });
+      continue;
+    }
     const p = findProduct(C, it.model);
     // 와이어가 없는 모델(products.json의 wires: 0)은 와이어 길이와 탈피가 없다
     const len = p && p.wires === 0 ? 0 : Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
@@ -273,10 +297,10 @@ function placeOrder(d, base) {
   const now = new Date().toISOString();
   tx(() => {
     const ins = q(`INSERT INTO orders (no, line, created_at, code, company, contact, phone, customer_po, address, memo, requested_date, eta,
-      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin, speed, terminal, term, rtemp)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+      spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin, speed, terminal, term, rtemp, quote, due)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     lines.forEach((l, k) => ins.run(no, k + 1, now, cust.code, cust.name, contact, phone, clip(o.customerPo, 40), address, clip(o.memo, 200),
-      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0, l.pin || 0, l.speed, l.terminal, l.term, l.rtemp));
+      wanted, eta, l.code, l.model, l.len, l.temp, l.qty, l.unit, l.amount, l.memo, total, STATUSES[0], now, '', file.url || '', l.len2 || 0, l.finish, l.strip || 0, l.strip2 || 0, l.pin || 0, l.speed, l.terminal, l.term, l.rtemp, l.quote || 0, l.due || ''));
   });
   return { ok: true, order: { no, total, eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -296,7 +320,7 @@ function orders(where, args, withLog) {
       total: r.total || 0, shipDate: r.ship_date || '', attachment: r.attachment || '', status: statusOf(r.status), items: [], log: log[r.no] || []
     });
     map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0, pin: r.pin || 0, speed: r.speed || '', terminal: r.terminal || '', term: r.term || '', rtemp: r.rtemp == null ? '' : r.rtemp,
-      temp: r.temp, qty: r.qty, unit: r.unit, memo: r.item_memo || '' });
+      temp: r.temp, qty: r.qty, unit: r.unit, memo: r.item_memo || '', quote: !!r.quote, due: r.due || '' });
   });
   return [...map.values()].reverse();
 }
