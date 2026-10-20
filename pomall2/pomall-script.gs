@@ -135,7 +135,7 @@ function saveCustomer(c) {
   var set = function (h, v) { var i = head.indexOf(h); if (i >= 0) row[i] = v; };
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
-  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email); set('견적 모델', quotes.length ? JSON.stringify(quotes) : '');
+  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email); if (Array.isArray(c.quotes) || !ex) set('견적 모델', quotes.length ? JSON.stringify(quotes) : '');  // 견적 모델 칸이 없는 예전 화면(pomall/)이 저장하면 그대로 둔다
   if (pw) set('비밀번호', hash(code, pw));
   var no = ex ? ex.no : custSeq(customers()) + 1;
   if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
