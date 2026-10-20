@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261020a">
+<link rel="stylesheet" href="style.css?v=20261020b">
 </head>
 <body>
 
@@ -88,10 +88,10 @@
 
 <!-- 주문하기 -->
 <section class="view" id="view-order">
-  <h2 data-en="Choose a specification and place a production order">사양을 고르면 바로 생산 발주가 됩니다</h2>
-  <p class="lede" data-en="We build to order, with no stock. Choose the model, wire length and operating temperature to get the spec code and estimated ship date. Unit prices are set per customer and appear after you sign in.">재고 없이 주문 받은 수량만 생산합니다. 모델, 와이어 길이, 동작온도를 정하면 사양 코드와 예상 출하일이 자동으로 나옵니다. 단가는 거래처마다 따로 정해져 있어 로그인하면 보입니다.</p>
+  <h2 data-en="Order your quoted models">견적 모델을 골라 바로 생산 발주합니다</h2>
+  <p class="lede" data-en="We build to order, with no stock. Sign in to see the models and prices agreed in your quote, then tick the ones to order.">재고 없이 주문 받은 수량만 생산합니다. 로그인하면 견적에서 정한 모델과 단가가 보이고, 주문할 모델을 체크해 발주합니다.</p>
   <ol class="steps">
-    <li data-en="&lt;i&gt;1&lt;/i&gt;Sign in"><i>1</i>거래처 로그인</li><li data-en="&lt;i&gt;2&lt;/i&gt;Model · wire length · temperature"><i>2</i>모델 · 와이어 길이 · 동작온도</li><li data-en="&lt;i&gt;3&lt;/i&gt;Add quantity"><i>3</i>수량 담기</li><li data-en="&lt;i&gt;4&lt;/i&gt;Confirm order"><i>4</i>발주 확정</li>
+    <li data-en="&lt;i&gt;1&lt;/i&gt;Sign in"><i>1</i>거래처 로그인</li><li data-en="&lt;i&gt;2&lt;/i&gt;Confirm quoted models"><i>2</i>견적 모델 확인</li><li data-en="&lt;i&gt;3&lt;/i&gt;Quantity · date · add"><i>3</i>수량 · 희망납기일 담기</li><li data-en="&lt;i&gt;4&lt;/i&gt;Confirm order"><i>4</i>발주 확정</li>
   </ol>
 
   <div class="grid-order">
@@ -109,7 +109,8 @@
           <button type="button" class="btn" id="quote-add" data-en="Add to order">발주서에 담기</button>
         </div>
       </div>
-      <div class="panel">
+      <!-- 모델을 직접 고르는 칸: 견적 모델 주문으로 바꾸면서 감춰 둔다(2026-10-20 사용자 요청) -->
+      <div class="panel" id="builder-panel" hidden>
         <div class="label" data-en="Model">모델</div>
         <div class="models" id="models"><p class="msg">제품 목록을 불러오는 중이에요.</p></div>
 
@@ -182,7 +183,7 @@
       <div class="panel" id="cart-panel">
         <h3 data-en="Your order">발주서</h3>
         <ul class="cart-list" id="cart"></ul>
-        <div class="empty" id="cart-empty" data-en="No items yet. Choose a spec and click &lt;b&gt;Add to order&lt;/b&gt;.">아직 담긴 품목이 없습니다. 사양을 정하고 <b>발주서에 담기</b>를 누르세요.</div>
+        <div class="empty" id="cart-empty" data-en="No items yet. Tick a quoted model and click &lt;b&gt;Add to order&lt;/b&gt;.">아직 담긴 품목이 없습니다. 견적 모델에 확인을 체크하고 <b>발주서에 담기</b>를 누르세요.</div>
         <div id="cart-sum" hidden>
           <div class="totals">
             <span data-en="Subtotal">공급가액</span><span class="money" id="sum-net"></span>
@@ -373,6 +374,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261020a"></script>
+<script src="app.js?v=20261020b"></script>
 </body>
 </html>

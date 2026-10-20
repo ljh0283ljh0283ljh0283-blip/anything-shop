@@ -404,7 +404,7 @@
   // ----- 발주서 (거래처마다 따로 보관) -----
   function saveCart() { if (!session) return; var all = store(KEY.cart) || {}; if (Array.isArray(all)) all = {}; all[session.code] = cart; store(KEY.cart, all); }
   function repriceCart() {
-    cart = cart.filter(function (i) { return (i.unit = unitOf(i)) != null; });
+    cart = cart.filter(function (i) { return i.quote && (i.unit = unitOf(i)) != null; });
     saveCart();
   }
   function renderCart() {
@@ -551,7 +551,8 @@
   }
   function renderRecent() {
     var rec = store(KEY.recent) || [];
-    $('#reorder-panel').hidden = !rec.length;
+    // 모델 고르기 칸을 감췄으니 최근 사양도 보이지 않는다
+    $('#reorder-panel').hidden = true;
     $('#recent-specs').innerHTML = rec.map(function (i) { return '<button type="button" class="chip" data-spec="' + esc([i.model, i.len, i.temp, i.qty, i.len2 || 0, i.finish || '', i.strip || 0, i.strip2 || 0, i.pin || 0, i.speed || '', i.terminal || '', i.term || '', i.rtemp || 0].join('|')) + '">' + esc(i.code + (stripText(i) ? ' (' + stripText(i) + ')' : '')) + '</button>'; }).join('');
   }
 
@@ -611,13 +612,12 @@
         if (qu == null) { skipped++; return; }
         n++; cart.push({ quote: true, code: i.model, model: i.model, qty: +i.qty, unit: qu, due: '', memo: i.memo || '' }); return;
       }
-      var p = product(i.model), unit = p ? unitPrice(p) : null;
-      if (unit == null) { skipped++; return; }
-      n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: +i.rtemp || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
+      // 모델 고르기 칸을 감췄으니 견적 모델이 아닌 예전 품목은 다시 담지 않는다
+      skipped++; return;
     });
     saveCart(); renderCart(); show('order'); $('#done').hidden = true;
-    toast(T(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (단가가 없는 ' + skipped + '개 제외)' : ''),
-      'Added ' + n + ' item(s) from ' + o.no + ' at current prices' + (skipped ? ' (' + skipped + ' without a price skipped)' : '')));
+    toast(T(o.no + '의 품목 ' + n + '개를 현재 단가로 담았습니다' + (skipped ? ' (견적 모델이 아닌 ' + skipped + '개 제외)' : ''),
+      'Added ' + n + ' item(s) from ' + o.no + ' at current prices' + (skipped ? ' (' + skipped + ' not in your quoted models skipped)' : '')));
   }
 
   // ----- 관리 -----
