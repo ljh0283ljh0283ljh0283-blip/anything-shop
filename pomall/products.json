@@ -22,7 +22,8 @@
       ],
       "name_en": "Standard, pin",
       "wires": 0,
-      "pinLength": true
+      "pinLength": true,
+      "noFinish": true
     },
     {
       "id": "ST-12",
@@ -57,7 +58,8 @@
       ],
       "name_en": "High capacity, pin",
       "wires": 0,
-      "pinLength": true
+      "pinLength": true,
+      "noFinish": true
     },
     {
       "id": "CK-01",
