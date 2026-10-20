@@ -25,7 +25,7 @@ var HELP_HEADER = ['ID', '요청 시각', '회사명', '담당자', '연락처',
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
-  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '견적 모델', '품목 희망납기일'];
+  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '견적 모델', '품목 희망납기일', '담당자 메모', '메모 수정'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
 var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일', '견적 모델'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
@@ -46,6 +46,7 @@ function doPost(e) {
       case 'mine': return reply(mine(d));
       case 'config': return reply({ ok: true, lead: lead() });
       case 'saveLead': return reply(staff(d.key, ['admin', 'sales'], function (role) { return saveLead(d, role); }));
+      case 'staffMemo': return reply(staff(d.key, ['admin', 'sales'], function () { return setStaffMemo(d); }));
       case 'shipDate': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setShipDate(d, role); }));
       case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
       case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
@@ -298,7 +299,8 @@ function attachFolder() {
 function mine(d) {
   var cust = authCustomer(d.code, d.pw);
   if (!cust) return { ok: false, error: '다시 로그인해 주세요.' };
-  return { ok: true, orders: orders().filter(function (o) { return o.code === cust.code; }) };
+  // 담당자 메모는 회사 안에서만 보므로 거래처에는 보내지 않는다
+  return { ok: true, orders: orders().filter(function (o) { return o.code === cust.code; }).map(function (o) { delete o.staffMemo; delete o.staffMemoBy; return o; }) };
 }
 
 // 상태 규칙 (pomall/app.js의 canMove, needsReason과 같다)
@@ -332,6 +334,20 @@ function setStatus(d, role) {
 }
 
 // 담당자가 생산 일정에 맞춰 정하는 확정 출하일. 빈 값이면 지운다. 상태 기록에 남는다.
+// 담당자 메모: 발주별로 회사 담당자끼리 남기는 메모(500자). 발주의 모든 줄에 같은 값을 적고, 누가 언제 고쳤는지 '메모 수정' 칸에 남긴다.
+function setStaffMemo(d) {
+  var by = clip(d.by, 20), memo = clip(d.memo, 500);
+  if (!by) return { ok: false, error: '바꾸는 사람 이름이 필요해요.' };
+  var s = orderSheet(), all = rows(), hit = [];
+  for (var i = 0; i < all.length; i++) if (String(all[i][COL['발주번호']]) === String(d.no)) hit.push(i);
+  if (!hit.length) return { ok: false, error: '없는 발주예요.' };
+  var stampText = by + ' · ' + new Date().toISOString();
+  hit.forEach(function (i) {
+    s.getRange(i + 2, COL['담당자 메모'] + 1).setValue(text(memo));
+    s.getRange(i + 2, COL['메모 수정'] + 1).setValue(text(stampText));
+  });
+  return { ok: true, by: stampText };
+}
 function setShipDate(d, role) {
   var date = String(d.date || ''), by = clip(d.by, 20);
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '날짜 형식이 맞지 않아요.' };
@@ -389,7 +405,8 @@ function orders(withLog) {
         code: String(r[COL['거래처 코드']]), company: String(r[COL['거래처']]), contact: String(r[COL['담당자']]), phone: String(r[COL['연락처']]),
         customerPo: String(r[COL['거래처 PO']]), address: String(r[COL['납품 주소']]), memo: String(r[COL['요청 사항']]),
         requestedDate: day(r[COL['희망 출하일']]), eta: day(r[COL['최단 출하일']]),
-        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, shipDate: day(r[COL['확정 출하일']]), attachment: String(r[COL['발주서']] || ''), status: statusOf(r[COL['상태']]), items: [], log: log[no] || []
+        total: Number(r[COL['발주 합계(VAT 포함)']]) || 0, shipDate: day(r[COL['확정 출하일']]), attachment: String(r[COL['발주서']] || ''), status: statusOf(r[COL['상태']]), items: [], log: log[no] || [],
+        staffMemo: String(r[COL['담당자 메모']] || ''), staffMemoBy: String(r[COL['메모 수정']] || '')
       };
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]), len2: Number(r[COL['와이어2(mm)']]) || 0, finish: String(r[COL['마감']] || ''),
