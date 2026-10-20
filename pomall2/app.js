@@ -899,6 +899,7 @@
     }).join('');
     $('#cust-empty').hidden = customers.length > 0;
     if (!$('#cu-quotes').children.length) fillQuotes(null);
+    if (!editing && !$('#cu-pw').value) { $('#cu-pw').value = newPassword(); $('#cu-pw-hint').textContent = '저절로 만든 비밀번호예요. 저장한 뒤 거래처에 알려 주세요.'; }
   }
   // 거래처 목록에는 주문모델을 두 개까지 보여 주고 나머지는 개수로
   function quoteSummary(c) {
@@ -953,7 +954,9 @@
     $('#cu-code-hint').textContent = c ? '바꾸면 비밀번호도 새로 정해야 해요. 지난 발주도 새 코드로 옮겨져요.' : '거래처가 로그인할 때 씁니다.';
     $('#cu-delete').hidden = !c;
     $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-email').value = c ? c.email || '' : ''; $('#cu-addr').value = c ? c.address : '';
-    $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
+    // 비밀번호는 담당자가 정하지 않는다: 새 거래처는 저절로 만들고, 있는 거래처는 '새 비밀번호 만들기'를 눌렀을 때만 바꾼다
+    $('#cu-pw').value = c ? '' : newPassword();
+    $('#cu-pw-hint').textContent = c ? '바꾸려면 새 비밀번호 만들기를 누르세요. 비어 있으면 그대로예요.' : '저절로 만든 비밀번호예요. 저장한 뒤 거래처에 알려 주세요.';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
     fillQuotes(c ? c.quotes : null, true);
@@ -971,7 +974,7 @@
     var renamed = !!(editing && editing !== c.code);
     if ((!editing || renamed) && customers.some(function (x) { return x.code === c.code; })) { say(msg, '이미 있는 거래처 코드예요. 목록에서 수정을 눌러 주세요.', true); return; }
     if (!editing && c.pw.length < 4) { say(msg, '새 거래처는 비밀번호를 4자 이상 정해 주세요.', true); return; }
-    if (renamed && c.pw.length < 4) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).', true); return $('#cu-pw').focus(); }
+    if (renamed && c.pw.length < 4) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요. 새 비밀번호 만들기를 눌러 주세요.', true); return $('#cu-temp-pw').focus(); }
     if (editing) c.oldCode = editing;
     if (c.pw && c.pw.length < 4) { say(msg, '비밀번호는 4자 이상이에요.', true); return; }
     // 모델 단가 칸은 없앴다. 예전에 적어 둔 모델 단가는 지우지 않고 그대로 보낸다
@@ -998,7 +1001,7 @@
       fillCustomerForm(saved);
       // 예전 Apps Script는 견적 모델을 모르고 버린다: 적은 주문모델이 돌아오지 않으면 새 버전 배포를 알린다
       if (c.quotes.length && !(saved && saved.quotes && saved.quotes.length)) { fillQuotes(c.quotes); say(msg, '거래처 정보는 저장됐지만 주문모델·견적단가는 저장되지 않았어요. Apps Script에 새 pomall-script.gs를 붙여 넣고 새 버전으로 배포해 주세요.', true); return; }
-      say(msg, '저장했어요. 거래처가 다음에 로그인하면 새 주문모델과 견적단가가 보여요.');
+      say(msg, c.pw ? '저장했어요. 거래처에 코드 ' + c.code + ', 비밀번호 ' + c.pw + ' 를 알려 주세요.' : '저장했어요. 거래처가 다음에 로그인하면 새 주문모델과 견적단가가 보여요.');
     }).catch(function (err) { say(msg, errText(err, '저장하지 못했어요. 다시 눌러 주세요.'), true); })
       .then(function () { $('#cu-save').disabled = false; });
   });
@@ -1107,11 +1110,16 @@
       .catch(function (err) { toast(errText(err, '처리하지 못했어요.')); });
   }
   // 임시 비밀번호: 헷갈리는 글자(0, O, 1, I)를 뺀 8자리
+  // 거래처 비밀번호: 영어 소문자와 숫자를 섞은 6자리(헷갈리는 l, o, 0, 1은 뺀다). 글자와 숫자가 꼭 하나씩은 들어간다
+  function newPassword() {
+    var letters = 'abcdefghijkmnpqrstuvwxyz', nums = '23456789', all = letters + nums, r = new Uint32Array(6), pw;
+    do { crypto.getRandomValues(r); pw = ''; r.forEach(function (n) { pw += all[n % all.length]; }); } while (!/[a-z]/.test(pw) || !/\d/.test(pw));
+    return pw;
+  }
   $('#cu-temp-pw').addEventListener('click', function () {
-    var abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = new Uint32Array(8), pw = '';
-    crypto.getRandomValues(r); r.forEach(function (n) { pw += abc[n % abc.length]; });
+    var pw = newPassword();
     $('#cu-pw').value = pw;
-    say($('#cu-msg'), '임시 비밀번호 ' + pw + ' 를 만들었어요. 저장을 누른 뒤 거래처에 알려 주세요.');
+    say($('#cu-msg'), '새 비밀번호 ' + pw + ' 를 만들었어요. 저장을 누른 뒤 거래처에 알려 주세요.');
   });
 
   // ----- 탭 -----
