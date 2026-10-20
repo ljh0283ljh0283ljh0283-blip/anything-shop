@@ -946,7 +946,10 @@
       return api.customers(adminKey());
     }).then(function (list) {
       customers = list || [];
-      fillCustomerForm(customers.filter(function (x) { return x.code === c.code; })[0]);
+      var saved = customers.filter(function (x) { return x.code === c.code; })[0];
+      fillCustomerForm(saved);
+      // 예전 Apps Script는 견적 모델을 모르고 버린다: 적은 주문모델이 돌아오지 않으면 새 버전 배포를 알린다
+      if (c.quotes.length && !(saved && saved.quotes && saved.quotes.length)) { fillQuotes(c.quotes); say(msg, '거래처 정보는 저장됐지만 주문모델·견적단가는 저장되지 않았어요. Apps Script에 새 pomall-script.gs를 붙여 넣고 새 버전으로 배포해 주세요.', true); return; }
       say(msg, '저장했어요. 거래처가 다음에 로그인하면 새 주문모델과 견적단가가 보여요.');
     }).catch(function (err) { say(msg, errText(err, '저장하지 못했어요. 다시 눌러 주세요.'), true); })
       .then(function () { $('#cu-save').disabled = false; });
