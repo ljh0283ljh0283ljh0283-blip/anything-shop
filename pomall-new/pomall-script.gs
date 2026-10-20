@@ -98,13 +98,13 @@ function custSeq(list) {
   var stored = Number(PropertiesService.getScriptProperties().getProperty('CUST_SEQ')) || 0;
   return list.reduce(function (m, c) { return Math.max(m, c.no || 0); }, stored);
 }
-// 비밀번호(보기): 관리 화면에서 만든 비밀번호를 그대로 적어 두는 칸. 관리자 열쇠에만 돌려준다.
+// 비밀번호(보기): 관리 화면에서 만든 비밀번호를 그대로 적어 두는 칸. 관리자·영업팀 열쇠에만 돌려준다(조회 전용은 거래처 목록을 못 받는다).
 // 거래처가 메일 인증으로 바꾸면 PW_CHANGED로 바뀌어 더는 볼 수 없다.
 var PW_CHANGED = '거래처가 바꿈';
 function customerList(role) {
   return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(function (c) {
     var p = publicCustomer(c);
-    if (role === 'admin') { p.pwView = c.pwView === PW_CHANGED ? '' : c.pwView; p.pwChanged = c.pwView === PW_CHANGED; }
+    if (role === 'admin' || role === 'sales') { p.pwView = c.pwView === PW_CHANGED ? '' : c.pwView; p.pwChanged = c.pwView === PW_CHANGED; }
     return p;
   });
 }

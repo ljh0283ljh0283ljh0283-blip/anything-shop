@@ -127,7 +127,7 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c, role) { return { pwView: role === 'admin' && !c.pwChanged ? c.pw : '', pwChanged: role === 'admin' && !!c.pwChanged, no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c, role) { return { pwView: role !== 'view' && !c.pwChanged ? c.pw : '', pwChanged: role !== 'view' && !!c.pwChanged, no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0 }; }); },
@@ -952,12 +952,12 @@
       })
       .catch(function (err) { btn.disabled = false; say(msg, errText(err, '삭제하지 못했어요. 다시 눌러 주세요.'), true); });
   }
-  // 지금 비밀번호: 관리자 열쇠로 들어왔을 때만 비밀번호 칸에 그대로 보인다(savedPw). 볼 수 없으면 그 까닭을 칸 아래에 적는다
+  // 지금 비밀번호: 관리자·영업팀 열쇠로 들어왔을 때만 비밀번호 칸에 그대로 보인다(savedPw). 볼 수 없으면 그 까닭을 칸 아래에 적는다
   var savedPw = '';
   function showPw(c) {
     var el = $('#cu-pw-now'), why = '';
-    savedPw = c && role === 'admin' && c.pwView ? c.pwView : '';
-    if (c && !savedPw) why = role !== 'admin' ? '비밀번호는 관리자 열쇠로 들어오면 보여요.'
+    savedPw = c && canEdit() && c.pwView ? c.pwView : '';
+    if (c && !savedPw) why = !canEdit() ? '비밀번호는 관리자·영업팀 열쇠로 들어오면 보여요.'
       : !('pwView' in c) ? 'Apps Script에 새 pomall-script.gs를 붙여 넣고 새 버전으로 배포해야 비밀번호가 보여요.'
       : c.pwChanged ? '거래처가 메일 인증으로 비밀번호를 바꿔서 볼 수 없어요. 새 비밀번호 만들기 → 저장을 누르면 보여요.'
       : '이 기능 전에 정한 비밀번호라 볼 수 없어요. 새 비밀번호 만들기 → 저장을 누르면 보여요.';
