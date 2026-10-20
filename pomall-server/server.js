@@ -71,7 +71,7 @@ db.exec(`
 for (const [c, t] of [['pin', 'REAL'], ['speed', 'TEXT'], ['terminal', 'TEXT'], ['term', 'TEXT'], ['rtemp', 'REAL']])
   if (!db.prepare('PRAGMA table_info(orders)').all().some(x => x.name === c)) db.exec('ALTER TABLE orders ADD COLUMN ' + c + ' ' + t);
 // 견적 모델(pomall-new/): 거래처의 주문모델·견적단가 [{model, price}]와 발주 줄의 견적 모델 표시·품목 희망납기일
-for (const [tb, c, t] of [['customers', 'quotes', 'TEXT'], ['orders', 'quote', 'INTEGER'], ['orders', 'due', 'TEXT']])
+for (const [tb, c, t] of [['customers', 'quotes', 'TEXT'], ['orders', 'quote', 'INTEGER'], ['orders', 'due', 'TEXT'], ['orders', 'staff_memo', 'TEXT'], ['orders', 'staff_memo_by', 'TEXT']])
   if (!db.prepare('PRAGMA table_info(' + tb + ')').all().some(x => x.name === c)) db.exec('ALTER TABLE ' + tb + ' ADD COLUMN ' + c + ' ' + t);
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
@@ -317,7 +317,8 @@ function orders(where, args, withLog) {
     if (!map.has(r.no)) map.set(r.no, {
       no: r.no, createdAt: r.created_at, code: r.code, company: r.company, contact: r.contact, phone: r.phone,
       customerPo: r.customer_po || '', address: r.address, memo: r.memo || '', requestedDate: r.requested_date || '', eta: r.eta || '',
-      total: r.total || 0, shipDate: r.ship_date || '', attachment: r.attachment || '', status: statusOf(r.status), items: [], log: log[r.no] || []
+      total: r.total || 0, shipDate: r.ship_date || '', attachment: r.attachment || '', status: statusOf(r.status), items: [], log: log[r.no] || [],
+      staffMemo: r.staff_memo || '', staffMemoBy: r.staff_memo_by || ''
     });
     map.get(r.no).items.push({ code: r.spec_code, model: r.model, len: r.len, len2: r.len2 || 0, finish: r.finish || '', strip: r.strip || 0, strip2: r.strip2 || 0, pin: r.pin || 0, speed: r.speed || '', terminal: r.terminal || '', term: r.term || '', rtemp: r.rtemp == null ? '' : r.rtemp,
       temp: r.temp, qty: r.qty, unit: r.unit, memo: r.item_memo || '', quote: !!r.quote, due: r.due || '' });
@@ -327,7 +328,8 @@ function orders(where, args, withLog) {
 function mine(d) {
   const cust = authCustomer(d.code, d.pw);
   if (!cust) return { ok: false, error: '다시 로그인해 주세요.' };
-  return { ok: true, orders: orders('WHERE code = ?', [cust.code]) };
+  // 담당자 메모는 회사 안에서만 보므로 거래처에는 보내지 않는다
+  return { ok: true, orders: orders('WHERE code = ?', [cust.code]).map(o => { delete o.staffMemo; delete o.staffMemoBy; return o; }) };
 }
 
 // 상태 규칙 (pomall/app.js의 canMove, needsReason과 같다)
@@ -352,6 +354,16 @@ function setStatus(d, role) {
     addLog(first.no, first.company, from, to, by, role, reason);
   });
   return { ok: true, status: to };
+}
+// 담당자 메모: 발주별로 회사 담당자끼리 남기는 메모(500자). 누가 언제 고쳤는지 함께 남긴다.
+function setStaffMemo(d) {
+  const by = clip(d.by, 20), memo = clip(d.memo, 500);
+  if (!by) return { ok: false, error: '바꾸는 사람 이름이 필요해요.' };
+  const first = q('SELECT no FROM orders WHERE no = ? LIMIT 1').get(String(d.no));
+  if (!first) return { ok: false, error: '없는 발주예요.' };
+  const stamp = by + ' · ' + new Date().toISOString();
+  q('UPDATE orders SET staff_memo = ?, staff_memo_by = ? WHERE no = ?').run(memo, stamp, first.no);
+  return { ok: true, by: stamp };
 }
 function setShipDate(d, role) {
   const date = String(d.date || ''), by = clip(d.by, 20);
@@ -384,6 +396,7 @@ function handle(d, ctx) {
     case 'mine': r = mine(d); break;
     case 'config': return { ok: true, lead: lead() };
     case 'saveLead': return staff(d.key, ['admin', 'sales'], role => saveLead(d, role));
+    case 'staffMemo': return staff(d.key, ['admin', 'sales'], () => setStaffMemo(d));
     case 'shipDate': return staff(d.key, ['admin', 'sales'], role => setShipDate(d, role));
     case 'staff': return staff(d.key, ['admin', 'sales', 'view'], role => ({ ok: true, role }));
     case 'list': return staff(d.key, ['admin', 'sales', 'view'], () => ({ ok: true, orders: orders('', [], true) }));
