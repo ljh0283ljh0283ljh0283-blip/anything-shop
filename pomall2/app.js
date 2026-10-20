@@ -124,7 +124,7 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c, role) { return { pwView: role === 'admin' && !c.pwChanged ? c.pw : '', pwChanged: role === 'admin' && !!c.pwChanged, no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0 }; }); },
@@ -158,11 +158,11 @@
           o.status = c.status; store(KEY.localOrders, list);
           return Promise.resolve({ ok: true });
         },
-        customers: function () {
+        customers: function (key) {
           // 번호가 없는 거래처는 목록 순서대로 번호를 붙인다
           var list = custs(), seq = list.reduce(function (m, c) { return Math.max(m, c.no || 0); }, 0);
           list.forEach(function (c) { if (!c.no) c.no = ++seq; }); store(KEY.localCustomers, list);
-          return Promise.resolve(list.map(pub).sort(function (a, b) { return a.no - b.no; }));
+          return Promise.resolve(list.map(function (c) { return pub(c, roleOf(key)); }).sort(function (a, b) { return a.no - b.no; }));
         },
         saveCustomer: function (key, c) {
           var list = custs(), ex = list.filter(function (x) { return x.code === (c.oldCode || c.code); })[0];
@@ -170,7 +170,7 @@
           if (renamed && list.some(function (x) { return x.code === c.code; })) return Promise.reject(new Error('이미 있는 거래처 코드예요.'));
           if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
           var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount });
-          if (c.pw) row.pw = c.pw;
+          if (c.pw) { row.pw = c.pw; row.pwChanged = false; }
           if (!ex) { row.no = list.reduce(function (m, x) { return Math.max(m, x.no || 0); }, 0) + 1; list.push(row); }
           store(KEY.localCustomers, list);
           if (renamed) store(KEY.localOrders, orders().map(function (o) { if (o.code === c.oldCode) o.code = c.code; return o; }));
@@ -197,7 +197,7 @@
           var list = custs(), c = list.filter(function (x) { return x.code === r.code && x.active && String(x.email || '').toLowerCase() === email; })[0];
           if (!c) return Promise.reject(new Error('이 메일에 등록된 거래처 코드가 아니에요.'));
           if (String(r.pw || '').length < 4) return Promise.reject(new Error('비밀번호는 4자 이상이에요.'));
-          c.pw = r.pw; store(KEY.localCustomers, list); store(KEY.localReset, null);
+          c.pw = r.pw; c.pwChanged = true; store(KEY.localCustomers, list); store(KEY.localReset, null);
           return Promise.resolve({ ok: true });
         },
         requestHelp: function (r) {
@@ -947,6 +947,15 @@
       })
       .catch(function (err) { btn.disabled = false; say(msg, errText(err, '삭제하지 못했어요. 다시 눌러 주세요.'), true); });
   }
+  // 지금 비밀번호: 관리자 열쇠로 들어왔을 때만 보인다
+  function showPw(c) {
+    var el = $('#cu-pw-now');
+    el.hidden = !(c && role === 'admin');
+    if (el.hidden) return;
+    el.innerHTML = c.pwView ? '지금 비밀번호: <b class="mono">' + esc(c.pwView) + '</b>'
+      : c.pwChanged ? '지금 비밀번호: 거래처가 메일 인증으로 바꿔서 볼 수 없어요. 필요하면 새 비밀번호 만들기를 눌러 저장하세요.'
+      : '지금 비밀번호: 예전에 정한 비밀번호라 볼 수 없어요. 필요하면 새 비밀번호 만들기를 눌러 저장하세요.';
+  }
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
     $('#cust-form-title').textContent = c ? (c.no ? c.no + '번 ' : '') + c.name + ' 수정' : '거래처 추가';
@@ -957,6 +966,7 @@
     // 비밀번호는 담당자가 정하지 않는다: 새 거래처는 저절로 만들고, 있는 거래처는 '새 비밀번호 만들기'를 눌렀을 때만 바꾼다
     $('#cu-pw').value = c ? '' : newPassword();
     $('#cu-pw-hint').textContent = c ? '바꾸려면 새 비밀번호 만들기를 누르세요. 비어 있으면 그대로예요.' : '저절로 만든 비밀번호예요. 저장한 뒤 거래처에 알려 주세요.';
+    showPw(c);
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
     fillQuotes(c ? c.quotes : null, true);
