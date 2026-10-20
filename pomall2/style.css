@@ -200,3 +200,19 @@ tr.done{opacity:.55}
 .mail-preview{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--surface)}
 .help-ask{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
 .help-ask summary{cursor:pointer;font-size:13px;color:var(--muted)}
+/* 견적 모델: 거래처 관리의 주문모델·견적단가 줄, 거래처 화면의 견적 모델 주문 표 */
+.quote-list{display:grid;gap:8px;margin:6px 0 8px}
+.quote-row{display:grid;grid-template-columns:minmax(0,1fr) 150px auto;gap:8px;align-items:center}
+.quote-row input{min-width:0}
+.quote-table{min-width:620px}
+.quote-table td{vertical-align:middle}
+.quote-table code{font-family:var(--font-mono);font-weight:600}
+.quote-table .q-price{font-size:12px;color:var(--muted)}
+.quote-table input[type=checkbox]{width:18px;height:18px}
+.quote-table input.num{width:100px}
+.quote-table input[type=date]{width:150px}
+.quote-table input.q-memo{width:100%;min-width:140px}
+#quote-actions{margin-top:12px}
+#quote-panel{min-width:0}
+.quote-table code{white-space:nowrap}
+@media (max-width:560px){.quote-row{grid-template-columns:minmax(0,1fr) 110px auto}}

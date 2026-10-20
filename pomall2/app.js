@@ -34,6 +34,9 @@
     [/담당자, 연락처, 납품 주소가 필요/, 'Contact name, phone and delivery address are required.'],
     [/담긴 품목이 없/, 'Your order has no items.'],
     [/^없는 모델이에요/, 'Unknown model.'],
+    [/^(\S+) 견적 모델이 아니에요/, '$1 is not one of your quoted models.'],
+    [/^(\S+) 수량은 1EA 이상/, 'Quantity for $1 must be at least 1 EA.'],
+    [/^(\S+) 희망납기일/, 'Please check the requested date for $1.'],
     [/^(\S+)는 단가가 정해지지/, '$1 has no price yet and cannot be ordered.'],
     [/^(\S+) 와이어 길이 2가 범위/, '$1 wire length 2 is out of range.'],
     [/^(\S+) 와이어 길이가 범위/, '$1 wire length is out of range.'],
@@ -75,7 +78,7 @@
 
   // ----- 저장 위치 -----
   // 각 저장 위치는 같은 일을 한다:
-  //   login(code, pw) → {customer, prices}      submit(auth, order) → {no, total, ...}      mine(auth) → [발주]
+  //   login(code, pw) → {customer, prices, quotes}      submit(auth, order) → {no, total, ...}      mine(auth) → [발주]
   //   staff(key) → 'admin' | 'sales' | 'view'      list(key) → [발주]      setStatus(key, {no, status, by, reason})
   //   config() → {lead}      saveLead(key, {days, bigQty, bigDays, by})      shipDate(key, {no, date, by})
   //   customers(key) → [거래처]      saveCustomer(key, 거래처 + oldCode)      deleteCustomer(key, code)
@@ -120,10 +123,10 @@
         var c = custs().filter(function (x) { return x.code === code && x.pw === pw && x.active; })[0];
         return c ? Promise.resolve(c) : Promise.reject(new Error('거래처 코드나 비밀번호가 맞지 않아요.'));
       }
-      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, discount: c.discount || 0, hasPassword: !!c.pw }; }
+      function pub(c) { return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0, hasPassword: !!c.pw }; }
       return {
         ready: true,
-        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
+        login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, quotes: c.quotes || [], discount: c.discount || 0 }; }); },
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
             // 이 브라우저 저장 방식은 파일 내용을 두지 않고 이름만 남긴다
@@ -160,7 +163,7 @@
           var renamed = !!(c.oldCode && c.oldCode !== c.code);
           if (renamed && list.some(function (x) { return x.code === c.code; })) return Promise.reject(new Error('이미 있는 거래처 코드예요.'));
           if ((!ex || renamed) && !c.pw) return Promise.reject(new Error('비밀번호가 필요해요.'));
-          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, discount: c.discount });
+          var row = Object.assign(ex || {}, { code: c.code, name: c.name, contact: c.contact, phone: c.phone, email: c.email || '', address: c.address, active: c.active, prices: c.prices, quotes: c.quotes || [], discount: c.discount });
           if (c.pw) row.pw = c.pw;
           if (!ex) { row.no = list.reduce(function (m, x) { return Math.max(m, x.no || 0); }, 0) + 1; list.push(row); }
           store(KEY.localCustomers, list);
@@ -208,7 +211,7 @@
   // ----- 상태 -----
   var C = null, settings = {}, api = null;
   var sel = { model: null, choice: {} };
-  var session = store(KEY.session);      // {code, pw, customer, prices, discount}
+  var session = store(KEY.session);      // {code, pw, customer, prices, quotes, discount}
   var cart = [];
   var history = [];
   var adminOrders = [], adminFilter = 'all', adminTab = 'orders', customers = [], editing = null, role = null, pending = null;
@@ -273,6 +276,11 @@
     var base = basePrice(p.id); if (base == null) return null;
     return Math.round(base * (1 - ((session && session.discount) || 0) / 100) * 10) / 10;
   }
+  // 견적 모델: 거래처 관리에서 영업 담당이 적은 주문모델과 견적단가. 할인율은 적용하지 않는다.
+  function quotes() { return (session && session.quotes) || []; }
+  function quotePrice(model) { var q = quotes().filter(function (x) { return x.model === model; })[0]; return q && Number(q.price) > 0 ? Number(q.price) : null; }
+  // 발주서 품목의 단가: 견적 모델이면 견적단가, 아니면 모델 단가
+  function unitOf(i) { if (i.quote) return quotePrice(i.model); var p = product(i.model); return p ? unitPrice(p) : null; }
   function leadDays(items) { return items.some(function (i) { return i.qty >= C.lead.bigQty; }) ? C.lead.bigDays : C.lead.days; }
   function totals(items) { var net = items.reduce(function (s, i) { return s + i.unit * i.qty; }, 0); return { net: net, vat: net * C.price.vat, total: net * (1 + C.price.vat) }; }
 
@@ -292,11 +300,11 @@
     $('#tab-order').hidden = !on; $('#tab-history').hidden = !on;
     $('#who').hidden = !on;
     if (on) $('#who-name').textContent = session.customer.name + ' (' + session.code + ')';
-    if (C) { renderModels(); renderSpec(); }
+    if (C) { renderModels(); renderSpec(); renderQuotes(); }
   }
   function login(code, pw, quiet) {
     return api.login(code, pw).then(function (d) {
-      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0 };
+      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, quotes: d.quotes || [], discount: Number(d.discount) || 0 };
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
@@ -396,14 +404,14 @@
   // ----- 발주서 (거래처마다 따로 보관) -----
   function saveCart() { if (!session) return; var all = store(KEY.cart) || {}; if (Array.isArray(all)) all = {}; all[session.code] = cart; store(KEY.cart, all); }
   function repriceCart() {
-    cart = cart.filter(function (i) { var p = product(i.model); return p && (i.unit = unitPrice(p)) != null; });
+    cart = cart.filter(function (i) { return (i.unit = unitOf(i)) != null; });
     saveCart();
   }
   function renderCart() {
     $('#cart').innerHTML = cart.map(function (i, k) {
       return '<li class="cart-item"><code>' + esc(i.code) + '</code><span class="money">' + won(i.unit * i.qty) + '</span>' +
-        '<div class="sub"><label for="cq-' + k + '">' + T('수량', 'Qty') + '</label><input class="num" id="cq-' + k + '" data-k="' + k + '" type="number" step="' + C.qty.step + '" min="' + C.qty.min + '" value="' + i.qty + '">' +
-        '<span>× ' + won(i.unit) + '</span>' + (stripText(i) ? '<span>· ' + esc(stripText(i)) + '</span>' : '') + (i.memo ? '<span>· ' + esc(i.memo) + '</span>' : '') +
+        '<div class="sub"><label for="cq-' + k + '">' + T('수량', 'Qty') + '</label><input class="num" id="cq-' + k + '" data-k="' + k + '" type="number" step="' + (i.quote ? 1 : C.qty.step) + '" min="' + (i.quote ? 1 : C.qty.min) + '" value="' + i.qty + '">' +
+        '<span>× ' + won(i.unit) + '</span>' + (stripText(i) ? '<span>· ' + esc(stripText(i)) + '</span>' : '') + (i.due ? '<span>· ' + T('희망납기 ', 'Requested ') + esc(i.due) + '</span>' : '') + (i.memo ? '<span>· ' + esc(i.memo) + '</span>' : '') +
         '<button type="button" class="btn ghost small" data-del="' + k + '">' + T('빼기', 'Remove') + '</button></div></li>';
     }).join('');
     $('#cart-empty').hidden = cart.length > 0;
@@ -429,6 +437,48 @@
     toast(T(code + ' ' + v.qty.toLocaleString() + 'EA 담았습니다', 'Added ' + code + ' × ' + v.qty.toLocaleString() + ' EA'));
   }
 
+  // ----- 견적 모델 주문 -----
+  // 영업 담당이 거래처 관리에 적은 주문모델을 보여 주고, 확인을 체크한 줄을 발주서에 담는다
+  function renderQuotes() {
+    var on = !!session, list = quotes();
+    $('#quote-panel').hidden = !on; if (!on) return;
+    $('#quote-empty').hidden = list.length > 0; $('#quote-actions').hidden = !list.length;
+    $('#quote-panel table').hidden = !list.length;
+    $('#quote-body').innerHTML = list.map(function (q, k) {
+      return '<tr><td><code>' + esc(q.model) + '</code><div class="q-price">' + T('견적단가 ', 'Quoted ') + won(q.price) + '</div></td>' +
+        '<td><input type="checkbox" data-q="' + k + '" aria-label="' + esc(q.model) + ' ' + T('확인', 'confirm') + '"></td>' +
+        '<td><input class="num" data-q-qty="' + k + '" type="number" min="1" step="1" inputmode="numeric" aria-label="' + T('수량', 'Quantity') + '"></td>' +
+        '<td><input type="date" data-q-due="' + k + '" min="' + ymd(new Date()) + '" aria-label="' + T('희망납기일', 'Requested date') + '"></td>' +
+        '<td><input class="q-memo" data-q-memo="' + k + '" maxlength="100" aria-label="' + T('품목메모', 'Item memo') + '"></td></tr>';
+    }).join('');
+    say($('#quote-err'), '');
+  }
+  function addQuotes() {
+    var err = $('#quote-err'), list = quotes(), picked = [], bad = '';
+    document.querySelectorAll('[data-q]').forEach(function (cb) {
+      if (!cb.checked) return;
+      var k = cb.dataset.q, q = list[+k]; if (!q) return;
+      var qty = Number($('[data-q-qty="' + k + '"]').value), due = $('[data-q-due="' + k + '"]').value, memo = $('[data-q-memo="' + k + '"]').value.trim();
+      if (!(qty >= 1 && qty === Math.floor(qty))) bad = bad || T(q.model + ' 수량을 1EA 이상으로 적어 주세요.', 'Enter a quantity of 1 EA or more for ' + q.model + '.');
+      else if (due && due < ymd(new Date())) bad = bad || T(q.model + ' 희망납기일은 오늘 이후로 골라 주세요.', 'Choose a requested date from today for ' + q.model + '.');
+      else picked.push({ quote: true, code: q.model, model: q.model, qty: qty, unit: Number(q.price), due: due, memo: memo });
+    });
+    if (bad) { say(err, bad, true); return; }
+    if (!picked.length) { say(err, T('주문할 모델에 확인을 체크해 주세요.', 'Tick Confirm on the models you want to order.'), true); return; }
+    picked.forEach(function (it) {
+      var ex = cart.filter(function (i) { return i.quote && i.model === it.model && (i.due || '') === it.due && (i.memo || '') === it.memo; })[0];
+      if (ex) { ex.qty += it.qty; ex.unit = it.unit; } else cart.push(it);
+    });
+    saveCart(); renderCart(); renderQuotes(); $('#done').hidden = true;
+    toast(T(picked.length + '개 모델을 발주서에 담았습니다', 'Added ' + picked.length + ' model(s) to your order'));
+  }
+  $('#quote-add').addEventListener('click', addQuotes);
+  // 수량이나 희망납기일을 적으면 확인도 자동으로 체크한다
+  $('#quote-body').addEventListener('input', function (e) {
+    var k = e.target.dataset.qQty || e.target.dataset.qDue;
+    if (k !== undefined && e.target.value) $('[data-q="' + k + '"]').checked = true;
+  });
+
   // ----- 발주 확정 -----
   function fillCheckout() {
     var c = session.customer;
@@ -447,7 +497,7 @@
     var order = {
       contact: v.name, phone: v.phone, customerPo: v.po, address: v.addr,
       memo: $('#c-memo').value.trim(), requestedDate: $('#c-date').value || ymd(ship), eta: ymd(ship),
-      items: cart.map(function (i) { return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
+      items: cart.map(function (i) { if (i.quote) return { quote: true, model: i.model, code: i.model, qty: i.qty, unit: i.unit, due: i.due || '', memo: i.memo }; return { model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty, memo: i.memo, code: i.code, unit: i.unit }; }),
       net: t.net, vat: t.vat, total: t.total
     };
     var f = $('#c-file').files[0];
@@ -496,7 +546,7 @@
   function rememberSpecs(items) {
     var rec = store(KEY.recent) || [];
     var same = function (a, b) { return a.code === b.code && (a.strip || 0) === (b.strip || 0) && (a.strip2 || 0) === (b.strip2 || 0) && (a.pin || 0) === (b.pin || 0) && (a.speed || '') === (b.speed || '') && (a.terminal || '') === (b.terminal || '') && (a.term || '') === (b.term || '') && (a.rtemp || 0) === (b.rtemp || 0); };
-    items.forEach(function (i) { rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty }); });
+    items.forEach(function (i) { if (i.quote) return; rec = rec.filter(function (r) { return !same(r, i); }); rec.unshift({ code: i.code, model: i.model, len: i.len, len2: i.len2 || 0, strip: i.strip || 0, strip2: i.strip2 || 0, pin: i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: i.rtemp || 0, finish: i.finish || '', temp: i.temp, qty: i.qty }); });
     store(KEY.recent, rec.slice(0, 8)); renderRecent();
   }
   function renderRecent() {
@@ -511,7 +561,7 @@
   function pill(s) { s = OLD_STATUS[s] || s || '접수 대기'; return '<span class="pill ' + (STATUS[s] || 'st-received') + '">' + esc(LANG === 'en' ? STATUS_EN[s] || s : s) + '</span>'; }
   // 마감(T, TD)을 이름과 함께 보여 준다. 마감 칸이 생기기 전 발주는 "기록 없음"
   function finishTag(i) {
-    if (!finishes().length || noFinish(product(i.model))) return '';
+    if (i.quote || !product(i.model) || !finishes().length || noFinish(product(i.model))) return '';
     var f = finishes().filter(function (x) { return x.code === i.finish; })[0];
     return '<div class="item-finish">' + T('마감: ', 'Finish: ') + (f ? '<b>' + esc(f.code) + '</b> ' + esc(f.name) : T('마감 없음', 'none')) + '</div>';
   }
@@ -528,7 +578,7 @@
   // 품목 메모는 사양 코드 아래에 작게 보여 준다
   function itemsHtml(o) {
     return '<ul class="order-items">' + o.items.map(function (i) {
-      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.memo ? '<div class="item-memo">' + T('메모: ', 'Memo: ') + esc(i.memo) + '</div>' : '') + '</li>';
+      return '<li>' + esc(i.code) + ' × ' + Number(i.qty).toLocaleString() + finishTag(i) + (stripText(i) ? '<div class="item-finish">' + esc(stripText(i)) + '</div>' : '') + (i.due ? '<div class="item-finish">' + T('희망납기 ', 'Requested ') + esc(i.due) + '</div>' : '') + (i.memo ? '<div class="item-memo">' + T('메모: ', 'Memo: ') + esc(i.memo) + '</div>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   // 담당자가 예상 출하일을 정했으면 그것을, 아니면 희망 출하일을 보여 준다 (시트 칸 이름은 '확정 출하일' 그대로)
@@ -556,6 +606,11 @@
     var o = history.filter(function (x) { return x.no === no; })[0]; if (!o) return;
     var n = 0, skipped = 0;
     o.items.forEach(function (i) {
+      if (i.quote) {
+        var qu = quotePrice(i.model);
+        if (qu == null) { skipped++; return; }
+        n++; cart.push({ quote: true, code: i.model, model: i.model, qty: +i.qty, unit: qu, due: '', memo: i.memo || '' }); return;
+      }
       var p = product(i.model), unit = p ? unitPrice(p) : null;
       if (unit == null) { skipped++; return; }
       n++; cart.push({ code: i.code, model: i.model, len: +i.len, len2: +i.len2 || 0, strip: +i.strip || 0, strip2: +i.strip2 || 0, pin: +i.pin || 0, speed: i.speed || '', terminal: i.terminal || '', term: i.term || '', rtemp: +i.rtemp || 0, finish: i.finish || '', temp: +i.temp, qty: +i.qty, memo: i.memo || '', unit: unit });
@@ -770,12 +825,12 @@
   });
   $('#ci-orders-excel').addEventListener('click', function () {
     var D = infoData; if (!D || !D.list.length) { toast('내려받을 발주가 없어요'); return; }
-    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '발주 합계 VAT 포함(원)'];
+    var head = ['발주번호', '접수 시각', '상태', '예상 출하일', '사양 코드', '모델', '와이어(mm)', '와이어2(mm)', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '마감', '온도(°C)', '수량(EA)', '단가(원)', '금액(원)', '품목 메모', '품목 희망납기일', '발주 합계 VAT 포함(원)'];
     var lines = [head.map(csvCell).join(',')];
     D.list.forEach(function (o) {
       o.items.forEach(function (i) {
         lines.push([csvCell(o.no), csvText(kst(o.createdAt)), csvCell(OLD_STATUS[o.status] || o.status), csvText(o.shipDate || ''), csvCell(i.code), csvCell(i.model), i.len || '', i.len2 || '', i.strip || '', i.strip2 || '', i.pin || '', csvCell(i.speed || ''), csvCell(i.terminal || ''), csvCell(i.term || ''), rtempOf(i),
-          csvCell(i.finish || ''), i.temp || '', i.qty || '', i.unit || '', (Number(i.unit) || 0) * (Number(i.qty) || 0), csvCell(i.memo || ''), o.total || ''].join(','));
+          csvCell(i.finish || ''), i.temp || '', i.qty || '', i.unit || '', (Number(i.unit) || 0) * (Number(i.qty) || 0), csvCell(i.memo || ''), csvText(i.due || ''), o.total || ''].join(','));
       });
     });
     saveCsv('POmall_' + D.c.code + '_orders' + (infoKey ? '_' + infoKey : ''), lines);
@@ -799,10 +854,10 @@
   function downloadCustomers() {
     if (!customers.length) { toast('내려받을 거래처가 없어요'); return; }
     var cell = csvCell, asText = csvText;
-    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '메일', '기본 납품 주소'].concat(C.products.map(function (p) { return p.id + ' 단가(원)'; }), ['할인율(%)', '상태']);
+    var head = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '메일', '기본 납품 주소', '주문모델 · 견적단가(원)', '할인율(%)', '상태'];
     var lines = [head.map(cell).join(',')].concat(customers.map(function (c) {
       return [c.no || '', asText(c.code), cell(c.name), cell(c.contact), asText(String(c.phone || '').replace(/^'/, '')), cell(c.email || ''), cell(c.address)]
-        .concat(C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return v > 0 ? v : ''; }), [c.discount || '', c.active ? '사용' : '중지']).join(',');
+        .concat([cell((c.quotes || []).map(function (q) { return q.model + ' ' + q.price; }).join('; ')), c.discount || '', c.active ? '사용' : '중지']).join(',');
     }));
     saveCsv('POmall_customers', lines);
   }
@@ -810,20 +865,39 @@
 
   // 거래처 단가
   function renderCustomers() {
-    $('#cust-head').innerHTML = '<tr><th>번호</th><th>코드</th><th>거래처</th><th>담당 · 연락처</th>' + C.products.map(function (p) { return '<th>' + esc(p.id) + '</th>'; }).join('') + '<th>할인율</th><th>상태</th><th></th></tr>';
+    $('#cust-head').innerHTML = '<tr><th>번호</th><th>코드</th><th>거래처</th><th>담당 · 연락처</th><th>주문모델 · 견적단가</th><th>할인율</th><th>상태</th><th></th></tr>';
     $('#cust-body').innerHTML = customers.map(function (c) {
       return '<tr class="' + (c.active ? '' : 'off') + (editing === c.code ? ' editing' : '') + '"><td class="num">' + (c.no || '-') + '</td><td><button type="button" class="code-link" data-cust-info="' + esc(c.code) + '" title="거래처 정보 보기">' + esc(c.code) + '</button></td><td><b>' + esc(c.name) + '</b></td>' +
         '<td>' + esc(c.contact) + '<div class="order-items">' + esc(c.phone) + '</div></td>' +
-        C.products.map(function (p) { var v = Number((c.prices || {})[p.id]); return '<td class="num">' + (v > 0 ? v.toLocaleString() : '-') + '</td>'; }).join('') +
+        '<td>' + quoteSummary(c) + '</td>' +
         '<td class="num">' + (c.discount ? c.discount + '%' : '-') + '</td><td>' + (c.active ? '사용' : '중지') + '</td><td><button type="button" class="btn ghost small" data-edit="' + esc(c.code) + '">수정</button></td></tr>';
     }).join('');
     $('#cust-empty').hidden = customers.length > 0;
-    if (!$('#cu-prices').children.length) {
-      $('#cu-prices').innerHTML = C.products.map(function (p) {
-        return '<label for="cp-' + esc(p.id) + '">' + esc(p.id) + '<input class="num" id="cp-' + esc(p.id) + '" data-price="' + esc(p.id) + '" type="number" min="0" step="0.1" inputmode="decimal" placeholder="단가 문의"></label>';
-      }).join('');
-    }
+    if (!$('#cu-quotes').children.length) fillQuotes(null);
   }
+  // 거래처 목록에는 주문모델을 두 개까지 보여 주고 나머지는 개수로
+  function quoteSummary(c) {
+    var q = c.quotes || [];
+    if (!q.length) return '<span class="order-items">-</span>';
+    return q.slice(0, 2).map(function (x) { return '<div class="order-items"><b>' + esc(x.model) + '</b> ' + Number(x.price).toLocaleString() + '원</div>'; }).join('') +
+      (q.length > 2 ? '<div class="order-items">외 ' + (q.length - 2) + '개</div>' : '');
+  }
+  // 주문모델·견적단가 입력 줄. +를 누르면 한 줄씩 늘어난다
+  function quoteRow(q) {
+    return '<div class="quote-row"><input data-qm maxlength="60" placeholder="주문모델 (예: ST-22W-L070-L120-T100)" aria-label="주문모델" value="' + esc(q ? q.model : '') + '">' +
+      '<div class="inrow"><input class="num" data-qp type="number" min="0" step="0.1" inputmode="decimal" placeholder="견적단가" aria-label="견적단가" value="' + (q && q.price ? q.price : '') + '"><span class="unit">원</span></div>' +
+      '<button type="button" class="btn ghost small" data-q-del aria-label="이 줄 빼기">빼기</button></div>';
+  }
+  function fillQuotes(list) { $('#cu-quotes').innerHTML = (list && list.length ? list : [null]).map(quoteRow).join(''); }
+  $('#cu-quote-add').addEventListener('click', function () {
+    $('#cu-quotes').insertAdjacentHTML('beforeend', quoteRow(null));
+    var all = $('#cu-quotes').querySelectorAll('[data-qm]'); all[all.length - 1].focus();
+  });
+  $('#cu-quotes').addEventListener('click', function (e) {
+    if (!e.target.hasAttribute('data-q-del')) return;
+    e.target.closest('.quote-row').remove();
+    if (!$('#cu-quotes').children.length) fillQuotes(null);
+  });
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
     $('#cust-form-title').textContent = c ? (c.no ? c.no + '번 ' : '') + c.name + ' 수정' : '거래처 추가';
@@ -834,13 +908,13 @@
     $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
-    document.querySelectorAll('[data-price]').forEach(function (inp) { var v = c && c.prices ? Number(c.prices[inp.dataset.price]) : 0; inp.value = v > 0 ? v : ''; });
+    fillQuotes(c ? c.quotes : null);
     say($('#cu-msg'), '');
     renderCustomers();
   }
   $('#cust-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var msg = $('#cu-msg'), prices = {};
+    var msg = $('#cu-msg'), quoteList = [], qErr = '';
     var c = { code: $('#cu-code').value.trim().toUpperCase(), name: $('#cu-name').value.trim(), contact: $('#cu-contact').value.trim(),
       phone: $('#cu-phone').value.trim(), email: $('#cu-email').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
     if (!/^[A-Z0-9_-]{2,20}$/.test(c.code)) { say(msg, '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.', true); return; }
@@ -852,8 +926,19 @@
     if (renamed && c.pw.length < 4) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).', true); return $('#cu-pw').focus(); }
     if (editing) c.oldCode = editing;
     if (c.pw && c.pw.length < 4) { say(msg, '비밀번호는 4자 이상이에요.', true); return; }
-    document.querySelectorAll('[data-price]').forEach(function (inp) { var v = Number(inp.value); if (v > 0) prices[inp.dataset.price] = Math.round(v * 10) / 10; });
-    c.prices = prices;
+    // 모델 단가 칸은 없앴다. 예전에 적어 둔 모델 단가는 지우지 않고 그대로 보낸다
+    var old = editing ? customers.filter(function (x) { return x.code === editing; })[0] : null;
+    c.prices = (old && old.prices) || {};
+    document.querySelectorAll('#cu-quotes .quote-row').forEach(function (row) {
+      var m = row.querySelector('[data-qm]').value.trim(), pv = row.querySelector('[data-qp]').value, v = Number(pv);
+      if (!m && !pv) return;
+      if (!m) qErr = qErr || '견적단가만 있고 주문모델이 빈 줄이 있어요.';
+      else if (!(v > 0)) qErr = qErr || m + ' 견적단가를 0보다 크게 적어 주세요.';
+      else if (quoteList.some(function (q) { return q.model === m; })) qErr = qErr || m + ' 주문모델이 두 번 적혀 있어요.';
+      else quoteList.push({ model: m, price: Math.round(v * 10) / 10 });
+    });
+    if (qErr) { say(msg, qErr, true); return; }
+    c.quotes = quoteList;
     c.discount = Number($('#cu-discount').value) || 0;
     if (c.discount < 0 || c.discount >= 100) { say(msg, '할인율은 0 이상 100 미만으로 적어 주세요.', true); return; }
     $('#cu-save').disabled = true; say(msg, '저장하는 중이에요…');
@@ -862,7 +947,7 @@
     }).then(function (list) {
       customers = list || [];
       fillCustomerForm(customers.filter(function (x) { return x.code === c.code; })[0]);
-      say(msg, '저장했어요. 거래처가 다음에 로그인하면 새 단가가 보여요.');
+      say(msg, '저장했어요. 거래처가 다음에 로그인하면 새 주문모델과 견적단가가 보여요.');
     }).catch(function (err) { say(msg, errText(err, '저장하지 못했어요. 다시 눌러 주세요.'), true); })
       .then(function () { $('#cu-save').disabled = false; });
   });
@@ -1021,9 +1106,9 @@
   });
   $('#cart').addEventListener('change', function (e) {
     var k = e.target.dataset.k; if (k === undefined) return;
-    var i = cart[+k], p = product(i.model);
-    i.qty = Math.max(C.qty.min, Math.round((+e.target.value || 0) / C.qty.step) * C.qty.step);
-    i.unit = unitPrice(p); saveCart(); renderCart();
+    var i = cart[+k];
+    i.qty = i.quote ? Math.max(1, Math.round(+e.target.value || 0)) : Math.max(C.qty.min, Math.round((+e.target.value || 0) / C.qty.step) * C.qty.step);
+    i.unit = unitOf(i); saveCart(); renderCart();
   });
   $('#go-checkout').addEventListener('click', function () { if (!session) return; $('#checkout').hidden = false; fillCheckout(); $('#checkout').scrollIntoView({ behavior: 'smooth' }); });
   $('#cancel-checkout').addEventListener('click', function () { $('#checkout').hidden = true; });
@@ -1066,7 +1151,7 @@
     // 주소의 ?lang= 도 맞춰 바꿔서, 새로고침하거나 주소를 복사해도 고른 언어로 열린다
     try { var u = new URL(location.href); u.searchParams.set('lang', LANG); window.history.replaceState(null, '', u); } catch (e) {}
     if (!C) return;
-    renderModels(); renderChips(); renderFinish(); renderSpec(); renderCart(); renderRecent();
+    renderModels(); renderChips(); renderFinish(); renderSpec(); renderCart(); renderRecent(); renderQuotes();
     if (!$('#view-history').hidden) loadHistory();
   });
   applyLang();

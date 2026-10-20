@@ -25,9 +25,9 @@ var HELP_HEADER = ['ID', '요청 시각', '회사명', '담당자', '연락처',
 var LOG_HEADER = ['시각', '발주번호', '거래처', '이전 상태', '바뀐 상태', '변경자', '권한', '사유'];
 var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
-  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)'];
+  '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '견적 모델', '품목 희망납기일'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일'];
+var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일', '견적 모델'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 // 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
 var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -73,7 +73,7 @@ function login(code, pw) {
   var c = authCustomer(code, pw);
   if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, discount: c.discount };
+  return { ok: true, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
 }
 function authCustomer(code, pw) {
   code = clip(code, 20).toUpperCase();
@@ -100,7 +100,7 @@ function customerList() {
   return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(publicCustomer);
 }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, active: c.active, prices: c.prices, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, active: c.active, prices: c.prices, quotes: c.quotes, discount: c.discount, hasPassword: !!c.hash };
 }
 // oldCode가 있으면 그 거래처를 고친다. 코드를 바꾸면 비밀번호가 코드와 묶여 있어 새 비밀번호가 필요하고, 지난 발주의 거래처 코드도 함께 바꾼다.
 function saveCustomer(c) {
@@ -120,13 +120,22 @@ function saveCustomer(c) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
   var discount = Number(c.discount) || 0;
   if (discount < 0 || discount >= 100) return { ok: false, error: '할인율은 0 이상 100 미만이에요.' };
+  // 견적 모델: 영업 담당이 견적에서 정한 주문모델과 견적단가. 거래처 탭 '견적 모델' 칸에 [{model, price}] 글자로 저장한다
+  var quotes = [], qs = Array.isArray(c.quotes) ? c.quotes.slice(0, 200) : [];
+  for (var q = 0; q < qs.length; q++) {
+    var qm = clip(qs[q] && qs[q].model, 60), qp = Math.round(Number(qs[q] && qs[q].price) * 10) / 10;
+    if (!qm) continue;
+    if (!(qp > 0)) return { ok: false, error: qm + ' 견적단가를 0보다 크게 적어 주세요.' };
+    if (quotes.some(function (x) { return x.model === qm; })) return { ok: false, error: qm + ' 주문모델이 두 번 적혀 있어요.' };
+    quotes.push({ model: qm, price: qp });
+  }
 
   var s = customerSheet(), head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
   var row = ex ? s.getRange(ex.index, 1, 1, head.length).getValues()[0] : head.map(function () { return ''; });
   var set = function (h, v) { var i = head.indexOf(h); if (i >= 0) row[i] = v; };
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
-  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email);
+  set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email); set('견적 모델', quotes.length ? JSON.stringify(quotes) : '');
   if (pw) set('비밀번호', hash(code, pw));
   var no = ex ? ex.no : custSeq(customers()) + 1;
   if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
@@ -160,8 +169,11 @@ function customers() {
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
     return { index: k + 2, no: Number(at(r, '번호')) || 0, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
       phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), email: String(at(r, '메일')).trim(), hash: String(at(r, '비밀번호')),
-      active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices };
+      active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices, quotes: quoteList(at(r, '견적 모델')) };
   }).filter(function (c) { return c.code; });
+}
+function quoteList(v) {
+  try { var a = JSON.parse(String(v || '[]')); return Array.isArray(a) ? a.filter(function (q) { return q && q.model && Number(q.price) > 0; }).map(function (q) { return { model: String(q.model), price: Number(q.price) }; }) : []; } catch (e) { return []; }
 }
 function findCustomer(code) { return customers().filter(function (c) { return c.code === code; })[0] || null; }
 function hash(code, pw) {
@@ -181,7 +193,17 @@ function placeOrder(d) {
 
   var C = catalog(), lines = [];
   for (var i = 0; i < items.length; i++) {
-    var it = items[i], p = findProduct(C, it.model);
+    var it = items[i];
+    // 견적 모델 품목: 거래처에 적힌 주문모델이어야 하고, 단가는 견적단가(할인율 적용 안 함). 수량은 1EA 단위, 품목 희망납기일은 선택
+    if (it.quote) {
+      var qm = clip(it.model, 60), qt = (cust.quotes || []).filter(function (x) { return x.model === qm; })[0], qq = Number(it.qty), due = String(it.due || '');
+      if (!qt) return { ok: false, error: qm + ' 견적 모델이 아니에요. 새로고침해 주세요.' };
+      if (!(qq >= 1 && qq === Math.floor(qq))) return { ok: false, error: qm + ' 수량은 1EA 이상이에요.' };
+      if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false, error: qm + ' 희망납기일을 확인해 주세요.' };
+      lines.push({ quote: true, code: qm, model: qm, len: 0, len2: 0, strip: 0, strip2: 0, pin: 0, speed: '', terminal: '', term: '', rtemp: '', finish: '', temp: '', qty: qq, unit: qt.price, amount: qt.price * qq, memo: clip(it.memo, 100), due: due });
+      continue;
+    }
+    var p = findProduct(C, it.model);
     // 와이어가 없는 모델(products.json의 wires: 0)은 와이어 길이와 탈피가 없다
     var len = p && p.wires === 0 ? 0 : Math.floor(Number(it.len)), temp = Math.floor(Number(it.temp)), qty = Math.floor(Number(it.qty));
     if (!p) return { ok: false, error: '없는 모델이에요: ' + clip(it.model, 20) };
@@ -229,7 +251,7 @@ function placeOrder(d) {
   lines.forEach(function (l, k) {
     // 거래처가 적은 칸은 수식으로 해석되지 않도록 글자로 저장한다
     s.appendRow([no, now, cust.code, text(cust.name), text(contact), "'" + phone, text(clip(o.customerPo, 40)), text(address), text(clip(o.memo, 200)),
-      "'" + wanted, "'" + eta, k + 1, l.code, l.model, l.len || '', l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish, l.strip || '', l.strip2 || '', l.pin || '', l.speed, l.terminal, l.term, l.rtemp]);
+      "'" + wanted, "'" + eta, k + 1, text(l.code), text(l.model), l.len || '', l.temp, l.qty, l.unit, l.amount, text(l.memo), total, STATUSES[0], now, '', file.url || '', l.len2 || '', l.finish, l.strip || '', l.strip2 || '', l.pin || '', l.speed, l.terminal, l.term, l.rtemp, l.quote ? 'Y' : '', l.due ? "'" + l.due : '']);
   });
   return { ok: true, order: { no: no, total: total, eta: eta, requestedDate: wanted, attachment: file.url || '' } };
 }
@@ -372,7 +394,8 @@ function orders(withLog) {
     }
     map[no].items.push({ code: String(r[COL['사양 코드']]), model: String(r[COL['모델']]), len: Number(r[COL['와이어(mm)']]), len2: Number(r[COL['와이어2(mm)']]) || 0, finish: String(r[COL['마감']] || ''),
       strip: Number(r[COL['탈피(mm)']]) || 0, strip2: Number(r[COL['탈피2(mm)']]) || 0, pin: Number(r[COL['핀 길이(mm)']]) || 0, speed: String(r[COL['전류감응속도']] || ''), terminal: String(r[COL['터미널방향']] || ''), term: String(r[COL['터미널']] || ''), rtemp: r[COL['복귀온도(°C)']] === '' || r[COL['복귀온도(°C)']] == null ? '' : Number(r[COL['복귀온도(°C)']]),
-      temp: Number(r[COL['온도(°C)']]), qty: Number(r[COL['수량']]), unit: Number(r[COL['단가']]), memo: String(r[COL['품목 메모']]) });
+      temp: Number(r[COL['온도(°C)']]), qty: Number(r[COL['수량']]), unit: Number(r[COL['단가']]), memo: String(r[COL['품목 메모']]),
+      quote: String(r[COL['견적 모델']] || '') === 'Y', due: day(r[COL['품목 희망납기일']]) });
   });
   return keys.reverse().map(function (k) { return map[k]; });
 }
@@ -385,7 +408,7 @@ function exportAll() {
     var o = {}; HEADER.forEach(function (h, i) { o[h] = r[i] instanceof Date ? (h === '접수 시각' || h === '바뀐 시각' ? iso(r[i]) : day(r[i])) : r[i]; }); return o;
   });
   var custs = numberCustomers().map(function (c) {
-    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices };
+    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices, quotes: c.quotes };
   });
   var s = logSheet(), n = s.getLastRow();
   var log = n < 2 ? [] : s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().map(function (r) {
