@@ -5,7 +5,7 @@
 // 시트 탭 세 개를 씁니다. 없으면 처음 쓸 때 만들어집니다.
 //   발주    발주 한 건의 품목마다 한 줄 (같은 발주번호). 생산 현장에서 줄 단위로 보기 쉽게 하려는 것입니다.
 //   상태 기록  상태를 바꿀 때마다 한 줄: 누가, 언제, 무엇에서 무엇으로, 왜(취소나 되돌리기).
-//   거래처  거래처 코드, 비밀번호(암호화), 사용 여부, 할인율(%), 모델마다 한 칸씩 단가(원/EA, 부가세 별도). 빈 칸은 "단가 문의".
+//   거래처  거래처 코드, 비밀번호(암호화), 비밀번호(보기: 관리 화면에서 만든 비밀번호, 관리자만 봄), 사용 여부, 할인율(%), 모델마다 한 칸씩 단가(원/EA, 부가세 별도). 빈 칸은 "단가 문의".
 //           최종 단가 = 모델 단가 × (1 - 할인율/100). 할인율이 비어 있으면 적은 단가 그대로입니다.
 //           단가는 사이트의 관리 > 거래처 단가에서 고치는 것이 기본이지만, 이 시트에서 직접 고쳐도 됩니다.
 // 스크립트 속성(프로젝트 설정 > 스크립트 속성)
@@ -27,7 +27,7 @@ var ROLES = { admin: '관리자', sales: '영업팀', view: '조회 전용' };
 var HEADER = ['발주번호', '접수 시각', '거래처 코드', '거래처', '담당자', '연락처', '거래처 PO', '납품 주소', '요청 사항', '희망 출하일', '최단 출하일',
   '줄', '사양 코드', '모델', '와이어(mm)', '온도(°C)', '수량', '단가', '금액', '품목 메모', '발주 합계(VAT 포함)', '상태', '바뀐 시각', '확정 출하일', '발주서', '와이어2(mm)', '마감', '탈피(mm)', '탈피2(mm)', '핀 길이(mm)', '전류감응속도', '터미널방향', '터미널', '복귀온도(°C)', '견적 모델', '품목 희망납기일', '담당자 메모', '메모 수정'];
 var COL = {}; HEADER.forEach(function (h, i) { COL[h] = i; });
-var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일', '견적 모델'];
+var CUST_BASE = ['번호', '거래처 코드', '거래처명', '담당자', '연락처', '기본 납품 주소', '비밀번호', '사용', '할인율(%)', '바뀐 시각', '메일', '견적 모델', '비밀번호(보기)'];
 var STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 // 예전 상태 이름으로 남은 발주는 새 이름으로 읽는다
 var OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -51,7 +51,7 @@ function doPost(e) {
       case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
       case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
       case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
-      case 'customers': return reply(staff(d.key, ['admin', 'sales'], function () { return { ok: true, customers: customerList() }; }));
+      case 'customers': return reply(staff(d.key, ['admin', 'sales'], function (role) { return { ok: true, customers: customerList(role) }; }));
       case 'saveCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return saveCustomer(d.customer || {}); }));
       case 'deleteCustomer': return reply(staff(d.key, ['admin', 'sales'], function () { return deleteCustomer(d.code); }));
       case 'export': return reply(staff(d.key, ['admin'], exportAll));
@@ -97,8 +97,15 @@ function custSeq(list) {
   var stored = Number(PropertiesService.getScriptProperties().getProperty('CUST_SEQ')) || 0;
   return list.reduce(function (m, c) { return Math.max(m, c.no || 0); }, stored);
 }
-function customerList() {
-  return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(publicCustomer);
+// 비밀번호(보기): 관리 화면에서 만든 비밀번호를 그대로 적어 두는 칸. 관리자 열쇠에만 돌려준다.
+// 거래처가 메일 인증으로 바꾸면 PW_CHANGED로 바뀌어 더는 볼 수 없다.
+var PW_CHANGED = '거래처가 바꿈';
+function customerList(role) {
+  return numberCustomers().sort(function (a, b) { return a.no - b.no; }).map(function (c) {
+    var p = publicCustomer(c);
+    if (role === 'admin') { p.pwView = c.pwView === PW_CHANGED ? '' : c.pwView; p.pwChanged = c.pwView === PW_CHANGED; }
+    return p;
+  });
 }
 function publicCustomer(c) {
   return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, active: c.active, prices: c.prices, quotes: c.quotes, discount: c.discount, hasPassword: !!c.hash };
@@ -137,7 +144,7 @@ function saveCustomer(c) {
   set('거래처 코드', code); set('거래처명', text(name)); set('담당자', text(clip(c.contact, 20)));
   set('연락처', c.phone ? "'" + clip(c.phone, 20) : ''); set('기본 납품 주소', text(clip(c.address, 120)));
   set('사용', c.active === false ? '중지' : '사용'); set('할인율(%)', discount ? Math.round(discount * 10) / 10 : ''); set('바뀐 시각', new Date()); set('메일', email); if (Array.isArray(c.quotes) || !ex) set('견적 모델', quotes.length ? JSON.stringify(quotes) : '');  // 견적 모델 칸이 없는 예전 화면(pomall/)이 저장하면 그대로 둔다
-  if (pw) set('비밀번호', hash(code, pw));
+  if (pw) { set('비밀번호', hash(code, pw)); set('비밀번호(보기)', "'" + pw); }
   var no = ex ? ex.no : custSeq(customers()) + 1;
   if (!ex) { set('번호', no); PropertiesService.getScriptProperties().setProperty('CUST_SEQ', String(no)); }
   var prices = c.prices || {};
@@ -169,7 +176,7 @@ function customers() {
     var prices = {};
     head.forEach(function (h, i) { if (h && CUST_BASE.indexOf(h) < 0 && Number(r[i]) > 0) prices[h] = Number(r[i]); });
     return { index: k + 2, no: Number(at(r, '번호')) || 0, code: String(at(r, '거래처 코드')).trim().toUpperCase(), name: String(at(r, '거래처명')), contact: String(at(r, '담당자')),
-      phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), email: String(at(r, '메일')).trim(), hash: String(at(r, '비밀번호')),
+      phone: String(at(r, '연락처')), address: String(at(r, '기본 납품 주소')), email: String(at(r, '메일')).trim(), hash: String(at(r, '비밀번호')), pwView: String(at(r, '비밀번호(보기)')).replace(/^'/, ''),
       active: String(at(r, '사용')) !== '중지', discount: Number(at(r, '할인율(%)')) || 0, prices: prices, quotes: quoteList(at(r, '견적 모델')) };
   }).filter(function (c) { return c.code; });
 }
@@ -425,7 +432,7 @@ function exportAll() {
     var o = {}; HEADER.forEach(function (h, i) { o[h] = r[i] instanceof Date ? (h === '접수 시각' || h === '바뀐 시각' ? iso(r[i]) : day(r[i])) : r[i]; }); return o;
   });
   var custs = numberCustomers().map(function (c) {
-    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash, active: c.active, discount: c.discount, prices: c.prices, quotes: c.quotes };
+    return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash, pwView: c.pwView === PW_CHANGED ? '' : c.pwView, active: c.active, discount: c.discount, prices: c.prices, quotes: c.quotes };
   });
   var s = logSheet(), n = s.getLastRow();
   var log = n < 2 ? [] : s.getRange(2, 1, n - 1, LOG_HEADER.length).getValues().map(function (r) {
@@ -471,6 +478,7 @@ function resetFinish(d) {
   if (pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
   var s = customerSheet(), head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
   s.getRange(c.index, head.indexOf('비밀번호') + 1).setValue(hash(code, pw));
+  if (head.indexOf('비밀번호(보기)') >= 0) s.getRange(c.index, head.indexOf('비밀번호(보기)') + 1).setValue(PW_CHANGED);
   s.getRange(c.index, head.indexOf('바뀐 시각') + 1).setValue(new Date());
   cache.remove(key);
   return { ok: true };
