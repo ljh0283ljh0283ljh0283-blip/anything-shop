@@ -101,6 +101,7 @@
         config: function () { return call({ action: 'config' }); },
         saveLead: function (key, L) { return call(Object.assign({ action: 'saveLead', key: key }, L)); },
         shipDate: function (key, c) { return call({ action: 'shipDate', key: key, no: c.no, date: c.date, by: c.by }); },
+        staffMemo: function (key, c) { return call({ action: 'staffMemo', key: key, no: c.no, memo: c.memo, by: c.by }); },
         list: function (key) { return call({ action: 'list', key: key }).then(function (d) { return d.orders; }); },
         setStatus: function (key, c) { return call({ action: 'status', key: key, no: c.no, status: c.status, by: c.by, reason: c.reason }); },
         customers: function (key) { return call({ action: 'customers', key: key }).then(function (d) { return d.customers; }); },
@@ -141,6 +142,11 @@
         shipDate: function (key, c) {
           if (roleOf(key) === 'view') return Promise.reject(new Error('영업팀 권한이 필요해요.'));
           store(KEY.localOrders, orders().map(function (o) { if (o.no === c.no) o.shipDate = c.date; return o; })); return Promise.resolve({ ok: true });
+        },
+        staffMemo: function (key, c) {
+          if (roleOf(key) === 'view') return Promise.reject(new Error('영업팀 권한이 필요해요.'));
+          var by = c.by + ' · ' + new Date().toISOString();
+          store(KEY.localOrders, orders().map(function (o) { if (o.no === c.no) { o.staffMemo = c.memo; o.staffMemoBy = by; } return o; })); return Promise.resolve({ ok: true, by: by });
         },
         list: function () { return Promise.resolve(orders()); },
         setStatus: function (key, c) {
@@ -674,7 +680,7 @@
         '<td><b>' + esc(o.company) + '</b> <span class="order-items">' + esc(o.code || '') + '</span><div class="order-items">' + esc(o.contact) + ' · ' + esc(o.phone) + '</div><div class="order-items">' + esc(o.address) + '</div>' + (o.memo ? '<div class="order-items">요청: ' + esc(o.memo) + '</div>' : '') + '</td>' +
         '<td>' + itemsHtml(o) + '</td><td class="mono">' + won(o.total) + '</td>' +
         '<td class="mono">' + shipCell(o) + '</td>' +
-        '<td>' + statusCell(o) + '</td></tr>';
+        '<td>' + statusCell(o) + '</td><td>' + memoCell(o) + '</td></tr>';
     }).join('');
     $('#admin-empty').hidden = list.length > 0;
   }
@@ -683,6 +689,25 @@
     var head = '<div class="order-items">희망 ' + esc(o.requestedDate) + ' · 최단 ' + esc(o.eta) + '</div>';
     if (!canEdit()) return (o.shipDate ? '<b>' + esc(o.shipDate) + '</b>' : '<span class="order-items">예상일 미정</span>') + head;
     return '<label class="ship"><span class="order-items">예상 출하일</span><input type="date" data-ship="' + esc(o.no) + '" value="' + esc(o.shipDate || '') + '"></label>' + head;
+  }
+  // 담당자 메모: 회사 담당자끼리만 보는 발주별 메모. 거래처 화면에는 나오지 않는다. 칸을 벗어나면 저장된다.
+  function memoBy(o) {
+    if (!o.staffMemoBy) return '';
+    var m = String(o.staffMemoBy).match(/^(.*) · (.+)$/);
+    return '<div class="order-items">' + esc(m ? m[1] + ' · ' + stamp(m[2]) : o.staffMemoBy) + '</div>';
+  }
+  function memoCell(o) {
+    if (!canEdit()) return (o.staffMemo ? '<div class="staff-memo">' + esc(o.staffMemo) + '</div>' : '<span class="order-items">-</span>') + memoBy(o);
+    return '<textarea class="staff-memo-input" data-smemo="' + esc(o.no) + '" maxlength="500" rows="3" placeholder="담당자끼리 남길 메모" aria-label="' + esc(o.no) + ' 담당자메모">' + esc(o.staffMemo || '') + '</textarea>' + memoBy(o);
+  }
+  function saveStaffMemo(input) {
+    var no = input.dataset.smemo, memo = input.value.trim(), o = adminOrders.filter(function (x) { return x.no === no; })[0];
+    if (!o || memo === (o.staffMemo || '')) return;
+    input.disabled = true;
+    api.staffMemo(adminKey(), { no: no, memo: memo, by: staffInfo().name }).then(function (r) {
+      o.staffMemo = memo; o.staffMemoBy = (r && r.by) || staffInfo().name + ' · ' + new Date().toISOString();
+      renderAdmin(); toast(no + ' 담당자메모를 저장했어요');
+    }).catch(function (err) { input.disabled = false; toast(errText(err, '담당자메모를 저장하지 못했어요.')); });
   }
   function saveShip(input) {
     var no = input.dataset.ship, date = input.value;
@@ -1155,6 +1180,7 @@
   $('#admin-body').addEventListener('change', function (e) {
     if (e.target.dataset.status) askStatus(e.target.dataset.status, e.target.value);
     if (e.target.dataset.ship) saveShip(e.target);
+    if (e.target.dataset.smemo) saveStaffMemo(e.target);
   });
 
   // ----- 언어 바꾸기 -----
