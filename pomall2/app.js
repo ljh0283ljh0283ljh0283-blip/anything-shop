@@ -89,8 +89,11 @@
     sheet: function (cfg) {
       // text/plain 본문이라 브라우저가 사전 확인(CORS preflight) 없이 보낸다. 비밀번호가 주소에 남지 않도록 모두 POST로 보낸다.
       function call(body) {
-        return fetch(cfg.orderUrl, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); })
-          .then(function (d) { if (!d.ok) throw new Error(d.error || '요청을 처리하지 못했어요.'); return d; });
+        // 답이 JSON이 아니면(구글 오류 화면 등) 그 글 앞부분을 오류에 담아 까닭을 볼 수 있게 한다
+        return fetch(cfg.orderUrl, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.text(); })
+          .then(function (t) { try { return JSON.parse(t); } catch (e) { throw new Error('Apps Script 답: ' + String(t).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)); } })
+          .then(function (d) { if (!d.ok) throw new Error(d.error || '요청을 처리하지 못했어요.'); return d; })
+          .catch(function (e) { if (e && typeof e === 'object') e.action = body.action; throw e; });
       }
       return {
         ready: !!cfg.orderUrl,
@@ -661,7 +664,8 @@
       if (infoCode) renderCustInfo();
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true; renderStaff();
-      say(msg, errText(err, '불러오지 못했어요.'), true);
+      var shown = errText(err, '불러오지 못했어요.'), raw = err && err.message ? err.message : String(err);
+      say(msg, shown + (shown === raw ? '' : ' (자세히: ' + (err.action || '') + ' · ' + raw + ')'), true);
     });
   }
   function showAdminTab(tab) {
