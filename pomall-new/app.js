@@ -948,14 +948,17 @@
       })
       .catch(function (err) { btn.disabled = false; say(msg, errText(err, '삭제하지 못했어요. 다시 눌러 주세요.'), true); });
   }
-  // 지금 비밀번호: 관리자 열쇠로 들어왔을 때만 보인다
+  // 지금 비밀번호: 관리자 열쇠로 들어왔을 때만 비밀번호 칸에 그대로 보인다(savedPw). 볼 수 없으면 그 까닭을 칸 아래에 적는다
+  var savedPw = '';
   function showPw(c) {
-    var el = $('#cu-pw-now');
-    el.hidden = !(c && role === 'admin');
-    if (el.hidden) return;
-    el.innerHTML = c.pwView ? '지금 비밀번호: <b class="mono">' + esc(c.pwView) + '</b>'
-      : c.pwChanged ? '지금 비밀번호: 거래처가 메일 인증으로 바꿔서 볼 수 없어요. 필요하면 새 비밀번호 만들기를 눌러 저장하세요.'
-      : '지금 비밀번호: 예전에 정한 비밀번호라 볼 수 없어요. 필요하면 새 비밀번호 만들기를 눌러 저장하세요.';
+    var el = $('#cu-pw-now'), why = '';
+    savedPw = c && role === 'admin' && c.pwView ? c.pwView : '';
+    if (c && !savedPw) why = role !== 'admin' ? '비밀번호는 관리자 열쇠로 들어오면 보여요.'
+      : !('pwView' in c) ? 'Apps Script에 새 pomall-script.gs를 붙여 넣고 새 버전으로 배포해야 비밀번호가 보여요.'
+      : c.pwChanged ? '거래처가 메일 인증으로 비밀번호를 바꿔서 볼 수 없어요. 새 비밀번호 만들기 → 저장을 누르면 보여요.'
+      : '이 기능 전에 정한 비밀번호라 볼 수 없어요. 새 비밀번호 만들기 → 저장을 누르면 보여요.';
+    el.hidden = !why; el.textContent = why;
+    if (savedPw) $('#cu-pw').value = savedPw;
   }
   function fillCustomerForm(c) {
     editing = c ? c.code : null;
@@ -966,7 +969,7 @@
     $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-email').value = c ? c.email || '' : ''; $('#cu-addr').value = c ? c.address : '';
     // 비밀번호는 담당자가 정하지 않는다: 새 거래처는 저절로 만들고, 있는 거래처는 '새 비밀번호 만들기'를 눌렀을 때만 바꾼다
     $('#cu-pw').value = c ? '' : newPassword();
-    $('#cu-pw-hint').textContent = c ? '바꾸려면 새 비밀번호 만들기를 누르세요. 비어 있으면 그대로예요.' : '저절로 만든 비밀번호예요. 저장한 뒤 거래처에 알려 주세요.';
+    $('#cu-pw-hint').textContent = c ? '바꾸려면 새 비밀번호 만들기를 누르세요.' : '저절로 만든 비밀번호예요. 저장한 뒤 거래처에 알려 주세요.';
     showPw(c);
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
@@ -979,6 +982,8 @@
     var msg = $('#cu-msg'), quoteList = [], qErr = '';
     var c = { code: $('#cu-code').value.trim().toUpperCase(), name: $('#cu-name').value.trim(), contact: $('#cu-contact').value.trim(),
       phone: $('#cu-phone').value.trim(), email: $('#cu-email').value.trim(), address: $('#cu-addr').value.trim(), active: $('#cu-active').value === '1', pw: $('#cu-pw').value };
+    // 칸이 지금 비밀번호 그대로면 바꾸지 않는다. 코드를 바꿀 때는 비밀번호가 코드와 묶여 있어 그대로 다시 보낸다
+    if (editing && savedPw && c.pw === savedPw && editing === c.code) c.pw = '';
     if (!/^[A-Z0-9_-]{2,20}$/.test(c.code)) { say(msg, '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.', true); return; }
     if (!c.name) { say(msg, '거래처명을 적어 주세요.', true); return; }
     if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) { say(msg, '메일 주소를 확인해 주세요.', true); return $('#cu-email').focus(); }
@@ -1129,9 +1134,9 @@
   }
   // 비밀번호 복사: 빈칸 없이 비밀번호만 복사한다. 칸에 저장 전 새 비밀번호가 있으면 그것을, 없으면 지금 비밀번호(관리자)를
   $('#cu-copy-pw').addEventListener('click', function () {
-    var c = customers.filter(function (x) { return x.code === editing; })[0], typed = $('#cu-pw').value.trim(), pw = typed || (c && c.pwView) || '';
+    var c = customers.filter(function (x) { return x.code === editing; })[0], typed = $('#cu-pw').value.trim(), pw = typed || (c && c.pwView) || '', unsaved = !!typed && typed !== savedPw;
     if (!pw) { say($('#cu-msg'), '복사할 비밀번호가 없어요. 새 비밀번호 만들기를 누르고 저장해 주세요.', true); return; }
-    var done = function () { say($('#cu-msg'), '비밀번호 ' + pw + ' 를 복사했어요.' + (typed ? ' 저장을 눌러야 이 비밀번호로 로그인돼요.' : '')); };
+    var done = function () { say($('#cu-msg'), '비밀번호 ' + pw + ' 를 복사했어요.' + (unsaved ? ' 저장을 눌러야 이 비밀번호로 로그인돼요.' : '')); };
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(pw).then(done, function () { window.prompt('아래 비밀번호를 복사하세요', pw); });
     else window.prompt('아래 비밀번호를 복사하세요', pw);
     if (navigator.clipboard && window.isSecureContext) return;
