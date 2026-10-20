@@ -219,3 +219,5 @@ tr.done{opacity:.55}
 /* 담당자메모: 주문관리 상태 변경 옆 */
 .staff-memo-input{width:100%;min-width:180px;font-size:13px;padding:6px 8px;resize:vertical;font-family:inherit}
 .staff-memo{white-space:pre-wrap;font-size:13px;min-width:160px}
+#cu-pw{font-family:var(--font-mono);letter-spacing:.05em}
+.pw-now{display:block;margin-top:4px}.pw-now .mono{font-family:var(--font-mono);letter-spacing:.05em}

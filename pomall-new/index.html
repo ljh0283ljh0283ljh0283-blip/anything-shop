@@ -8,7 +8,7 @@
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=20261020e">
+<link rel="stylesheet" href="style.css?v=20261020h">
 </head>
 <body>
 
@@ -325,7 +325,7 @@
           <div class="field"><label for="cu-phone">연락처</label><input id="cu-phone" maxlength="20" inputmode="tel"></div>
           <div class="field"><label for="cu-email">메일 <span class="hint">(선택)</span></label><input id="cu-email" type="email" maxlength="80" placeholder="name@company.com"><span class="hint">코드·비밀번호를 잊었을 때 거래처가 이 메일로 바로 찾아요.</span></div>
           <div class="field full"><label for="cu-addr">기본 납품 주소</label><input id="cu-addr" maxlength="120"></div>
-          <div class="field"><label for="cu-pw">비밀번호</label><div class="inrow"><input id="cu-pw" maxlength="40" autocomplete="new-password"><button type="button" class="btn ghost small" id="cu-temp-pw">임시 비밀번호 만들기</button></div><span class="hint" id="cu-pw-hint">거래처에 알려줄 비밀번호 (4자 이상)</span></div>
+          <div class="field"><label for="cu-pw">비밀번호</label><div class="inrow"><input id="cu-pw" maxlength="40" autocomplete="off" readonly><button type="button" class="btn ghost small" id="cu-copy-pw">복사</button><button type="button" class="btn ghost small" id="cu-temp-pw">새 비밀번호 만들기</button></div><span class="hint" id="cu-pw-hint">새 거래처는 비밀번호가 저절로 만들어져요.</span><span class="hint pw-now" id="cu-pw-now" hidden></span></div>
           <div class="field"><label for="cu-discount">할인율 <span class="hint">(선택)</span></label><div class="inrow"><input class="num" id="cu-discount" type="number" min="0" max="99" step="0.1" inputmode="decimal" placeholder="0"><span class="unit">%</span></div><span class="hint">모델을 직접 골라 주문할 때 깎아 줄 비율이에요. 견적단가에는 적용하지 않아요.</span></div>
           <div class="field"><label for="cu-active">상태</label><select id="cu-active"><option value="1">사용</option><option value="0">중지 (로그인 막기)</option></select></div>
           <div class="field full">
@@ -373,6 +373,6 @@
   </form>
 </dialog>
 
-<script src="app.js?v=20261020e"></script>
+<script src="app.js?v=20261020h"></script>
 </body>
 </html>
