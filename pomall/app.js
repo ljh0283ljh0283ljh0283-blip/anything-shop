@@ -6,6 +6,7 @@
   'use strict';
 
   var $ = function (s) { return document.querySelector(s); };
+  var PW_MIN = 6; // 새 비밀번호 최소 길이 (pomall-script.gs의 PW_MIN과 같다)
   var KEY = { cart: 'pomall.cart', session: 'pomall.session', admin: 'pomall.admin', recent: 'pomall.recent', localOrders: 'pomall.orders', localCustomers: 'pomall.customers', localLead: 'pomall.lead', localHelp: 'pomall.help', localReset: 'pomall.reset', lang: 'pomall.lang' };
   function store(k, v) {
     try {
@@ -50,7 +51,8 @@
     [/여러 번 틀렸/, 'Too many wrong tries. Please request a new verification number.'],
     [/인증번호가 맞지/, 'The verification number is incorrect.'],
     [/이 메일에 등록된 거래처 코드가 아니/, 'That customer code is not registered to this email.'],
-    [/비밀번호는 4자 이상/, 'The password must be at least 4 characters.']
+    [/비밀번호는 6자 이상/, 'The password must be at least 6 characters.'],
+    [/15분 동안 잠겼/, 'Too many wrong tries. It is locked for 15 minutes; please try again later.']
   ];
   function enErr(m) {
     for (var k = 0; k < EN_ERR.length; k++) {
@@ -92,9 +94,11 @@
       return {
         ready: !!cfg.orderUrl,
         login: function (code, pw) { return call({ action: 'login', code: code, pw: pw }); },
-        submit: function (auth, order) { return call({ action: 'order', code: auth.code, pw: auth.pw, order: order }).then(function (d) { return d.order; }); },
-        mine: function (auth) { return call({ action: 'mine', code: auth.code, pw: auth.pw }).then(function (d) { return d.orders; }); },
-        staff: function (key) { return call({ action: 'staff', key: key }).then(function (d) { return d.role; }); },
+        // 입장권으로 다시 들어온다(비밀번호는 브라우저에 두지 않는다). 예전 Apps Script는 입장권을 주지 않으니 그때만 비밀번호를 쓴다.
+        resume: function (auth) { return call({ action: 'login', code: auth.code, token: auth.token, pw: auth.token ? undefined : auth.pw }); },
+        submit: function (auth, order) { return call({ action: 'order', code: auth.code, token: auth.token, pw: auth.token ? undefined : auth.pw, order: order }).then(function (d) { return d.order; }); },
+        mine: function (auth) { return call({ action: 'mine', code: auth.code, token: auth.token, pw: auth.token ? undefined : auth.pw }).then(function (d) { return d.orders; }); },
+        staff: function (key) { return call({ action: 'staff', key: key }).then(function (d) { return { role: d.role, token: d.token }; }); },
         config: function () { return call({ action: 'config' }); },
         saveLead: function (key, L) { return call(Object.assign({ action: 'saveLead', key: key }, L)); },
         shipDate: function (key, c) { return call({ action: 'shipDate', key: key, no: c.no, date: c.date, by: c.by }); },
@@ -124,6 +128,7 @@
       return {
         ready: true,
         login: function (code, pw) { return auth(code, pw).then(function (c) { return { customer: pub(c), prices: c.prices, discount: c.discount || 0 }; }); },
+        resume: function (a) { return this.login(a.code, a.pw); },
         submit: function (a, order) {
           return auth(a.code, a.pw).then(function (c) {
             // 이 브라우저 저장 방식은 파일 내용을 두지 않고 이름만 남긴다
@@ -132,7 +137,7 @@
           });
         },
         mine: function (a) { return auth(a.code, a.pw).then(function (c) { return orders().filter(function (o) { return o.code === c.code; }); }); },
-        staff: function (key) { return Promise.resolve(roleOf(key)); },
+        staff: function (key) { return Promise.resolve({ role: roleOf(key) }); },
         config: function () { return Promise.resolve({ lead: store(KEY.localLead) }); },
         saveLead: function (key, L) { if (roleOf(key) === 'view') return Promise.reject(new Error('영업팀 권한이 필요해요.')); store(KEY.localLead, { days: +L.days, bigQty: +L.bigQty, bigDays: +L.bigDays }); return Promise.resolve({ ok: true }); },
         shipDate: function (key, c) {
@@ -187,7 +192,7 @@
           if (String(r.otp) !== rec.otp) { rec.tries++; store(KEY.localReset, rec); return Promise.reject(new Error('인증번호가 맞지 않아요.')); }
           var list = custs(), c = list.filter(function (x) { return x.code === r.code && x.active && String(x.email || '').toLowerCase() === email; })[0];
           if (!c) return Promise.reject(new Error('이 메일에 등록된 거래처 코드가 아니에요.'));
-          if (String(r.pw || '').length < 4) return Promise.reject(new Error('비밀번호는 4자 이상이에요.'));
+          if (String(r.pw || '').length < PW_MIN) return Promise.reject(new Error('비밀번호는 ' + PW_MIN + '자 이상이에요.'));
           c.pw = r.pw; store(KEY.localCustomers, list); store(KEY.localReset, null);
           return Promise.resolve({ ok: true });
         },
@@ -285,7 +290,8 @@
   }
 
   // ----- 로그인 -----
-  function auth() { return { code: session.code, pw: session.pw }; }
+  // 입장권이 있으면 비밀번호는 저장하지 않는다(예전 Apps Script처럼 입장권이 없을 때만 비밀번호를 둔다)
+  function auth() { return { code: session.code, token: session.token, pw: session.pw }; }
   function renderSession() {
     var on = !!session;
     // 로그인 전에는 로그인 화면만 보이고, 주문하기·주문 조회 탭은 감춘다
@@ -295,13 +301,20 @@
     if (C) { renderModels(); renderSpec(); }
   }
   function login(code, pw, quiet) {
-    return api.login(code, pw).then(function (d) {
-      session = { code: code, pw: pw, customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0 };
+    return (pw ? api.login(code, pw) : api.resume(auth())).then(function (d) {
+      var token = d.token || (pw ? '' : session.token);
+      session = { code: code, token: token || undefined, pw: token ? undefined : (pw || session.pw), customer: d.customer, prices: d.prices || {}, discount: Number(d.discount) || 0 };
       store(KEY.session, session);
       cart = (store(KEY.cart) || {})[code] || [];
       repriceCart(); renderSession(); renderCart();
       if (!quiet) { toast(T(d.customer.name + '으로 로그인했어요', 'Signed in as ' + d.customer.name)); show('order'); }
     });
+  }
+  // 입장권 시간(6시간)이 지났거나 비밀번호가 바뀌었으면 로그인 화면으로 보낸다. 담은 품목은 다시 로그인하면 돌아온다.
+  function expired(err) {
+    if (!/다시 로그인/.test((err && err.message) || '')) return false;
+    logout(); show('login'); toast(T('로그인 시간이 지났어요. 다시 로그인해 주세요', 'Your sign-in has expired. Please sign in again'));
+    return true;
   }
   function logout() {
     session = null; store(KEY.session, null); cart = []; history = [];
@@ -467,6 +480,7 @@
         'We have received the order from ' + session.customer.name + '. The status in My orders changes when we confirm production. Total ' + won(saved.total || t.total) + ', requested ship date ' + (saved.requestedDate || order.requestedDate) + '.');
       $('#done').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }).catch(function (e2) {
+      if (expired(e2)) return;
       err.textContent = errText(e2, T('발주를 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', 'Could not send the order. Check your connection and try again.'));
     }).then(function () { $('#submit-btn').disabled = false; });
   }
@@ -550,7 +564,7 @@
           '<td class="mono">' + won(o.total) + '</td><td class="mono">' + shipText(o) + '</td><td>' + pill(o.status) + '</td>' +
           '<td><button type="button" class="btn ghost small" data-reorder="' + esc(o.no) + '">' + T('재주문', 'Reorder') + '</button></td></tr>';
       }).join('');
-    }).catch(function (err) { say(msg, errText(err, T('불러오지 못했어요. 잠시 후 다시 열어 주세요.', 'Could not load your orders. Please try again in a moment.')), true); });
+    }).catch(function (err) { if (expired(err)) return; say(msg, errText(err, T('불러오지 못했어요. 잠시 후 다시 열어 주세요.', 'Could not load your orders. Please try again in a moment.')), true); });
   }
   function reorder(no) {
     var o = history.filter(function (x) { return x.no === no; })[0]; if (!o) return;
@@ -586,7 +600,9 @@
     if (!api.ready) { say(msg, '주문 받을 주소(orderUrl)가 아직 없어요. README의 순서대로 구글 시트를 연결해 주세요.', true); return; }
     say(msg, '불러오는 중이에요…');
     api.staff(key).then(function (r) {
-      role = r;
+      role = r.role;
+      // 열쇠 대신 입장권을 저장한다(열쇠는 브라우저에 남기지 않는다)
+      if (r.token && r.token !== key) { key = r.token; store(KEY.admin, { key: key, name: staffInfo().name }); }
       // 찾기 요청은 예전 Apps Script에는 없으니 못 받아 와도 나머지는 연다
       return Promise.all([api.list(key), canEdit() ? api.customers(key) : [], canEdit() && api.helpList ? api.helpList(key).catch(function () { return []; }) : []]);
     }).then(function (r) {
@@ -831,7 +847,7 @@
     $('#cu-code-hint').textContent = c ? '바꾸면 비밀번호도 새로 정해야 해요. 지난 발주도 새 코드로 옮겨져요.' : '거래처가 로그인할 때 씁니다.';
     $('#cu-delete').hidden = !c;
     $('#cu-name').value = c ? c.name : ''; $('#cu-contact').value = c ? c.contact : ''; $('#cu-phone').value = c ? c.phone : ''; $('#cu-email').value = c ? c.email || '' : ''; $('#cu-addr').value = c ? c.address : '';
-    $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (4자 이상)';
+    $('#cu-pw').value = ''; $('#cu-pw-hint').textContent = c ? '바꿀 때만 적으세요. 비워 두면 그대로예요.' : '거래처에 알려줄 비밀번호 (' + PW_MIN + '자 이상)';
     $('#cu-active').value = !c || c.active ? '1' : '0';
     $('#cu-discount').value = c && c.discount ? c.discount : '';
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = c && c.prices ? Number(c.prices[inp.dataset.price]) : 0; inp.value = v > 0 ? v : ''; });
@@ -848,10 +864,10 @@
     if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) { say(msg, '메일 주소를 확인해 주세요.', true); return $('#cu-email').focus(); }
     var renamed = !!(editing && editing !== c.code);
     if ((!editing || renamed) && customers.some(function (x) { return x.code === c.code; })) { say(msg, '이미 있는 거래처 코드예요. 목록에서 수정을 눌러 주세요.', true); return; }
-    if (!editing && c.pw.length < 4) { say(msg, '새 거래처는 비밀번호를 4자 이상 정해 주세요.', true); return; }
-    if (renamed && c.pw.length < 4) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).', true); return $('#cu-pw').focus(); }
+    if (!editing && c.pw.length < PW_MIN) { say(msg, '새 거래처는 비밀번호를 ' + PW_MIN + '자 이상 정해 주세요.', true); return; }
+    if (renamed && c.pw.length < PW_MIN) { say(msg, '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (' + PW_MIN + '자 이상).', true); return $('#cu-pw').focus(); }
     if (editing) c.oldCode = editing;
-    if (c.pw && c.pw.length < 4) { say(msg, '비밀번호는 4자 이상이에요.', true); return; }
+    if (c.pw && c.pw.length < PW_MIN) { say(msg, '비밀번호는 ' + PW_MIN + '자 이상이에요.', true); return; }
     document.querySelectorAll('[data-price]').forEach(function (inp) { var v = Number(inp.value); if (v > 0) prices[inp.dataset.price] = Math.round(v * 10) / 10; });
     c.prices = prices;
     c.discount = Number($('#cu-discount').value) || 0;
@@ -914,7 +930,7 @@
     var msg = $('#r-msg2'), r = { email: $('#r-email').value.trim(), code: $('#r-code').value.trim().toUpperCase(), otp: $('#r-otp').value.trim(), pw: $('#r-pw').value };
     if (!r.code) { say(msg, T('메일에 있는 거래처 코드를 넣어 주세요.', 'Enter the customer code from the email.'), true); return; }
     if (!/^\d{6}$/.test(r.otp)) { say(msg, T('인증번호 6자리를 넣어 주세요.', 'Enter the 6-digit verification number.'), true); return; }
-    if (r.pw.length < 4) { say(msg, T('새 비밀번호를 4자 이상으로 정해 주세요.', 'Choose a new password of at least 4 characters.'), true); return; }
+    if (r.pw.length < PW_MIN) { say(msg, T('새 비밀번호를 6자 이상으로 정해 주세요.', 'Choose a new password of at least 6 characters.'), true); return; }
     if (r.pw !== $('#r-pw2').value) { say(msg, T('새 비밀번호 두 칸이 서로 달라요.', 'The two new passwords do not match.'), true); return; }
     say(msg, T('바꾸는 중이에요…', 'Updating…')); $('#r-save').disabled = true;
     api.resetFinish(r).then(function () {
@@ -1091,8 +1107,9 @@
       cart = (store(KEY.cart) || {})[session.code] || [];
       renderSession(); renderCart();
       // 저장된 로그인으로 단가를 새로 받아 온다. 비밀번호가 바뀌었거나 중지된 거래처면 로그아웃한다.
-      login(session.code, session.pw, true).catch(function (err) {
-        if (/맞지|중지/.test((err && err.message) || '')) { logout(); show('order'); toast(T('다시 로그인해 주세요', 'Please sign in again')); }
+      // 입장권이 있으면 입장권으로, 예전에 저장된 비밀번호만 있으면 그것으로 한 번 들어와 입장권으로 바꾼다
+      login(session.code, session.token ? '' : session.pw, true).catch(function (err) {
+        if (/맞지|중지|다시 로그인|잠겼/.test((err && err.message) || '')) { logout(); show('order'); toast(T('다시 로그인해 주세요', 'Please sign in again')); }
       });
     } else { session = null; renderSession(); renderCart(); }
     show('order');

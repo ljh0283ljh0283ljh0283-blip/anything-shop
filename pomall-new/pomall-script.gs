@@ -19,6 +19,8 @@
 //   ATTACH_FOLDER 거래처가 첨부한 발주서를 넣는 구글 드라이브 폴더 ID. 처음 첨부가 오면 "SEKI POmall 발주서" 폴더를 만들고 여기에 적습니다.
 // 발주서 파일은 드라이브 폴더에 저장되고, 발주 탭의 "발주서" 칸에 링크가 남습니다. 링크를 아는 사람만 볼 수 있습니다.
 // 금액은 거래처 브라우저가 보낸 값을 믿지 않고 시트의 거래처 단가와 할인율로 다시 계산합니다.
+// 보안: 거래처 비밀번호를 5번 틀리면 그 코드는 15분 잠기고, 관리 열쇠를 15분에 20번 틀리면 열쇠 입력이 15분 잠깁니다.
+//       로그인하면 비밀번호 대신 6시간짜리 입장권을 브라우저에 줍니다. 비밀번호나 열쇠를 바꾸면 그 입장권은 바로 못 씁니다.
 
 var DEFAULT_PRODUCTS_URL = 'https://raw.githubusercontent.com/ljh0283ljh0283ljh0283-blip/anything-shop/main/pomall/products.json';
 var ORDER_SHEET = '발주', CUSTOMER_SHEET = '거래처', LOG_SHEET = '상태 기록', HELP_SHEET = '찾기 요청';
@@ -42,14 +44,14 @@ function doPost(e) {
   try {
     var d = JSON.parse(e.postData.contents);
     switch (d.action) {
-      case 'login': return reply(login(d.code, d.pw));
+      case 'login': return reply(login(d));
       case 'order': return reply(placeOrder(d));
       case 'mine': return reply(mine(d));
       case 'config': return reply({ ok: true, lead: lead() });
       case 'saveLead': return reply(staff(d.key, ['admin', 'sales'], function (role) { return saveLead(d, role); }));
       case 'staffMemo': return reply(staff(d.key, ['admin', 'sales'], function () { return setStaffMemo(d); }));
       case 'shipDate': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setShipDate(d, role); }));
-      case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role }; }));
+      case 'staff': return reply(staff(d.key, ['admin', 'sales', 'view'], function (role) { return { ok: true, role: role, token: staffToken(d.key, role) }; }));
       case 'list': return reply(staff(d.key, ['admin', 'sales', 'view'], function () { return { ok: true, orders: orders(true) }; }));
       case 'status': return reply(staff(d.key, ['admin', 'sales'], function (role) { return setStatus(d, role); }));
       case 'customers': return reply(staff(d.key, ['admin', 'sales'], function (role) { return { ok: true, customers: customerList(role) }; }));
@@ -71,17 +73,47 @@ function doPost(e) {
 }
 
 // ----- 거래처 -----
-function login(code, pw) {
-  var c = authCustomer(code, pw);
-  if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
+// 비밀번호로 로그인하면 입장권(token)을 준다. 브라우저는 비밀번호 대신 입장권을 저장하고, 다음부터 입장권으로 들어온다.
+function login(d) {
+  var c = authCustomer(d);
+  if (c && c.locked) return { ok: false, error: LOCKED };
+  if (!c) return { ok: false, error: d.token ? '다시 로그인해 주세요.' : '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
+  var token = d.token ? String(d.token) : newToken('c', { code: c.code, hash: c.hash });
+  return { ok: true, token: token, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
 }
-function authCustomer(code, pw) {
-  code = clip(code, 20).toUpperCase();
+// 입장권이 있으면 입장권으로, 없으면 거래처 코드와 비밀번호로 확인한다.
+// 비밀번호를 5번 틀리면 그 코드는 15분 동안 잠근다({locked: true}).
+function authCustomer(d) {
+  if (d.token) {
+    var t = readToken('c', d.token), tc = t && findCustomer(t.code);
+    return tc && tc.hash === t.hash ? tc : null;
+  }
+  var code = clip(d.code, 20).toUpperCase(), pw = String(d.pw || '');
   if (!code || !pw) return null;
+  if (failCount('c:' + code) >= FAIL_MAX) return { locked: true };
   var c = findCustomer(code);
-  return c && c.hash && c.hash === hash(code, pw) ? c : null;
+  if (c && c.hash && c.hash === hash(code, pw)) { clearFail('c:' + code); return c; }
+  addFail('c:' + code);
+  return null;
+}
+
+// ----- 보안: 틀린 횟수 제한과 입장권 -----
+var FAIL_MAX = 5, STAFF_FAIL_MAX = 20, FAIL_LOCK = 900, TOKEN_TTL = 21600, PW_MIN = 6;
+var LOCKED = '여러 번 틀려서 15분 동안 잠겼어요. 잠시 뒤에 다시 해 주세요.';
+function failCount(k) { return Number(CacheService.getScriptCache().get('fail:' + k)) || 0; }
+function addFail(k) { CacheService.getScriptCache().put('fail:' + k, String(failCount(k) + 1), FAIL_LOCK); }
+function clearFail(k) { CacheService.getScriptCache().remove('fail:' + k); }
+// 입장권: 맞히기 어려운 긴 무작위 글자. 구글 캐시에 6시간 둔다(캐시가 먼저 비면 다시 로그인하면 된다).
+function newToken(kind, data) {
+  var t = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  CacheService.getScriptCache().put('tok:' + kind + ':' + t, JSON.stringify(data), TOKEN_TTL);
+  return t;
+}
+function readToken(kind, t) {
+  t = String(t || '');
+  if (!/^[0-9a-f]{64}$/.test(t)) return null;
+  try { return JSON.parse(CacheService.getScriptCache().get('tok:' + kind + ':' + t) || 'null'); } catch (e) { return null; }
 }
 // 거래처 고유번호: 등록 순서대로 1, 2, 3… 지운 번호는 다시 쓰지 않는다(스크립트 속성 CUST_SEQ에 마지막 번호를 기억).
 // 번호 칸이 생기기 전에 등록된 거래처는 시트 줄 순서대로 번호를 붙인다.
@@ -122,9 +154,9 @@ function saveCustomer(c) {
   var ex = findCustomer(oldCode || code), renamed = !!(oldCode && oldCode !== code);
   if (oldCode && !ex) return { ok: false, error: '고치려는 거래처가 없어요. 새로고침해 주세요.' };
   if (renamed && findCustomer(code)) return { ok: false, error: '이미 있는 거래처 코드예요.' };
-  if (renamed && pw.length < 4) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).' };
-  if (!ex && pw.length < 4) return { ok: false, error: '새 거래처는 비밀번호를 4자 이상 정해 주세요.' };
-  if (pw && pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  if (renamed && pw.length < PW_MIN) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (' + PW_MIN + '자 이상).' };
+  if (!ex && pw.length < PW_MIN) return { ok: false, error: '새 거래처는 비밀번호를 ' + PW_MIN + '자 이상 정해 주세요.' };
+  if (pw && pw.length < PW_MIN) return { ok: false, error: '비밀번호는 ' + PW_MIN + '자 이상이에요.' };
   var email = clip(c.email, 80);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
   var discount = Number(c.discount) || 0;
@@ -192,7 +224,8 @@ function hash(code, pw) {
 
 // ----- 발주 -----
 function placeOrder(d) {
-  var cust = authCustomer(d.code, d.pw);
+  var cust = authCustomer(d);
+  if (cust && cust.locked) return { ok: false, error: LOCKED };
   if (!cust || !cust.active) return { ok: false, error: '다시 로그인해 주세요.' };
   var o = d.order || {};
   var contact = clip(o.contact, 20), phone = clip(o.phone, 20), address = clip(o.address, 120);
@@ -305,7 +338,8 @@ function attachFolder() {
 }
 
 function mine(d) {
-  var cust = authCustomer(d.code, d.pw);
+  var cust = authCustomer(d);
+  if (cust && cust.locked) return { ok: false, error: LOCKED };
   if (!cust) return { ok: false, error: '다시 로그인해 주세요.' };
   // 담당자 메모는 회사 안에서만 보므로 거래처에는 보내지 않는다
   return { ok: true, orders: orders().filter(function (o) { return o.code === cust.code; }).map(function (o) { delete o.staffMemo; delete o.staffMemoBy; return o; }) };
@@ -476,7 +510,7 @@ function resetFinish(d) {
   var code = clip(d.code, 20).toUpperCase(), pw = String(d.pw || '');
   var c = customers().filter(function (x) { return x.code === code && x.active && x.email.toLowerCase() === email; })[0];
   if (!c) return { ok: false, error: '이 메일에 등록된 거래처 코드가 아니에요.' };
-  if (pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  if (pw.length < PW_MIN) return { ok: false, error: '비밀번호는 ' + PW_MIN + '자 이상이에요.' };
   var s = customerSheet(), head = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
   s.getRange(c.index, head.indexOf('비밀번호') + 1).setValue(hash(code, pw));
   if (head.indexOf('비밀번호(보기)') >= 0) s.getRange(c.index, head.indexOf('비밀번호(보기)') + 1).setValue(PW_CHANGED);
@@ -571,17 +605,29 @@ function logSheet() {
   return s;
 }
 // 열쇠로 권한을 정한다. 같은 값이면 높은 권한이 먼저다.
+// 열쇠 대신 입장권(staffToken)으로도 된다. 열쇠 값을 바꾸면 그 열쇠로 받은 입장권은 바로 못 쓴다.
+// 틀린 열쇠가 15분에 20번 오면 열쇠 입력을 15분 잠근다('locked'). 입장권은 잠금과 상관없다.
+var ROLE_PROP = { admin: 'ADMIN_KEY', sales: 'SALES_KEY', view: 'VIEW_KEY' };
+function keyHash(v) { return hash('staff', v); }
 function roleOf(key) {
   key = String(key || '');
   if (!key) return null;
   var p = PropertiesService.getScriptProperties();
+  var t = readToken('s', key);
+  if (t) { var now = p.getProperty(ROLE_PROP[t.role] || ''); return now && keyHash(now) === t.h ? t.role : null; }
+  if (failCount('staff') >= STAFF_FAIL_MAX) return 'locked';
   if (key === p.getProperty('ADMIN_KEY')) return 'admin';
   if (key === p.getProperty('SALES_KEY')) return 'sales';
   if (key === p.getProperty('VIEW_KEY')) return 'view';
+  if (!/^[0-9a-f]{64}$/.test(key)) addFail('staff');
   return null;
+}
+function staffToken(key, role) {
+  return readToken('s', key) ? String(key) : newToken('s', { role: role, h: keyHash(String(key)) });
 }
 function staff(key, allowed, fn) {
   var role = roleOf(key);
+  if (role === 'locked') return { ok: false, error: LOCKED };
   if (!role) return { ok: false, error: '열쇠가 맞지 않아요.' };
   if (allowed.indexOf(role) < 0) return { ok: false, error: ROLES[role] + ' 열쇠로는 할 수 없어요. ' + (allowed[0] === 'admin' && allowed.length === 1 ? '관리자' : '영업팀') + ' 권한이 필요해요.' };
   return fn(role);
