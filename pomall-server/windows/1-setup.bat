@@ -15,7 +15,7 @@ echo.
 echo [2/2] 설정 파일 config.json
 if not exist config.json (
   copy /y config.example.json config.json >nul
-  echo   config.json 을 만들었어요. 메모장이 열리면 세 열쇠를 적고 저장해 주세요.
+  echo   config.json 을 만들었어요. 메모장이 열리면 세 열쇠와 메일 설정(선택)을 적고 저장해 주세요.
 ) else (
   echo   config.json 이 이미 있어요. 메모장에서 확인만 해 주세요.
 )
