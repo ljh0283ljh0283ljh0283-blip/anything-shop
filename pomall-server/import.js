@@ -9,6 +9,7 @@
 //
 // 비밀번호는 암호화된 그대로 옮기므로 거래처는 쓰던 비밀번호로 로그인합니다.
 // 발주서 첨부 파일은 구글 드라이브 링크를 그대로 둡니다(드라이브에 파일이 남아 있는 동안 열립니다).
+// 회사 서버에서 export로 내보낸 파일(--file)도 그대로 넣을 수 있습니다(서버 컴퓨터를 바꿀 때).
 
 'use strict';
 const fs = require('node:fs');
@@ -43,7 +44,7 @@ for (let i = 0; i < args.length; i++) {
 
   db.exec('BEGIN');
   try {
-    if (opt.force) db.exec('DELETE FROM orders; DELETE FROM customers; DELETE FROM status_log;');
+    if (opt.force) db.exec('DELETE FROM orders; DELETE FROM customers; DELETE FROM status_log; DELETE FROM help_requests; DELETE FROM tokens;');
     const lineOf = {};
     const ins = db.prepare(`INSERT OR REPLACE INTO orders (no, line, created_at, code, company, contact, phone, customer_po, address, memo, requested_date, eta,
       spec_code, model, len, temp, qty, unit, amount, item_memo, total, status, updated_at, ship_date, attachment, len2, finish, strip, strip2, pin, speed, terminal, term, rtemp, quote, due, staff_memo, staff_memo_by)
@@ -57,9 +58,13 @@ for (let i = 0; i < args.length; i++) {
         txt(r['바뀐 시각']), txt(r['확정 출하일']), txt(r['발주서']), num(r['와이어2(mm)']), txt(r['마감']), num(r['탈피(mm)']), num(r['탈피2(mm)']), num(r['핀 길이(mm)']), txt(r['전류감응속도']), txt(r['터미널방향']), txt(r['터미널']), r['복귀온도(°C)'] === '' || r['복귀온도(°C)'] == null ? null : num(r['복귀온도(°C)']),
         txt(r['견적 모델']) === 'Y' ? 1 : 0, txt(r['품목 희망납기일']), txt(r['담당자 메모']), txt(r['메모 수정']));
     });
-    const insC = db.prepare('INSERT OR REPLACE INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, quotes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    // 메일(비밀번호 찾기)과 비밀번호(보기)도 옮긴다. 예전 스크립트에서 받은 자료에 없으면 빈 칸으로 둔다
+    const insC = db.prepare('INSERT OR REPLACE INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, quotes, email, pw_view) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     data.customers.forEach(c => insC.run(String(c.code).toUpperCase(), num(c.no), txt(c.name), txt(c.contact), txt(c.phone), txt(c.address), String(c.hash || ''),
-      c.active ? 1 : 0, num(c.discount), JSON.stringify(c.prices || {}), new Date().toISOString(), JSON.stringify(c.quotes || [])));
+      c.active ? 1 : 0, num(c.discount), JSON.stringify(c.prices || {}), new Date().toISOString(), JSON.stringify(c.quotes || []), txt(c.email).trim(), txt(c.pwView)));
+    // 찾기 요청: 회사 서버에서 내보낸 자료(export)에만 있다
+    const insH = db.prepare('INSERT OR REPLACE INTO help_requests (id, at, company, contact, phone, what, memo, done, done_by) VALUES (?,?,?,?,?,?,?,?,?)');
+    (data.help || []).forEach(h => insH.run(String(h.id), txt(h.at), txt(h.company), txt(h.contact), txt(h.phone), txt(h.what), txt(h.memo), txt(h.done), txt(h.doneBy)));
     const insL = db.prepare('INSERT INTO status_log (at, no, company, from_status, to_status, by, role, reason) VALUES (?,?,?,?,?,?,?,?)');
     (data.log || []).forEach(l => insL.run(l.at, l.no, txt(l.company), l.from, l.to, txt(l.by), l.role, txt(l.reason)));
     const set = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
@@ -70,4 +75,6 @@ for (let i = 0; i < args.length; i++) {
 
   const orders = db.prepare('SELECT COUNT(DISTINCT no) AS n FROM orders').get().n;
   console.log('옮기기 끝: 발주 ' + orders + '건(' + count('orders') + '줄), 거래처 ' + count('customers') + '곳, 상태 기록 ' + count('status_log') + '줄');
+  const noMail = db.prepare("SELECT COUNT(*) AS n FROM customers WHERE IFNULL(email, '') = ''").get().n;
+  if (noMail) console.log('메일이 없는 거래처 ' + noMail + '곳은 "메일로 비밀번호 찾기"를 못 써요. 관리 화면 거래처 관리에서 메일을 적어 두면 돼요.');
 })().catch(e => { console.error('옮기지 못했어요:', e.message); process.exit(1); });
