@@ -681,6 +681,8 @@
     }).catch(function (err) {
       store(KEY.admin, null); role = null; $('#key-form').hidden = false; $('#admin-wrap').hidden = true; renderStaff();
       var shown = errText(err, '불러오지 못했어요.'), raw = err && err.message ? err.message : String(err);
+      // 저장해 둔 입장권(6시간)이 끝났으면 열쇠가 틀렸다고 하지 않고 다시 넣어 달라고 한다
+      if (/^[0-9a-f]{64}$/.test(key) && /열쇠가 맞지/.test(raw)) { say(msg, '로그인 시간(6시간)이 지났어요. 이름과 팀 열쇠를 다시 넣어 주세요.'); return; }
       say(msg, shown + (shown === raw ? '' : ' (자세히: ' + (err.action || '') + ' · ' + raw + ')'), true);
     });
   }
