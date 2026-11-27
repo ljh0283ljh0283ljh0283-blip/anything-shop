@@ -1,10 +1,10 @@
 
-/* POmall 발주 화면 (디자인: 자재 수급 보드와 같은 색·글씨, 2026-11-27)
+/* POmall 발주 화면 (디자인: 자재 수급 보드와 같은 색·글씨, 강조색은 검정, 2026-11-27)
    Layout: 상단 탭 바 + 좌측 작업 영역 / 우측 발주서 패널(좁으면 한 열) */
 :root{
   --bg:#f7f8f7; --surface:#ffffff; --surface-3:#eef1ef; --ink:#1d2421; --ink-2:#2f3833; --muted:#66706b; --line:#dfe3e0;
-  --accent:#2f6f8f; --accent-ink:#ffffff; --accent-soft:#eaf1f4;
-  --ok:#1f8a4c; --warn:#b07a1f; --info:#2f6f8f; --ok-soft:#e4f2ea; --warn-soft:#f6efe1; --info-soft:#eaf1f4;
+  --accent:#1d2421; --accent-ink:#ffffff; --accent-soft:#eef1ef;
+  --ok:#1f8a4c; --warn:#b07a1f; --info:#1d2421; --ok-soft:#e4f2ea; --warn-soft:#f6efe1; --info-soft:#eef1ef;
   --prod:#8c6bb1; --prod-soft:#f1ecf7; --danger:#c4432f; --on-ink:#f7f8f7;
   --font-body:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
   --font-mono:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
@@ -13,14 +13,14 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#121614; --surface:#1a201d; --surface-3:#232a26; --ink:#e6ebe8; --ink-2:#c9d1cc; --muted:#9aa5a0; --line:#2c3430;
-  --accent:#6fb3d4; --accent-ink:#121614; --accent-soft:#1f2d33;
-  --ok:#5cc98a; --warn:#e0b05a; --info:#6fb3d4; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#1f2d33;
+  --accent:#e6ebe8; --accent-ink:#121614; --accent-soft:#232a26;
+  --ok:#5cc98a; --warn:#e0b05a; --info:#e6ebe8; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#232a26;
   --prod:#b597dd; --prod-soft:#29223a; --danger:#f07a65; --on-ink:#121614;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121614; --surface:#1a201d; --surface-3:#232a26; --ink:#e6ebe8; --ink-2:#c9d1cc; --muted:#9aa5a0; --line:#2c3430;
-  --accent:#6fb3d4; --accent-ink:#121614; --accent-soft:#1f2d33;
-  --ok:#5cc98a; --warn:#e0b05a; --info:#6fb3d4; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#1f2d33;
+  --accent:#e6ebe8; --accent-ink:#121614; --accent-soft:#232a26;
+  --ok:#5cc98a; --warn:#e0b05a; --info:#e6ebe8; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#232a26;
   --prod:#b597dd; --prod-soft:#29223a; --danger:#f07a65; --on-ink:#121614;
   color-scheme:dark}
 *{box-sizing:border-box}
@@ -289,3 +289,4 @@ dialog.confirm h3{margin:0;padding:16px 20px;background:var(--ink);color:var(--o
 dialog.confirm form > :not(h3){margin-inline:20px}
 dialog.confirm form > :nth-child(2){margin-top:16px}
 dialog.confirm form > :last-child{margin-bottom:20px}
+.btn:not(.ghost):not(.danger):not(.danger-text):hover{background:var(--ink-2)}
