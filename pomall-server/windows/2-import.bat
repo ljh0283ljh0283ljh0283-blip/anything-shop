@@ -2,7 +2,7 @@
 chcp 65001 >nul
 cd /d "%~dp0.."
 echo 구글 시트의 발주, 거래처, 상태 기록을 회사 서버로 옮깁니다. (처음 한 번만)
-echo Apps Script에 최신 pomall-script.gs 를 새 버전으로 배포한 뒤에 하세요.
+echo Apps Script에 최신 pomall-new\pomall-script.gs 를 새 버전으로 배포한 뒤에 하세요.
 echo.
 set /p URL=Apps Script 주소(https://script.google.com/... /exec)를 붙여 넣고 Enter: 
 set /p KEY=관리자 열쇠를 입력하고 Enter: 

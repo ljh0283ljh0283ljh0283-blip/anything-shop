@@ -1,10 +1,13 @@
 // SEKI POmall 회사 서버
-// 구글 Apps Script(pomall/pomall-script.gs)가 하던 일을 회사 서버에서 그대로 합니다.
-// 사이트(pomall/app.js)는 바뀌지 않습니다. settings.json의 orderUrl만 이 서버의 /api 로 바꾸면 됩니다.
-// 이 서버가 사이트 화면도 함께 보여 줄 수 있습니다(config.json의 siteDir). 그때는 주소창에 서버 주소만 치면 됩니다.
+// 구글 Apps Script(pomall-new/pomall-script.gs)가 하던 일을 회사 서버에서 그대로 합니다.
+// 화면(pomall-new/, pomall/)은 바뀌지 않습니다. settings.json의 orderUrl만 이 서버의 /api 로 바꾸면 됩니다.
+// 이 서버가 화면도 함께 보여 줍니다: 주소/ 는 견적 모델판(siteDir), 주소/old/ 는 예전 화면(oldSiteDir).
+//
+// 보안(Apps Script와 같음): 거래처 비밀번호 5번 틀리면 그 코드 15분 잠금, 관리 열쇠를 15분에 20번 틀리면 열쇠 입력 15분 잠금,
+// 로그인하면 비밀번호 대신 6시간짜리 입장권, 새 비밀번호는 6자 이상.
 //
 // 자료는 dataDir 폴더 하나에 모입니다.
-//   pomall.db   발주, 거래처, 상태 기록, 설정 (SQLite 파일 하나. 백업은 이 폴더를 복사하면 됩니다)
+//   pomall.db   발주, 거래처, 상태 기록, 찾기 요청, 설정 (SQLite 파일 하나. 백업은 이 폴더를 복사하면 됩니다)
 //   files/      거래처가 첨부한 발주서 파일
 //
 // 실행: node server.js   (Node.js 22.13 이상, 따로 설치할 패키지 없음)
@@ -15,19 +18,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const { sendMail, mailReady } = require('./mail.js');
 
 // ----- 설정 -----
 const CONFIG_FILE = process.env.POMALL_CONFIG || path.join(__dirname, 'config.json');
 const cfg = Object.assign({
   port: 8080,
   dataDir: './data',
-  productsFile: '../pomall/products.json',
-  siteDir: '../pomall',
+  productsFile: '../pomall-new/products.json',
+  siteDir: '../pomall-new',  // 주소/ 에서 보여 줄 화면 (견적 모델판)
+  oldSiteDir: '../pomall',   // 주소/old/ 에서 보여 줄 예전 화면. 비우면 안 보여 준다
   publicUrl: '',          // 예: https://pomall.seki.co.kr  (발주서 링크에 쓰임. 비우면 요청 주소로 만든다)
   allowOrigin: '*',       // 사이트를 다른 주소(GitHub Pages)에 두면 그 주소, 예: https://ljh0283ljh0283ljh0283-blip.github.io
   backupDir: './backup',  // 매일 자동 백업할 폴더. 다른 디스크나 OneDrive 폴더로 바꾸면 더 안전하다. 비우면 백업 안 함
   backupDays: 30,         // 데이터베이스 백업을 며칠치 남길지
-  adminKey: '', salesKey: '', viewKey: ''
+  adminKey: '', salesKey: '', viewKey: '',
+  mail: {}                // 비밀번호 찾기 메일. mail.js 맨 위 설명 참고
 }, fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {});
 // 열쇠는 환경 변수로도 줄 수 있다 (config.json에 적지 않으려면)
 cfg.adminKey = process.env.ADMIN_KEY || cfg.adminKey;
@@ -36,7 +42,8 @@ cfg.viewKey = process.env.VIEW_KEY || cfg.viewKey;
 if (process.env.PORT) cfg.port = Number(process.env.PORT);
 const here = p => path.resolve(path.dirname(CONFIG_FILE), p);
 const DATA_DIR = here(cfg.dataDir), FILES_DIR = path.join(DATA_DIR, 'files');
-const PRODUCTS_FILE = here(cfg.productsFile), SITE_DIR = cfg.siteDir ? here(cfg.siteDir) : '';
+const PRODUCTS_FILE = here(cfg.productsFile), SITE_DIR = cfg.siteDir ? here(cfg.siteDir) : '', OLD_SITE_DIR = cfg.oldSiteDir ? here(cfg.oldSiteDir) : '';
+if (process.env.MAIL_PASS) cfg.mail = Object.assign({}, cfg.mail, { pass: process.env.MAIL_PASS });
 
 const STATUSES = ['접수 대기', '생산 지시', '생산 중', '입고 완료', '출하', '취소'];
 const OLD_STATUS = { '생산 확정': '생산 지시', '출하 완료': '출하' };
@@ -71,8 +78,16 @@ db.exec(`
 for (const [c, t] of [['pin', 'REAL'], ['speed', 'TEXT'], ['terminal', 'TEXT'], ['term', 'TEXT'], ['rtemp', 'REAL']])
   if (!db.prepare('PRAGMA table_info(orders)').all().some(x => x.name === c)) db.exec('ALTER TABLE orders ADD COLUMN ' + c + ' ' + t);
 // 견적 모델(pomall-new/): 거래처의 주문모델·견적단가 [{model, price}]와 발주 줄의 견적 모델 표시·품목 희망납기일
-for (const [tb, c, t] of [['customers', 'quotes', 'TEXT'], ['orders', 'quote', 'INTEGER'], ['orders', 'due', 'TEXT'], ['orders', 'staff_memo', 'TEXT'], ['orders', 'staff_memo_by', 'TEXT']])
+// 메일(코드·비밀번호 찾기)과 비밀번호(보기: 관리 화면에서 만든 비밀번호, 관리자·영업팀만 봄)
+for (const [tb, c, t] of [['customers', 'quotes', 'TEXT'], ['orders', 'quote', 'INTEGER'], ['orders', 'due', 'TEXT'], ['orders', 'staff_memo', 'TEXT'], ['orders', 'staff_memo_by', 'TEXT'],
+  ['customers', 'email', 'TEXT'], ['customers', 'pw_view', 'TEXT']])
   if (!db.prepare('PRAGMA table_info(' + tb + ')').all().some(x => x.name === c)) db.exec('ALTER TABLE ' + tb + ' ADD COLUMN ' + c + ' ' + t);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS help_requests (    -- '찾기 요청' 탭: 메일이 없는 거래처가 코드·비밀번호를 찾아 달라고 남긴 요청
+    id TEXT PRIMARY KEY, at TEXT, company TEXT, contact TEXT, phone TEXT, what TEXT, memo TEXT, done TEXT, done_by TEXT);
+  CREATE TABLE IF NOT EXISTS tokens (           -- 로그인 입장권 (서버를 다시 켜도 6시간 동안 유지)
+    token TEXT PRIMARY KEY, kind TEXT, data TEXT, expires INTEGER);
+`);
 const q = sql => db.prepare(sql);
 function getSetting(k) { const r = q('SELECT value FROM settings WHERE key = ?').get(k); return r ? r.value : null; }
 function setSetting(k, v) { q('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, String(v)); }
@@ -100,17 +115,53 @@ function addBizDays(n) {
 function hash(code, pw) { return crypto.createHash('sha256').update('pomall:' + code + ':' + pw, 'utf8').digest('hex'); }   // Apps Script와 같은 방식이라 옮긴 비밀번호가 그대로 맞는다
 function same(a, b) { a = Buffer.from(String(a)); b = Buffer.from(String(b)); return a.length === b.length && crypto.timingSafeEqual(a, b); }
 
+// ----- 보안: 틀린 횟수 제한과 입장권 -----
+const FAIL_MAX = 5, STAFF_FAIL_MAX = 20, FAIL_LOCK = 900e3, TOKEN_TTL = 21600e3, PW_MIN = 6;
+const LOCKED = '여러 번 틀려서 15분 동안 잠겼어요. 잠시 뒤에 다시 해 주세요.';
+// 틀린 횟수: 마지막으로 틀린 뒤 15분이 지나면 잊는다 (Apps Script 캐시와 같은 방식)
+const fails = new Map();
+function failCount(k) { const f = fails.get(k); if (f && f.exp < Date.now()) { fails.delete(k); return 0; } return f ? f.n : 0; }
+function addFail(k) { fails.set(k, { n: failCount(k) + 1, exp: Date.now() + FAIL_LOCK }); }
+function clearFail(k) { fails.delete(k); }
+// 짧은 시간 횟수 세기 (메일 보내기, 찾기 요청). 이전 횟수를 돌려준다
+const counters = new Map();
+function bump(k, ttl) { const c = counters.get(k); const n = c && c.exp > Date.now() ? c.n : 0; counters.set(k, { n: n + 1, exp: Date.now() + ttl }); return n; }
+// 입장권: 맞히기 어려운 64글자. 데이터베이스에 6시간 둔다(서버를 다시 켜도 유지)
+function newToken(kind, data) {
+  const t = crypto.randomBytes(32).toString('hex');
+  q('INSERT INTO tokens (token, kind, data, expires) VALUES (?,?,?,?)').run(t, kind, JSON.stringify(data), Date.now() + TOKEN_TTL);
+  return t;
+}
+function readToken(kind, t) {
+  t = String(t || '');
+  if (!/^[0-9a-f]{64}$/.test(t)) return null;
+  const r = q('SELECT * FROM tokens WHERE token = ? AND kind = ?').get(t, kind);
+  if (!r || r.expires < Date.now()) return null;
+  try { return JSON.parse(r.data); } catch (e) { return null; }
+}
+function cleanTokens() { q('DELETE FROM tokens WHERE expires < ?').run(Date.now()); }
+
 // ----- 열쇠와 권한 -----
+// 열쇠 대신 입장권으로도 된다. 열쇠 값을 바꾸면 그 열쇠로 받은 입장권은 바로 못 쓴다.
+// 틀린 열쇠가 15분에 20번 오면 열쇠 입력을 15분 잠근다('locked'). 입장권은 잠금과 상관없다.
+const ROLE_KEY = { admin: 'adminKey', sales: 'salesKey', view: 'viewKey' };
+const keyHash = v => hash('staff', v);
 function roleOf(key) {
   key = String(key || '');
   if (!key) return null;
+  const t = readToken('s', key);
+  if (t) { const now = cfg[ROLE_KEY[t.role]]; return now && keyHash(now) === t.h ? t.role : null; }
+  if (failCount('staff') >= STAFF_FAIL_MAX) return 'locked';
   if (cfg.adminKey && same(key, cfg.adminKey)) return 'admin';
   if (cfg.salesKey && same(key, cfg.salesKey)) return 'sales';
   if (cfg.viewKey && same(key, cfg.viewKey)) return 'view';
+  if (!/^[0-9a-f]{64}$/.test(key)) addFail('staff');
   return null;
 }
+function staffToken(key, role) { return readToken('s', key) ? String(key) : newToken('s', { role, h: keyHash(String(key)) }); }
 function staff(key, allowed, fn) {
   const role = roleOf(key);
+  if (role === 'locked') return { ok: false, error: LOCKED };
   if (!role) return { ok: false, error: '열쇠가 맞지 않아요.' };
   if (!allowed.includes(role)) return { ok: false, error: ROLES[role] + ' 열쇠로는 할 수 없어요. ' + (allowed[0] === 'admin' && allowed.length === 1 ? '관리자' : '영업팀') + ' 권한이 필요해요.' };
   return fn(role);
@@ -119,31 +170,52 @@ function staff(key, allowed, fn) {
 // ----- 거래처 -----
 function rowToCustomer(r) {
   return { no: r.no || 0, code: r.code, name: r.name || '', contact: r.contact || '', phone: r.phone || '', address: r.address || '',
-    hash: r.hash || '', active: !!r.active, discount: r.discount || 0, prices: JSON.parse(r.prices || '{}'), quotes: JSON.parse(r.quotes || '[]') };
+    email: (r.email || '').trim(), hash: r.hash || '', pwView: r.pw_view || '',
+    active: !!r.active, discount: r.discount || 0, prices: JSON.parse(r.prices || '{}'), quotes: JSON.parse(r.quotes || '[]') };
 }
 function customers() { return q('SELECT * FROM customers').all().map(rowToCustomer); }
 function findCustomer(code) { const r = q('SELECT * FROM customers WHERE code = ?').get(code); return r ? rowToCustomer(r) : null; }
 function publicCustomer(c) {
-  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, active: c.active, prices: c.prices, quotes: c.quotes, discount: c.discount, hasPassword: !!c.hash };
+  return { no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, active: c.active, prices: c.prices, quotes: c.quotes, discount: c.discount, hasPassword: !!c.hash };
 }
-function authCustomer(code, pw) {
-  code = clip(code, 20).toUpperCase();
+// 입장권이 있으면 입장권으로, 없으면 거래처 코드와 비밀번호로 확인한다.
+// 비밀번호를 5번 틀리면 그 코드는 15분 동안 잠근다({locked: true}).
+function authCustomer(d) {
+  if (d.token) {
+    const t = readToken('c', d.token), tc = t && findCustomer(t.code);
+    return tc && tc.hash === t.hash ? tc : null;
+  }
+  const code = clip(d.code, 20).toUpperCase(), pw = String(d.pw || '');
   if (!code || !pw) return null;
+  if (failCount('c:' + code) >= FAIL_MAX) return { locked: true };
   const c = findCustomer(code);
-  return c && c.hash && same(c.hash, hash(code, pw)) ? c : null;
+  if (c && c.hash && same(c.hash, hash(code, pw))) { clearFail('c:' + code); return c; }
+  addFail('c:' + code);
+  return null;
 }
 // 고유번호: 등록 순서대로 1, 2, 3… 지운 번호는 다시 쓰지 않는다
 function custSeq() {
   const max = (q('SELECT MAX(no) AS m FROM customers').get().m) || 0;
   return Math.max(max, Number(getSetting('CUST_SEQ')) || 0);
 }
-function login(code, pw) {
-  const c = authCustomer(code, pw);
-  if (!c) return { ok: false, error: '거래처 코드나 비밀번호가 맞지 않아요.' };
+// 비밀번호로 로그인하면 입장권(token)을 준다. 브라우저는 비밀번호 대신 입장권을 저장하고, 다음부터 입장권으로 들어온다.
+function login(d) {
+  const c = authCustomer(d);
+  if (c && c.locked) return { ok: false, error: LOCKED };
+  if (!c) return { ok: false, error: d.token ? '다시 로그인해 주세요.' : '거래처 코드나 비밀번호가 맞지 않아요.' };
   if (!c.active) return { ok: false, error: '사용 중지된 거래처예요. 담당 영업에 문의해 주세요.' };
-  return { ok: true, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
+  const token = d.token ? String(d.token) : newToken('c', { code: c.code, hash: c.hash });
+  return { ok: true, token, customer: publicCustomer(c), prices: c.prices, quotes: c.quotes, discount: c.discount };
 }
-function customerList() { return customers().sort((a, b) => a.no - b.no).map(publicCustomer); }
+// 비밀번호(보기): 관리 화면에서 만든 비밀번호. 관리자·영업팀에만 돌려준다. 거래처가 메일 인증으로 바꾸면 PW_CHANGED가 되어 더는 볼 수 없다.
+const PW_CHANGED = '거래처가 바꿈';
+function customerList(role) {
+  return customers().sort((a, b) => a.no - b.no).map(c => {
+    const p = publicCustomer(c);
+    if (role === 'admin' || role === 'sales') { p.pwView = c.pwView === PW_CHANGED ? '' : c.pwView; p.pwChanged = c.pwView === PW_CHANGED; }
+    return p;
+  });
+}
 function saveCustomer(c) {
   const code = clip(c.code, 20).toUpperCase(), oldCode = clip(c.oldCode, 20).toUpperCase();
   if (!/^[A-Z0-9_-]{2,20}$/.test(code)) return { ok: false, error: '거래처 코드는 영문 대문자, 숫자, -, _ 로 2~20자예요.' };
@@ -153,9 +225,11 @@ function saveCustomer(c) {
   const ex = findCustomer(oldCode || code), renamed = !!(oldCode && oldCode !== code);
   if (oldCode && !ex) return { ok: false, error: '고치려는 거래처가 없어요. 새로고침해 주세요.' };
   if (renamed && findCustomer(code)) return { ok: false, error: '이미 있는 거래처 코드예요.' };
-  if (renamed && pw.length < 4) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (4자 이상).' };
-  if (!ex && pw.length < 4) return { ok: false, error: '새 거래처는 비밀번호를 4자 이상 정해 주세요.' };
-  if (pw && pw.length < 4) return { ok: false, error: '비밀번호는 4자 이상이에요.' };
+  if (renamed && pw.length < PW_MIN) return { ok: false, error: '거래처 코드를 바꾸면 비밀번호도 새로 정해야 해요 (' + PW_MIN + '자 이상).' };
+  if (!ex && pw.length < PW_MIN) return { ok: false, error: '새 거래처는 비밀번호를 ' + PW_MIN + '자 이상 정해 주세요.' };
+  if (pw && pw.length < PW_MIN) return { ok: false, error: '비밀번호는 ' + PW_MIN + '자 이상이에요.' };
+  const email = clip(c.email, 80);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
   const discount = Number(c.discount) || 0;
   if (discount < 0 || discount >= 100) return { ok: false, error: '할인율은 0 이상 100 미만이에요.' };
   const models = catalog().products.map(p => p.id), prices = {};
@@ -176,9 +250,10 @@ function saveCustomer(c) {
     const no = ex ? ex.no : custSeq() + 1;
     if (!ex) setSetting('CUST_SEQ', no);
     const row = [code, no, name, clip(c.contact, 20), clip(c.phone, 20), clip(c.address, 120), pw ? hash(code, pw) : ex.hash,
-      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString(), JSON.stringify(quotes)];
+      c.active === false ? 0 : 1, discount ? Math.round(discount * 10) / 10 : 0, JSON.stringify(prices), new Date().toISOString(), JSON.stringify(quotes),
+      email, pw ? pw : (ex ? ex.pwView : '')];
     if (ex) q('DELETE FROM customers WHERE code = ?').run(ex.code);
-    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, quotes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(...row);
+    q('INSERT INTO customers (code, no, name, contact, phone, address, hash, active, discount, prices, updated_at, quotes, email, pw_view) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(...row);
     // 코드를 바꾸면 지난 발주도 새 코드로 옮긴다
     if (renamed) q('UPDATE orders SET code = ? WHERE code = ?').run(code, oldCode);
     return { ok: true, code, no };
@@ -235,7 +310,8 @@ function saveAttachment(a, no, company, base) {
   return { url: base + '/files/' + token + '/' + encodeURIComponent(file) };
 }
 function placeOrder(d, base) {
-  const cust = authCustomer(d.code, d.pw);
+  const cust = authCustomer(d);
+  if (cust && cust.locked) return { ok: false, error: LOCKED };
   if (!cust || !cust.active) return { ok: false, error: '다시 로그인해 주세요.' };
   const o = d.order || {};
   const contact = clip(o.contact, 20), phone = clip(o.phone, 20), address = clip(o.address, 120);
@@ -326,7 +402,8 @@ function orders(where, args, withLog) {
   return [...map.values()].reverse();
 }
 function mine(d) {
-  const cust = authCustomer(d.code, d.pw);
+  const cust = authCustomer(d);
+  if (cust && cust.locked) return { ok: false, error: LOCKED };
   if (!cust) return { ok: false, error: '다시 로그인해 주세요.' };
   // 담당자 메모는 회사 안에서만 보므로 거래처에는 보내지 않는다
   return { ok: true, orders: orders('WHERE code = ?', [cust.code]).map(o => { delete o.staffMemo; delete o.staffMemoBy; return o; }) };
@@ -380,34 +457,106 @@ function setShipDate(d, role) {
   return { ok: true, date };
 }
 
-// ----- 요청 처리 -----
-// 거래처 비밀번호를 계속 틀리는 곳은 잠시 막는다 (1분에 10번)
-const fails = new Map();
-function tooMany(ip) { const f = fails.get(ip); return f && f.n >= 10 && Date.now() - f.t < 60000; }
-function failed(ip) { const f = fails.get(ip); if (!f || Date.now() - f.t > 60000) fails.set(ip, { n: 1, t: Date.now() }); else f.n++; }
+// ----- 코드·비밀번호 찾기 -----
+// 1단계: 등록된 메일이면 거래처 코드와 인증번호 6자리를 메일로 보낸다. 메일이 등록돼 있는지는 대답하지 않는다.
+// 같은 메일로는 10분에 3번까지만 보낸다. 인증번호는 10분 동안, 5번 틀리면 못 쓴다.
+const resets = new Map();
+async function resetStart(d) {
+  const email = clip(d.email, 80).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: '메일 주소를 확인해 주세요.' };
+  if (!mailReady(cfg.mail)) return { ok: false, error: '메일 보내기가 아직 준비되지 않았어요. 아래 "메일이 없어요"로 요청을 남기거나 담당 영업에 문의해 주세요.' };
+  if (bump('reset:' + email, 600e3) >= 3) return { ok: true };
+  const mineList = customers().filter(c => c.active && c.email.toLowerCase() === email);
+  if (!mineList.length) return { ok: true };
+  const otp = String(crypto.randomInt(100000, 1000000));
+  resets.set(email, { otp, tries: 0, exp: Date.now() + 600e3 });
+  const codes = mineList.map(c => c.code).join(', '), en = d.lang === 'en';
+  try {
+    await sendMail(cfg.mail, {
+      to: email,
+      subject: en ? '[SEKI POmall] Your customer code and verification number' : '[SEKI POmall] 거래처 코드와 인증번호',
+      text: en
+        ? 'Customer code: ' + codes + '\nVerification number: ' + otp + '\n\nEnter them on the SEKI POmall sign-in page within 10 minutes to set a new password.\nIf you did not ask for this, you can ignore this email.'
+        : '거래처 코드: ' + codes + '\n인증번호: ' + otp + '\n\nSEKI POmall 로그인 화면에 10분 안에 넣고 새 비밀번호를 정하세요.\n요청하지 않으셨다면 이 메일은 무시하셔도 돼요.'
+    });
+  } catch (e) { console.error(new Date().toISOString(), '인증 메일을 보내지 못했어요:', e.message); }
+  return { ok: true };
+}
+// 2단계: 인증번호가 맞으면 그 거래처의 비밀번호를 바꾼다
+function resetFinish(d) {
+  const email = clip(d.email, 80).toLowerCase(), rec = resets.get(email);
+  if (!rec || rec.exp < Date.now()) return { ok: false, error: '인증번호 시간이 지났어요. 다시 받아 주세요.' };
+  if (rec.tries >= 5) return { ok: false, error: '여러 번 틀렸어요. 인증번호를 다시 받아 주세요.' };
+  if (String(d.otp) !== rec.otp) { rec.tries++; return { ok: false, error: '인증번호가 맞지 않아요.' }; }
+  const code = clip(d.code, 20).toUpperCase(), pw = String(d.pw || '');
+  const c = customers().find(x => x.code === code && x.active && x.email.toLowerCase() === email);
+  if (!c) return { ok: false, error: '이 메일에 등록된 거래처 코드가 아니에요.' };
+  if (pw.length < PW_MIN) return { ok: false, error: '비밀번호는 ' + PW_MIN + '자 이상이에요.' };
+  q('UPDATE customers SET hash = ?, pw_view = ?, updated_at = ? WHERE code = ?').run(hash(code, pw), PW_CHANGED, new Date().toISOString(), code);
+  resets.delete(email);
+  return { ok: true };
+}
+// 메일이 없는 거래처: 회사에 찾기 요청을 남긴다(한 시간에 30건까지)
+function addHelp(d) {
+  const company = clip(d.company, 40), contact = clip(d.contact, 20), phone = clip(d.phone, 20);
+  if (!company || !contact || digits(phone).length < 8) return { ok: false, error: '회사명, 담당자, 연락처를 모두 적어 주세요.' };
+  if (bump('help', 3600e3) >= 30) return { ok: false, error: '요청이 많아 잠시 받을 수 없어요. 담당 영업에 직접 연락해 주세요.' };
+  const what = { pw: 'pw', code: 'code', both: 'both' }[d.what] || 'pw';
+  q('INSERT INTO help_requests (id, at, company, contact, phone, what, memo, done, done_by) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(crypto.randomUUID(), new Date().toISOString(), company, contact, phone, what, clip(d.memo, 200), '', '');
+  return { ok: true };
+}
+function helpList() {
+  return q('SELECT * FROM help_requests ORDER BY at DESC, rowid DESC').all().map(r => ({
+    id: r.id, at: r.at, company: r.company, contact: r.contact, phone: r.phone, what: r.what, memo: r.memo || '', done: r.done || '', doneBy: r.done_by || '' }));
+}
+function helpDone(d) {
+  const r = q('UPDATE help_requests SET done = ?, done_by = ? WHERE id = ?').run(new Date().toISOString(), clip(d.by, 20), String(d.id || ''));
+  return r.changes ? { ok: true } : { ok: false, error: '없는 요청이에요.' };
+}
 
-function handle(d, ctx) {
-  const auth = ['login', 'order', 'mine'].includes(d.action);
-  if (auth && tooMany(ctx.ip)) return { ok: false, error: '비밀번호를 여러 번 틀렸어요. 1분 뒤에 다시 해 주세요.' };
-  let r;
+// ----- 내보내기 -----
+// Apps Script의 export와 같은 모양(발주 줄은 시트 머리글 이름). 다른 컴퓨터로 옮길 때 import.js --file 로 그대로 넣을 수 있다.
+const ORDER_COLS = [['발주번호', 'no'], ['접수 시각', 'created_at'], ['거래처 코드', 'code'], ['거래처', 'company'], ['담당자', 'contact'], ['연락처', 'phone'],
+  ['거래처 PO', 'customer_po'], ['납품 주소', 'address'], ['요청 사항', 'memo'], ['희망 출하일', 'requested_date'], ['최단 출하일', 'eta'], ['줄', 'line'],
+  ['사양 코드', 'spec_code'], ['모델', 'model'], ['와이어(mm)', 'len'], ['온도(°C)', 'temp'], ['수량', 'qty'], ['단가', 'unit'], ['금액', 'amount'], ['품목 메모', 'item_memo'],
+  ['발주 합계(VAT 포함)', 'total'], ['상태', 'status'], ['바뀐 시각', 'updated_at'], ['확정 출하일', 'ship_date'], ['발주서', 'attachment'], ['와이어2(mm)', 'len2'],
+  ['마감', 'finish'], ['탈피(mm)', 'strip'], ['탈피2(mm)', 'strip2'], ['핀 길이(mm)', 'pin'], ['전류감응속도', 'speed'], ['터미널방향', 'terminal'], ['터미널', 'term'],
+  ['복귀온도(°C)', 'rtemp'], ['견적 모델', 'quote'], ['품목 희망납기일', 'due'], ['담당자 메모', 'staff_memo'], ['메모 수정', 'staff_memo_by']];
+function exportAll() {
+  const orderRows = q('SELECT * FROM orders ORDER BY created_at, no, line').all().map(r => {
+    const o = {}; ORDER_COLS.forEach(([h, c]) => { o[h] = c === 'quote' ? (r.quote ? 'Y' : '') : (r[c] == null ? '' : r[c]); }); return o;
+  });
+  const custs = customers().map(c => ({ no: c.no, code: c.code, name: c.name, contact: c.contact, phone: c.phone, address: c.address, email: c.email, hash: c.hash,
+    pwView: c.pwView === PW_CHANGED ? '' : c.pwView, active: c.active, discount: c.discount, prices: c.prices, quotes: c.quotes }));
+  const log = q('SELECT * FROM status_log ORDER BY id').all().map(r => ({ at: r.at, no: r.no, company: r.company, from: r.from_status, to: r.to_status, by: r.by, role: r.role, reason: r.reason }));
+  return { ok: true, exportedAt: new Date().toISOString(), orders: orderRows, customers: custs, log, lead: lead(), custSeq: custSeq(), help: helpList() };
+}
+
+// ----- 요청 처리 -----
+async function handle(d, ctx = {}) {
   switch (d.action) {
-    case 'login': r = login(d.code, d.pw); break;
-    case 'order': r = placeOrder(d, ctx.base); break;
-    case 'mine': r = mine(d); break;
+    case 'login': return login(d);
+    case 'order': return placeOrder(d, ctx.base);
+    case 'mine': return mine(d);
     case 'config': return { ok: true, lead: lead() };
     case 'saveLead': return staff(d.key, ['admin', 'sales'], role => saveLead(d, role));
     case 'staffMemo': return staff(d.key, ['admin', 'sales'], () => setStaffMemo(d));
     case 'shipDate': return staff(d.key, ['admin', 'sales'], role => setShipDate(d, role));
-    case 'staff': return staff(d.key, ['admin', 'sales', 'view'], role => ({ ok: true, role }));
+    case 'staff': return staff(d.key, ['admin', 'sales', 'view'], role => ({ ok: true, role, token: staffToken(d.key, role) }));
     case 'list': return staff(d.key, ['admin', 'sales', 'view'], () => ({ ok: true, orders: orders('', [], true) }));
     case 'status': return staff(d.key, ['admin', 'sales'], role => setStatus(d, role));
-    case 'customers': return staff(d.key, ['admin', 'sales'], () => ({ ok: true, customers: customerList() }));
+    case 'customers': return staff(d.key, ['admin', 'sales'], role => ({ ok: true, customers: customerList(role) }));
     case 'saveCustomer': return staff(d.key, ['admin', 'sales'], () => saveCustomer(d.customer || {}));
     case 'deleteCustomer': return staff(d.key, ['admin', 'sales'], () => deleteCustomer(d.code));
+    case 'export': return staff(d.key, ['admin'], exportAll);
+    case 'resetStart': return resetStart(d);
+    case 'resetFinish': return resetFinish(d);
+    case 'help': return addHelp(d);
+    case 'helpList': return staff(d.key, ['admin', 'sales'], () => ({ ok: true, requests: helpList() }));
+    case 'helpDone': return staff(d.key, ['admin', 'sales'], () => helpDone(d));
     default: return { ok: false, error: '알 수 없는 요청이에요.' };
   }
-  if (auth && !r.ok && /맞지 않아요|다시 로그인/.test(r.error || '')) failed(ctx.ip);
-  return r;
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -428,7 +577,7 @@ function serveFile(res, file, type, extra) {
 function inside(dir, rel) { const f = path.resolve(dir, '.' + path.sep + rel); return f.startsWith(dir + path.sep) ? f : null; }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x'), ip = req.socket.remoteAddress || '';
+  const url = new URL(req.url, 'http://x');
   const base = (cfg.publicUrl || ((req.headers['x-forwarded-proto'] || 'http') + '://' + req.headers.host)).replace(/\/$/, '');
 
   if (url.pathname === '/api' && req.method === 'OPTIONS') return send(res, 204, '', 'text/plain', { 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });
@@ -438,10 +587,10 @@ const server = http.createServer((req, res) => {
     req.on('data', c => { size += c.length; if (size > BODY_MAX) { send(res, 413, JSON.stringify({ ok: false, error: '보낸 내용이 너무 커요.' })); req.destroy(); } else chunks.push(c); });
     req.on('end', () => {
       if (res.writableEnded) return;
-      let out;
-      try { out = handle(JSON.parse(Buffer.concat(chunks).toString('utf8')), { ip, base }); }
-      catch (e) { console.error(new Date().toISOString(), e); out = { ok: false, error: '요청을 처리하지 못했어요.' }; }
-      send(res, 200, JSON.stringify(out));
+      let d;
+      try { d = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { return send(res, 200, JSON.stringify({ ok: false, error: '요청을 처리하지 못했어요.' })); }
+      Promise.resolve().then(() => handle(d, { base })).catch(e => { console.error(new Date().toISOString(), e); return { ok: false, error: '요청을 처리하지 못했어요.' }; })
+        .then(out => send(res, 200, JSON.stringify(out)));
     });
     return;
   }
@@ -457,19 +606,23 @@ const server = http.createServer((req, res) => {
       { 'Content-Disposition': "inline; filename*=UTF-8''" + encodeURIComponent(name), 'Cache-Control': 'private, max-age=3600' });
   }
 
-  // 사이트 화면 (siteDir). settings.json은 이 서버의 /api를 쓰도록 바꿔서 준다.
-  if (!SITE_DIR) return send(res, 404, '', 'text/plain');
-  let rel = decodeURIComponent(url.pathname);
+  // 화면: 주소/ 는 견적 모델판(siteDir), 주소/old/ 는 예전 화면(oldSiteDir). settings.json은 이 서버의 /api를 쓰도록 바꿔서 준다.
+  let rel, dir = SITE_DIR;
+  try { rel = decodeURIComponent(url.pathname); } catch (e) { return send(res, 400, '', 'text/plain'); }
+  if (rel === '/old') return send(res, 301, '', 'text/plain', { Location: '/old/' });
+  if (rel.startsWith('/old/')) { dir = OLD_SITE_DIR; rel = rel.slice(4); }
+  if (!dir) return send(res, 404, '', 'text/plain');
   if (rel.endsWith('/')) rel += 'index.html';
   if (rel === '/settings.json') {
     let s = {};
-    try { s = JSON.parse(fs.readFileSync(path.join(SITE_DIR, 'settings.json'), 'utf8')); } catch (e) { /* 기본값 */ }
+    try { s = JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')); } catch (e) { /* 기본값 */ }
     return send(res, 200, JSON.stringify(Object.assign(s, { storage: 'sheet', orderUrl: base + '/api' })), 'application/json; charset=utf-8', { 'Cache-Control': 'no-store' });
   }
   if (/\.(gs|md)$/.test(rel)) return send(res, 404, '', 'text/plain');
-  const f = inside(SITE_DIR, rel);
+  const f = inside(dir, rel);
   if (!f) return send(res, 404, '', 'text/plain');
-  serveFile(res, f, MIME[path.extname(f).toLowerCase()] || 'application/octet-stream', { 'Cache-Control': 'no-cache' });
+  serveFile(res, f, MIME[path.extname(f).toLowerCase()] || 'application/octet-stream',
+    { 'Cache-Control': 'no-cache', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'same-origin' });
 });
 
 // ----- 매일 자동 백업 -----
@@ -498,7 +651,8 @@ if (require.main === module) {
     process.exit(1);
   }
   server.listen(cfg.port, () => console.log('SEKI POmall 서버가 켜졌어요: http://localhost:' + cfg.port + '  (자료 폴더: ' + DATA_DIR + ')'));
-  backup();
-  setInterval(backup, 3600e3);
+  if (!mailReady(cfg.mail)) console.log('알림: 메일 설정(mail)이 비어 있어 "메일로 비밀번호 찾기"는 쓸 수 없어요. 찾기 요청은 관리 화면으로 받아요.');
+  backup(); cleanTokens();
+  setInterval(() => { backup(); cleanTokens(); }, 3600e3);
 }
-module.exports = { server, db, handle, cfg, hash, backup };
+module.exports = { server, db, handle, cfg, hash, backup, PW_CHANGED };
