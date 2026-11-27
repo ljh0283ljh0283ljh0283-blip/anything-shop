@@ -1,23 +1,27 @@
 
-/* POmall 발주 화면
+/* POmall 발주 화면 (디자인: 자재 수급 보드와 같은 색·글씨, 2026-11-27)
    Layout: 상단 탭 바 + 좌측 작업 영역 / 우측 발주서 패널(좁으면 한 열) */
 :root{
-  --bg:#f3f5f7; --surface:#ffffff; --ink:#18212b; --muted:#5b6876; --line:#d9dfe5;
-  --accent:#b35a24; --accent-ink:#ffffff; --accent-soft:#f7e8dd;
-  --ok:#2f7a4b; --warn:#a66a00; --info:#2a5d8f; --ok-soft:#e3f1e8; --warn-soft:#fbf0d9; --info-soft:#e2ecf6;
-  --font-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --r:8px;
+  --bg:#f7f8f7; --surface:#ffffff; --surface-3:#eef1ef; --ink:#1d2421; --ink-2:#2f3833; --muted:#66706b; --line:#dfe3e0;
+  --accent:#2f6f8f; --accent-ink:#ffffff; --accent-soft:#eaf1f4;
+  --ok:#1f8a4c; --warn:#b07a1f; --info:#2f6f8f; --ok-soft:#e4f2ea; --warn-soft:#f6efe1; --info-soft:#eaf1f4;
+  --prod:#8c6bb1; --prod-soft:#f1ecf7; --danger:#c4432f; --on-ink:#f7f8f7;
+  --font-body:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+  --font-mono:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+  --r:10px; --r-sm:8px; --ease:cubic-bezier(0.16,1,0.3,1);
+  --shadow-lift:0 6px 20px rgb(0 0 0 / 0.12);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#12171d; --surface:#1a2129; --ink:#e7ecf1; --muted:#9aa7b4; --line:#2c3640;
-  --accent:#e08a50; --accent-ink:#1a1009; --accent-soft:#3a2617;
-  --ok:#6cc58f; --warn:#e3b04f; --info:#7fb2e5; --ok-soft:#173226; --warn-soft:#3a2d12; --info-soft:#172a3d;
+  --bg:#121614; --surface:#1a201d; --surface-3:#232a26; --ink:#e6ebe8; --ink-2:#c9d1cc; --muted:#9aa5a0; --line:#2c3430;
+  --accent:#6fb3d4; --accent-ink:#121614; --accent-soft:#1f2d33;
+  --ok:#5cc98a; --warn:#e0b05a; --info:#6fb3d4; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#1f2d33;
+  --prod:#b597dd; --prod-soft:#29223a; --danger:#f07a65; --on-ink:#121614;
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#12171d; --surface:#1a2129; --ink:#e7ecf1; --muted:#9aa7b4; --line:#2c3640;
-  --accent:#e08a50; --accent-ink:#1a1009; --accent-soft:#3a2617;
-  --ok:#6cc58f; --warn:#e3b04f; --info:#7fb2e5; --ok-soft:#173226; --warn-soft:#3a2d12; --info-soft:#172a3d;
+  --bg:#121614; --surface:#1a201d; --surface-3:#232a26; --ink:#e6ebe8; --ink-2:#c9d1cc; --muted:#9aa5a0; --line:#2c3430;
+  --accent:#6fb3d4; --accent-ink:#121614; --accent-soft:#1f2d33;
+  --ok:#5cc98a; --warn:#e0b05a; --info:#6fb3d4; --ok-soft:#1c2b22; --warn-soft:#2e2717; --info-soft:#1f2d33;
+  --prod:#b597dd; --prod-soft:#29223a; --danger:#f07a65; --on-ink:#121614;
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
@@ -221,3 +225,67 @@ tr.done{opacity:.55}
 .staff-memo{white-space:pre-wrap;font-size:13px;min-width:160px}
 #cu-pw{font-family:var(--font-mono);letter-spacing:.05em}
 .pw-now{display:block;margin-top:4px}.pw-now .mono{font-family:var(--font-mono);letter-spacing:.05em}
+
+/* ===== 자재 수급 보드·매출 대시보드와 같은 모양 (2026-11-27) ===== */
+body{font-size:14px;line-height:1.55;word-break:keep-all;caret-color:var(--accent)}
+::selection{background:color-mix(in oklab,var(--accent) 22%,transparent);color:var(--ink)}
+h1,h2,h3{font-weight:700;line-height:1.15}
+h2{font-size:22px}
+h3{font-size:16px}
+.money,input.num,td.mono,.price-table td.num{font-variant-numeric:tabular-nums}
+header.top{background:var(--bg);border-bottom:1px solid var(--line)}
+.top-inner{padding:10px 16px 0;row-gap:4px;min-height:64px}
+.brand b{font-family:var(--font-body);font-weight:700;font-size:17px;letter-spacing:0}
+.brand:hover b{color:var(--ink)}
+nav.tabs{gap:4px;align-self:flex-end}
+nav.tabs button{font-size:14px;font-weight:500;border:0;border-bottom:3px solid transparent;border-radius:0;background:none;color:var(--muted);padding:0 14px;min-height:44px;transition:color .12s var(--ease),border-color .12s var(--ease)}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button[aria-selected="true"]{background:none;color:var(--ink);border-color:transparent;border-bottom-color:var(--accent);font-weight:500}
+nav.tabs .count{font-family:var(--font-body);font-variant-numeric:tabular-nums;border-radius:4px}
+.label{font-size:13px;letter-spacing:0;text-transform:none;font-weight:500;color:var(--muted)}
+.panel{border-radius:var(--r);border-color:var(--line);background:var(--surface)}
+input,select,textarea{border:1px solid var(--muted);border-radius:var(--r-sm);padding:0 12px;min-height:40px;background:var(--surface);outline:2px solid transparent;outline-offset:-3px}
+textarea{padding:8px 12px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-color:var(--accent)}
+input[type=checkbox],input[type=radio]{min-height:0;accent-color:var(--accent)}
+.cart-item .sub input,label.ship input{min-height:32px;padding:0 8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:var(--r-sm);font-weight:500;background:var(--accent);color:var(--accent-ink);border:1px solid color-mix(in oklab,var(--accent) 78%,var(--ink));box-shadow:inset 0 1px 0 color-mix(in oklab,#fff 32%,transparent),inset 0 -1px 0 color-mix(in oklab,var(--ink) 10%,transparent);transition:background-color .15s var(--ease),transform .12s var(--ease)}
+.btn:hover{background:color-mix(in oklab,var(--accent) 88%,var(--ink))}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:var(--surface);color:var(--ink);border-color:var(--line);font-weight:500;box-shadow:inset 0 1px 0 var(--surface),0 1px 1px var(--line)}
+.btn.ghost:hover{background:var(--surface-3)}
+.btn.small{min-height:32px;padding:0 10px;font-size:13px}
+.btn:disabled{opacity:.55;transform:none}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.danger-text,:root .btn.danger-text{background:var(--surface);color:var(--danger);border-color:color-mix(in oklab,var(--danger) 35%,var(--line))}
+.model{border-radius:var(--r-sm);background:var(--surface)}
+.model b{font-family:var(--font-body);font-weight:700}
+.model:hover{background:var(--surface-3)}
+.model[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.seg button,.checks label{border-radius:var(--r-sm)}
+.seg button b,.checks label{font-family:var(--font-body)}
+.chip{font-family:var(--font-body);border-radius:var(--r-sm);background:var(--surface)}
+.spec{border-radius:var(--r)}
+.spec code,.done-box code,.cart-item code,.quote-table code{font-family:var(--font-body);font-weight:700;letter-spacing:.01em}
+.eta{border-radius:var(--r-sm);background:var(--accent-soft)}
+table{font-size:13px}
+thead th,th{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;background:var(--bg);white-space:nowrap;padding:8px 12px}
+td{padding:12px;vertical-align:middle}
+tbody tr:hover{background:color-mix(in oklab,var(--surface-3) 60%,transparent)}
+#ci-sum tr[aria-selected="true"],.price-table tr.editing td{background:var(--accent-soft)}
+.pill,.role,.lock{border-radius:4px;font-weight:500;padding:2px 8px}
+.st-production{background:var(--prod-soft);color:var(--prod)}
+.st-canceled{background:var(--surface-3);border-color:transparent}
+.role-view{background:var(--surface-3);border-color:transparent}
+.kpis button{border-radius:var(--r-sm);font-weight:500;color:var(--muted)}
+.kpis button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.notice{border-radius:var(--r-sm)}
+.item-memo{border-left-color:var(--accent)}
+.code-link{font-family:var(--font-body);color:var(--ink);text-decoration-color:var(--line);text-underline-offset:.2em;font-weight:500}
+.code-link:hover{text-decoration-color:var(--ink)}
+.toast{background:var(--ink);color:var(--on-ink);border-radius:var(--r-sm);box-shadow:var(--shadow-lift)}
+dialog.confirm{border-radius:var(--r);box-shadow:0 0 0 1px var(--ink),var(--shadow-lift);border:0;padding:0;overflow:hidden}
+dialog.confirm h3{margin:0;padding:16px 20px;background:var(--ink);color:var(--on-ink)}
+dialog.confirm form > :not(h3){margin-inline:20px}
+dialog.confirm form > :nth-child(2){margin-top:16px}
+dialog.confirm form > :last-child{margin-bottom:20px}
